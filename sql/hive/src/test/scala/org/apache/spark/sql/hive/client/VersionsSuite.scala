@@ -26,7 +26,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, L
 import org.apache.spark.sql.catalyst.util.quietly
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.sql.types.IntegerType
-import org.apache.spark.tags.ExtendedHiveTest
+//import org.apache.spark.tags.ExtendedHiveTest
 import org.apache.spark.util.Utils
 
 /**
@@ -35,7 +35,7 @@ import org.apache.spark.util.Utils
  * sure that reflective calls are not throwing NoSuchMethod error, but the actually functionality
  * is not fully tested.
  */
-@ExtendedHiveTest
+//@ExtendedHiveTest
 class VersionsSuite extends SparkFunSuite with Logging {
 
   // In order to speed up test execution during development or in Jenkins, you can specify the path

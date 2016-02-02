@@ -874,9 +874,8 @@ class CheckpointSuite extends TestSuiteBase with DStreamCheckpointTester
             markedRDDs
           }
         }
-
         shouldCheckpointAllMarkedRDDs =
-          Option(rdd.sparkContext.getLocalProperty(RDD.CHECKPOINT_ALL_MARKED_ANCESTORS)).
+          Option(rdd.sparkContext.getLocalProperty("spark.checkpoint.checkpointAllMarkedAncestors")).
             map(_.toBoolean).getOrElse(false)
 
         val stateRDDs = findAllMarkedRDDs(rdd)

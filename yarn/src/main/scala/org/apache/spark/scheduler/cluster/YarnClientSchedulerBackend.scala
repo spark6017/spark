@@ -38,6 +38,10 @@ private[spark] class YarnClientSchedulerBackend(
   /**
    * Create a Yarn client to submit an application to the ResourceManager.
    * This waits until the application is running.
+   *
+   * 在Yarn-Client模式下，SparkContext创建时，逻辑会执行到YarnClientSchedulerBackend的start方法
+   *
+   * 这个方法，将启动ApplicationMaster
    */
   override def start() {
     val driverHost = conf.get("spark.driver.host")
@@ -45,15 +49,23 @@ private[spark] class YarnClientSchedulerBackend(
     val hostport = driverHost + ":" + driverPort
     sc.ui.foreach { ui => conf.set("spark.driver.appUIAddress", ui.appUIAddress) }
 
+    /**
+     * ExecutorLauncher进程的命令参数列表
+     */
     val argsArrayBuf = new ArrayBuffer[String]()
+
+    //--arg是driver的host和port
     argsArrayBuf += ("--arg", hostport)
+
     argsArrayBuf ++= getExtraClientArguments
 
     logDebug("ClientArguments called with: " + argsArrayBuf.mkString(" "))
     val args = new ClientArguments(argsArrayBuf.toArray, conf)
     totalExpectedExecutors = args.numExecutors
     client = new Client(args, conf)
-    bindToYarn(client.submitApplication(), None)
+
+    val submitApplication = client.submitApplication()
+    bindToYarn(submitApplication, None)
 
     // SPARK-8687: Ensure all necessary properties have already been set before
     // we initialize our driver scheduler backend, which serves these properties

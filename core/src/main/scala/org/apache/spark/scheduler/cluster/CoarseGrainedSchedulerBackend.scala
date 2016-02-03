@@ -78,6 +78,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   // Executors that have been lost, but for which we don't yet know the real exit reason.
   protected val executorsPendingLossReason = new HashSet[String]
 
+  /**
+   * Driver进程对应的RPC通信Endpoint
+   * @param rpcEnv
+   * @param sparkProperties
+   */
   class DriverEndpoint(override val rpcEnv: RpcEnv, sparkProperties: Seq[(String, String)])
     extends ThreadSafeRpcEndpoint with Logging {
 
@@ -182,6 +187,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         removeExecutor(executorId, reason)
         context.reply(true)
 
+      /**
+       * 应答CoarseGrainedExecutorBackend的请求，返回Spark的配置信息
+       */
       case RetrieveSparkProps =>
         context.reply(sparkProperties)
     }

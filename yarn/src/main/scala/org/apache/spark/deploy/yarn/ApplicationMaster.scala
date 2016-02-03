@@ -642,6 +642,10 @@ private[spark] class ApplicationMaster(
 
 }
 
+/**
+ *  在yarn-client模式下，启动ExecutorLauncher进程
+ * 在yarn-cluster模式下，启动ApplicationMaster进程
+ */
 object ApplicationMaster extends Logging {
 
   // exit codes for different causes, no reason behind the values
@@ -681,9 +685,22 @@ object ApplicationMaster extends Logging {
 /**
  * This object does not provide any special functionality. It exists so that it's easy to tell
  * apart the client-mode AM from the cluster-mode AM when using tools such as ps or jps.
+ *
+ * 在yarn-client模式下，启动ExecutorLauncher进程
+ * 在yarn-cluster模式下，启动ApplicationMaster进程
  */
 object ExecutorLauncher {
 
+  /**
+   * 执行ExecutorLauncher进程
+   * args参数列表：
+   * --arg: Driver的IP和Port
+   * --executor-memory 1024m
+   * --executor-cores 1
+   * --properties-file 存放在Hadoop目录上的配置文件，这个文件的内容是Spark写入的
+   *
+   * @param args
+   */
   def main(args: Array[String]): Unit = {
     ApplicationMaster.main(args)
   }

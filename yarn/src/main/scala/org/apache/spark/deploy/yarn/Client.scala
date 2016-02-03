@@ -57,6 +57,12 @@ import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.launcher.{LauncherBackend, SparkAppHandle, YarnCommandBuilderUtils}
 import org.apache.spark.util.Utils
 
+/**
+ * ClientArguments
+ * @param args
+ * @param hadoopConf
+ * @param sparkConf
+ */
 private[spark] class Client(
     val args: ClientArguments,
     val hadoopConf: Configuration,
@@ -388,6 +394,8 @@ private[spark] class Client(
      * @return A 2-tuple. First item is whether the file is a "local:" URI. Second item is the
      *         localized path for non-local paths, or the input `path` for local paths.
      *         The localized path will be null if the URI has already been added to the cache.
+     *
+     *         将文件广播到HADOOP集群
      */
     def distribute(
         path: String,
@@ -517,6 +525,8 @@ private[spark] class Client(
    *
    * The archive also contains some Spark configuration. Namely, it saves the contents of
    * SparkConf in a file to be loaded by the AM process.
+   *
+   * AM进程要使用的SparkConfiguration也放在这个压缩文件
    */
   private def createConfArchive(): File = {
     val hadoopConfFiles = new HashMap[String, File]()
@@ -533,6 +543,9 @@ private[spark] class Client(
       }
     }
 
+    /**
+     * 先提取HADOOP_CONF_DIR和YARN_CONF_DIR环境变量下的配置文件放到hadoopConfFiles中
+     */
     Seq("HADOOP_CONF_DIR", "YARN_CONF_DIR").foreach { envKey =>
       sys.env.get(envKey).foreach { path =>
         val dir = new File(path)
@@ -546,10 +559,16 @@ private[spark] class Client(
       }
     }
 
+    /**
+     * 创建__spark_conf__.zip文件，写入Hadoop的配置文件以及Spark的配置文件
+     */
     val confArchive = File.createTempFile(LOCALIZED_CONF_DIR, ".zip",
       new File(Utils.getLocalDir(sparkConf)))
     val confStream = new ZipOutputStream(new FileOutputStream(confArchive))
 
+    /**
+     * 1. 写入Hadoop配置文件
+     */
     try {
       confStream.setLevel(0)
       hadoopConfFiles.foreach { case (name, file) =>
@@ -561,6 +580,10 @@ private[spark] class Client(
       }
 
       // Save Spark configuration to a file in the archive.
+      /**
+       * 2. 将Spark Configuration配置添加到压缩文件中
+       *
+       */
       val props = new Properties()
       sparkConf.getAll.foreach { case (k, v) => props.setProperty(k, v) }
       confStream.putNextEntry(new ZipEntry(SPARK_CONF_FILE))
@@ -704,6 +727,8 @@ private[spark] class Client(
   /**
    * Set up a ContainerLaunchContext to launch our ApplicationMaster container.
    * This sets up the launch environment, java options, and the command for launching the AM.
+   *
+   * 在createContainerLaunchContext中会指定要传递给ApplicationMaster进程的参数
    */
   private def createContainerLaunchContext(newAppResponse: GetNewApplicationResponse)
     : ContainerLaunchContext = {
@@ -802,6 +827,10 @@ private[spark] class Client(
     javaOpts += ("-Dspark.yarn.app.container.log.dir=" + ApplicationConstants.LOG_DIR_EXPANSION_VAR)
     YarnCommandBuilderUtils.addPermGenSizeOpt(javaOpts)
 
+    /**
+     * 如果是Cluster模式，那么会添加--class参数，如果是Client模式，则不添加
+     * ApplicationMaster进程有--class参数，ExecutorLauncher进程没有--class参数
+     */
     val userClass =
       if (isClusterMode) {
         Seq("--class", YarnSparkHadoopUtil.escapeForShell(args.userClass))
@@ -826,6 +855,10 @@ private[spark] class Client(
       } else {
         Nil
       }
+
+    /**
+     * 如果是Cluster模式，那么启动ApplicationMaster进程；如果是Client模式，那么启动ExecutorLauncer进程
+     */
     val amClass =
       if (isClusterMode) {
         Utils.classForName("org.apache.spark.deploy.yarn.ApplicationMaster").getName
@@ -838,12 +871,16 @@ private[spark] class Client(
     val userArgs = args.userArgs.flatMap { arg =>
       Seq("--arg", YarnSparkHadoopUtil.escapeForShell(arg))
     }
+
+    /**
+     * 在此处指定--properties-file参数，buildPath的入参是$PWD，那么$PWD的路径指向哪里？
+     */
     val amArgs =
       Seq(amClass) ++ userClass ++ userJar ++ primaryPyFile ++ primaryRFile ++
         userArgs ++ Seq(
           "--executor-memory", args.executorMemory.toString + "m",
           "--executor-cores", args.executorCores.toString,
-          "--properties-file", buildPath(YarnSparkHadoopUtil.expandEnvironment(Environment.PWD),
+          "--properties-file", buildPath(YarnSparkHadoopUtil.expandEnvironment(Environment.PWD), /**ExecutorLauncher的--properties-file参数，为啥是当前目录*/
             LOCALIZED_CONF_DIR, SPARK_CONF_FILE))
 
     // Command for the ApplicationMaster
@@ -1113,7 +1150,10 @@ object Client extends Logging {
   // Subdirectory where the user's Spark and Hadoop config files will be placed.
   val LOCALIZED_CONF_DIR = "__spark_conf__"
 
-  // Name of the file in the conf archive containing Spark configuration.
+    /** *
+      *  Name of the file in the conf archive containing Spark configuration.
+      *  Spark配置信息组成的配置文件
+       */
   val SPARK_CONF_FILE = "__spark_conf__.properties"
 
   // Subdirectory where the user's python files (not archives) will be placed.

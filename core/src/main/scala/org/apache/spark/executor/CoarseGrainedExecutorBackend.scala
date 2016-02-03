@@ -159,6 +159,10 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
         new SecurityManager(executorConf),
         clientMode = true)
       val driver = fetcher.setupEndpointRefByURI(driverUrl)
+
+      /**
+       * CoarseGrainedExecutorBackend会主动向Driver请求Spark的配置信息
+       */
       val props = driver.askWithRetry[Seq[(String, String)]](RetrieveSparkProps) ++
         Seq[(String, String)](("spark.app.id", appId))
       fetcher.shutdown()
@@ -192,6 +196,10 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     }
   }
 
+  /**
+   * CoarseGrainedExecutorBackend的命令参数在解析args参数时都有体现
+   * @param args
+   */
   def main(args: Array[String]) {
     var driverUrl: String = null
     var executorId: String = null
@@ -223,6 +231,10 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
           // Worker url is used in spark standalone mode to enforce fate-sharing with worker
           workerUrl = Some(value)
           argv = tail
+
+        /**
+         * 用户提交作业的jar包，如果指定了--jars参数，是否也会引用到，另外，Executor所需要的参数，此处并没有体现
+         */
         case ("--user-class-path") :: value :: tail =>
           userClassPath += new URL(value)
           argv = tail

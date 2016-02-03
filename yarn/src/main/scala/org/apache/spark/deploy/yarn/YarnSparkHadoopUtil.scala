@@ -421,6 +421,12 @@ object YarnSparkHadoopUtil {
     Try(classOf[Environment].getMethod("$$"))
       .getOrElse(classOf[Environment].getMethod("$"))
 
+  /**
+   *  expandMethod是Environment类的$或者$$方法，
+   *  传入Environment对象，执行expandMethod方法
+   * @param environment
+   * @return
+   */
   def expandEnvironment(environment: Environment): String =
     expandMethod.invoke(environment).asInstanceOf[String]
 

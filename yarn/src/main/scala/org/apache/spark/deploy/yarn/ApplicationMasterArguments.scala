@@ -22,6 +22,10 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.deploy.yarn.YarnSparkHadoopUtil._
 import org.apache.spark.util.{IntParam, MemoryParam}
 
+/**
+ * propertiesFile是如何传递给ApplicationMaster的？这个在ApplicationMaster进程中，是以--properties-file形式出现的
+ * @param args
+ */
 class ApplicationMasterArguments(val args: Array[String]) {
   var userJar: String = null
   var userClass: String = null

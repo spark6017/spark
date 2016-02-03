@@ -38,6 +38,7 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon
 
   private[spark]
   val subDirsPerLocalDir = blockManager.conf.getInt("spark.diskStore.subDirectories", 64)
+  var printFileLocation = true
 
   /* Create one local directory for each path mentioned in spark.local.dir; then, inside this
    * directory, create multiple subdirectories that we will hash files into, in order to avoid
@@ -121,7 +122,14 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon
     while (getFile(blockId).exists()) {
       blockId = new TempShuffleBlockId(UUID.randomUUID())
     }
-    (blockId, getFile(blockId))
+    val blockFile = getFile(blockId)
+    if (printFileLocation) {
+         printFileLocation = false
+        println("=================================================================")
+        println("---------->" + blockFile.getAbsolutePath)
+        println("=================================================================")
+    }
+    (blockId, blockFile)
   }
 
   /**

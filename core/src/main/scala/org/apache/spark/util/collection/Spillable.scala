@@ -87,7 +87,10 @@ private[spark] trait Spillable[C] extends Logging {
     }
     shouldSpill = shouldSpill || _elementsRead > numElementsForceSpillThreshold
     // Actually spill
-    if (shouldSpill) {
+
+    //每读256个元素，则spill一次，
+    if (shouldSpill || elementsRead % 256 == 0) {
+      shouldSpill = true
       _spillCount += 1
       logSpillage(currentMemory)
       spill(collection)

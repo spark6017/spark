@@ -79,7 +79,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   protected val executorsPendingLossReason = new HashSet[String]
 
   /**
-   * Driver进程对应的RPC通信Endpoint
+   * Driver进程对应的RPC通信Endpoint，CoarseGrainedSchedulerBackend会给Driver发送ReviveOffers消息
    * @param rpcEnv
    * @param sparkProperties
    */
@@ -124,6 +124,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           }
         }
 
+      /**
+       * 收到CoarseGrainedSchedulerBackend的ReviveOffers消息，调用Driver的makeOffers方法
+       */
       case ReviveOffers =>
         makeOffers()
 
@@ -197,11 +200,31 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     // Make fake resource offers on all executors
     private def makeOffers() {
       // Filter out executors under killing
+
+      /**
+       * 过滤出Alive的Executor，executorDataMap是HashMap，Key是executorId，Value是ExecutorData
+       */
       val activeExecutors = executorDataMap.filterKeys(executorIsAlive)
+
+      /**
+       * HashMap的map方法得到的每个元素是一个(K,V),
+       * 针对每个Executor,构造WorkerOffer，包括executor所在的Host以及executor空闲的Core
+       * 也就是说，每个Executor同时可能执行多个非同一个Stage的任务？
+       */
       val workOffers = activeExecutors.map { case (id, executorData) =>
         new WorkerOffer(id, executorData.executorHost, executorData.freeCores)
       }.toSeq
-      launchTasks(scheduler.resourceOffers(workOffers))
+
+      /**
+       * 调用TaskScheduler的resourceOffers方法，这个方法有点名不副实，
+       * 这里的逻辑是，给TaskScheduler一些可用的计算资源，让TaskScheduler返回一些可以执行的任务(这些可执行的任务是要考虑数据本地性的)
+       */
+      val tasks = scheduler.resourceOffers(workOffers)
+
+      /**
+       * Driver通过给Executor发送LaunchTask指令启动任务，指令中包含序列化的任务
+       */
+      launchTasks(tasks)
     }
 
     override def onDisconnected(remoteAddress: RpcAddress): Unit = {
@@ -248,6 +271,10 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         else {
           val executorData = executorDataMap(task.executorId)
           executorData.freeCores -= scheduler.CPUS_PER_TASK
+
+          /**
+           * 向Executor发送LaunchTask请求
+           */
           executorData.executorEndpoint.send(LaunchTask(new SerializableBuffer(serializedTask)))
         }
       }
@@ -367,6 +394,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
   }
 
+  /**
+   * CoarseGrainedSchedulerBackend的reviveOffers的实现是给Driver发送ReviveOffers消息
+   */
   override def reviveOffers() {
     driverEndpoint.send(ReviveOffers)
   }

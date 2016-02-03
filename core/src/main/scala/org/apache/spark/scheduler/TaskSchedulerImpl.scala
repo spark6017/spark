@@ -159,6 +159,10 @@ private[spark] class TaskSchedulerImpl(
   override def submitTasks(taskSet: TaskSet) {
     val tasks = taskSet.tasks
     logInfo("Adding task set " + taskSet.id + " with " + tasks.length + " tasks")
+
+    /**
+     * 为TaskSet创建TaskSetManager
+     */
     this.synchronized {
       val manager = createTaskSetManager(taskSet, maxTaskFailures)
       val stage = taskSet.stageId
@@ -189,6 +193,11 @@ private[spark] class TaskSchedulerImpl(
       }
       hasReceivedTask = true
     }
+
+    /**
+     * SchedulerBackend.reviveOffers是干啥的？SchedulerBackend作为TaskScheduler的对外接口，负责与外界进行通信
+     * 包括任务的调度，killTask等之类的交互性工作
+     */
     backend.reviveOffers()
   }
 
@@ -275,6 +284,9 @@ private[spark] class TaskSchedulerImpl(
    * Called by cluster manager to offer resources on slaves. We respond by asking our active task
    * sets for tasks in order of priority. We fill each node with tasks in a round-robin manner so
    * that tasks are balanced across the cluster.
+   *
+   * 这个是所有的TaskScheduler实现类通用的方法
+   * TaskScheduler调度时会考虑数据本地性
    */
   def resourceOffers(offers: Seq[WorkerOffer]): Seq[Seq[TaskDescription]] = synchronized {
     // Mark each slave as alive and remember its hostname

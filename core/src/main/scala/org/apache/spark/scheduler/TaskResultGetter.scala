@@ -36,7 +36,9 @@ private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedul
 
   private val THREADS = sparkEnv.conf.getInt("spark.resultGetter.threads", 4)
 
-  // Exposed for testing.
+  /**
+    * Java多线程，默认四个线程
+    */
   protected val getTaskResultExecutor: ExecutorService =
     ThreadUtils.newDaemonFixedThreadPool(THREADS, "task-result-getter")
 
@@ -114,14 +116,28 @@ private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedul
     })
   }
 
+  /**
+    * 失败任务入队列
+    * @param taskSetManager
+    * @param tid
+    * @param taskState
+    * @param serializedData
+    */
   def enqueueFailedTask(taskSetManager: TaskSetManager, tid: Long, taskState: TaskState,
     serializedData: ByteBuffer) {
     var reason : TaskEndReason = UnknownReason
     try {
+
+      /**
+        * getTaskResultExecutor获取线程池
+        */
       getTaskResultExecutor.execute(new Runnable {
         override def run(): Unit = Utils.logUncaughtExceptions {
           val loader = Utils.getContextOrSparkClassLoader
           try {
+            /**
+              * 解析出任务失败的原因，是一个TaskEndReason对象
+              */
             if (serializedData != null && serializedData.limit() > 0) {
               reason = serializer.get().deserialize[TaskEndReason](
                 serializedData, loader)
@@ -134,6 +150,10 @@ private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedul
                 "Could not deserialize TaskEndReason: ClassNotFound with classloader " + loader)
             case ex: Exception => {}
           }
+
+          /**
+            * 调用TaskScheduler的handleFailedTask方法
+            */
           scheduler.handleFailedTask(taskSetManager, tid, taskState, reason)
         }
       })

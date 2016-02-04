@@ -115,7 +115,15 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         * 任务执行完成，归还executor使用的core，为什么不归还内存
         */
       case StatusUpdate(executorId, taskId, state, data) =>
-        scheduler.statusUpdate(taskId, state, data.value)
+
+        /**
+          * Driver调用TaskScheduler的statusUpdate方法
+          */
+      scheduler.statusUpdate(taskId, state, data.value)
+
+        /**
+          * 任务执行完，释放资源
+          */
         if (TaskState.isFinished(state)) {
           executorDataMap.get(executorId) match {
             case Some(executorInfo) =>

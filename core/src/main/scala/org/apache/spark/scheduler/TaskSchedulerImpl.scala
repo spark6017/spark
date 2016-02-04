@@ -397,7 +397,13 @@ private[spark] class TaskSchedulerImpl(
             if (state == TaskState.FINISHED) {
               taskSet.removeRunningTask(tid)
               taskResultGetter.enqueueSuccessfulTask(taskSet, tid, serializedData)
-            } else if (Set(TaskState.FAILED, TaskState.KILLED, TaskState.LOST).contains(state)) {
+            }
+
+
+            /**
+              * 如果是FAILED,KILLED或者LOST，则添加到失败的任务队列
+              */
+            else if (Set(TaskState.FAILED, TaskState.KILLED, TaskState.LOST).contains(state)) {
               taskSet.removeRunningTask(tid)
               taskResultGetter.enqueueFailedTask(taskSet, tid, state, serializedData)
             }
@@ -449,11 +455,25 @@ private[spark] class TaskSchedulerImpl(
     taskSetManager.handleSuccessfulTask(tid, taskResult)
   }
 
+  /**
+    * TaskScheduler的handleFailedTask方法
+    *  - 首先调用TaskSetManager的handleFailedTask方法
+    *  - 然后调用SchedulerBackend的reviveOffers方法
+    *
+    * @param taskSetManager
+    * @param tid
+    * @param taskState
+    * @param reason
+    */
   def handleFailedTask(
       taskSetManager: TaskSetManager,
       tid: Long,
       taskState: TaskState,
       reason: TaskEndReason): Unit = synchronized {
+
+    /**
+      *
+      */
     taskSetManager.handleFailedTask(tid, taskState, reason)
     if (!taskSetManager.isZombie && taskState != TaskState.KILLED) {
       // Need to revive offers again now that the task set manager state has been updated to

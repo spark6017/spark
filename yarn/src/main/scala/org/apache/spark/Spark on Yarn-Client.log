@@ -1,0 +1,256 @@
+yuzt@yuzt-Aspire-TC-606:~/software/bigdata/spark-1.6.0-bin-hadoop2.6.0-withouthive/bin$ ./spark-submit --master yarn-client --executor-memory 512m --class com.bit.WordcountTest2 examples/learn.spark-1.0-SNAPSHOT.jar 120
+The WordcountTest started to run
+16/02/04 18:15:44 INFO org.apache.spark.SparkContext : Running Spark version 1.6.0
+16/02/04 18:15:44 WARN org.apache.hadoop.util.NativeCodeLoader : Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
+16/02/04 18:15:44 WARN org.apache.spark.util.Utils : Your hostname, yuzt-Aspire-TC-606 resolves to a loopback address: 127.0.1.1; using 10.12.167.42 instead (on interface eth0)
+16/02/04 18:15:44 WARN org.apache.spark.util.Utils : Set SPARK_LOCAL_IP if you need to bind to another address
+16/02/04 18:15:44 INFO org.apache.spark.SecurityManager : Changing view acls to: yuzt
+16/02/04 18:15:44 INFO org.apache.spark.SecurityManager : Changing modify acls to: yuzt
+16/02/04 18:15:44 INFO org.apache.spark.SecurityManager : SecurityManager: authentication disabled; ui acls disabled; users with view permissions: Set(yuzt); users with modify permissions: Set(yuzt)
+16/02/04 18:15:44 DEBUG org.apache.spark.SSLOptions : No SSL protocol specified
+16/02/04 18:15:45 DEBUG org.apache.spark.SSLOptions : No SSL protocol specified
+16/02/04 18:15:45 DEBUG org.apache.spark.SSLOptions : No SSL protocol specified
+16/02/04 18:15:45 DEBUG org.apache.spark.SecurityManager : SSLConfiguration for file server: SSLOptions{enabled=false, keyStore=None, keyStorePassword=None, trustStore=None, trustStorePassword=None, protocol=None, enabledAlgorithms=Set()}
+16/02/04 18:15:45 DEBUG org.apache.spark.SecurityManager : SSLConfiguration for Akka: SSLOptions{enabled=false, keyStore=None, keyStorePassword=None, trustStore=None, trustStorePassword=None, protocol=None, enabledAlgorithms=Set()}
+16/02/04 18:15:45 DEBUG io.netty.util.internal.logging.InternalLoggerFactory : Using SLF4J as the default logging framework
+16/02/04 18:15:45 DEBUG io.netty.util.internal.PlatformDependent0 : java.nio.Buffer.address: available
+16/02/04 18:15:45 DEBUG io.netty.util.internal.PlatformDependent0 : sun.misc.Unsafe.theUnsafe: available
+16/02/04 18:15:45 DEBUG io.netty.util.internal.PlatformDependent0 : sun.misc.Unsafe.copyMemory: available
+16/02/04 18:15:45 DEBUG io.netty.util.internal.PlatformDependent0 : java.nio.Bits.unaligned: true
+16/02/04 18:15:45 DEBUG io.netty.util.internal.PlatformDependent : Java version: 7
+16/02/04 18:15:45 DEBUG io.netty.util.internal.PlatformDependent : -Dio.netty.noUnsafe: false
+16/02/04 18:15:45 DEBUG io.netty.util.internal.PlatformDependent : sun.misc.Unsafe: available
+16/02/04 18:15:45 DEBUG io.netty.util.internal.PlatformDependent : -Dio.netty.noJavassist: false
+16/02/04 18:15:45 DEBUG io.netty.util.internal.PlatformDependent : Javassist: unavailable
+16/02/04 18:15:45 DEBUG io.netty.util.internal.PlatformDependent : You don't have Javassist in your class path or you don't have enough permission to load dynamically generated classes.  Please check the configuration for better performance.
+16/02/04 18:15:45 DEBUG io.netty.util.internal.PlatformDependent : -Dio.netty.tmpdir: /tmp (java.io.tmpdir)
+16/02/04 18:15:45 DEBUG io.netty.util.internal.PlatformDependent : -Dio.netty.bitMode: 64 (sun.arch.data.model)
+16/02/04 18:15:45 DEBUG io.netty.util.internal.PlatformDependent : -Dio.netty.noPreferDirect: false
+16/02/04 18:15:45 DEBUG io.netty.channel.MultithreadEventLoopGroup : -Dio.netty.eventLoopThreads: 8
+16/02/04 18:15:45 DEBUG io.netty.channel.nio.NioEventLoop : -Dio.netty.noKeySetOptimization: false
+16/02/04 18:15:45 DEBUG io.netty.channel.nio.NioEventLoop : -Dio.netty.selectorAutoRebuildThreshold: 512
+16/02/04 18:15:45 DEBUG io.netty.buffer.PooledByteBufAllocator : -Dio.netty.allocator.numHeapArenas: 8
+16/02/04 18:15:45 DEBUG io.netty.buffer.PooledByteBufAllocator : -Dio.netty.allocator.numDirectArenas: 8
+16/02/04 18:15:45 DEBUG io.netty.buffer.PooledByteBufAllocator : -Dio.netty.allocator.pageSize: 8192
+16/02/04 18:15:45 DEBUG io.netty.buffer.PooledByteBufAllocator : -Dio.netty.allocator.maxOrder: 11
+16/02/04 18:15:45 DEBUG io.netty.buffer.PooledByteBufAllocator : -Dio.netty.allocator.chunkSize: 16777216
+16/02/04 18:15:45 DEBUG io.netty.buffer.PooledByteBufAllocator : -Dio.netty.allocator.tinyCacheSize: 512
+16/02/04 18:15:45 DEBUG io.netty.buffer.PooledByteBufAllocator : -Dio.netty.allocator.smallCacheSize: 256
+16/02/04 18:15:45 DEBUG io.netty.buffer.PooledByteBufAllocator : -Dio.netty.allocator.normalCacheSize: 64
+16/02/04 18:15:45 DEBUG io.netty.buffer.PooledByteBufAllocator : -Dio.netty.allocator.maxCachedBufferCapacity: 32768
+16/02/04 18:15:45 DEBUG io.netty.buffer.PooledByteBufAllocator : -Dio.netty.allocator.cacheTrimInterval: 8192
+16/02/04 18:15:45 DEBUG io.netty.util.internal.ThreadLocalRandom : -Dio.netty.initialSeedUniquifier: 0xc54956380b06f00f (took 0 ms)
+16/02/04 18:15:45 DEBUG io.netty.buffer.ByteBufUtil : -Dio.netty.allocator.type: unpooled
+16/02/04 18:15:45 DEBUG io.netty.buffer.ByteBufUtil : -Dio.netty.threadLocalDirectBufferSize: 65536
+16/02/04 18:15:45 DEBUG io.netty.util.NetUtil : Loopback interface: lo (lo, 127.0.0.1)
+16/02/04 18:15:45 DEBUG io.netty.util.NetUtil : /proc/sys/net/core/somaxconn: 128
+16/02/04 18:15:45 DEBUG org.apache.spark.network.server.TransportServer : Shuffle server started on port :35160
+16/02/04 18:15:45 INFO org.apache.spark.util.Utils : Successfully started service 'sparkDriver' on port 35160.
+16/02/04 18:15:45 DEBUG org.apache.spark.util.AkkaUtils : In createActorSystem, requireCookie is: off
+16/02/04 18:15:45 INFO akka.event.slf4j.Slf4jLogger : Slf4jLogger started
+16/02/04 18:15:45 INFO Remoting : Starting remoting
+16/02/04 18:15:45 INFO Remoting : Remoting started; listening on addresses :[akka.tcp://sparkDriverActorSystem@10.12.167.42:47814]
+16/02/04 18:15:45 INFO org.apache.spark.util.Utils : Successfully started service 'sparkDriverActorSystem' on port 47814.
+16/02/04 18:15:45 DEBUG org.apache.spark.SparkEnv : Using serializer: class org.apache.spark.serializer.JavaSerializer
+16/02/04 18:15:45 INFO org.apache.spark.SparkEnv : Registering MapOutputTracker
+16/02/04 18:15:45 INFO org.apache.spark.SparkEnv : Registering BlockManagerMaster
+16/02/04 18:15:45 INFO org.apache.spark.storage.DiskBlockManager : Created local directory at /tmp/blockmgr-bcf63851-21b4-43cf-b505-f6c0072d0892
+16/02/04 18:15:45 INFO org.apache.spark.storage.MemoryStore : MemoryStore started with capacity 511.5 MB
+16/02/04 18:15:45 INFO org.apache.spark.SparkEnv : Registering OutputCommitCoordinator
+16/02/04 18:15:45 INFO org.apache.spark.util.Utils : Successfully started service 'SparkUI' on port 4040.
+16/02/04 18:15:45 INFO org.apache.spark.ui.SparkUI : Started SparkUI at http://10.12.167.42:4040
+16/02/04 18:15:45 INFO org.apache.spark.HttpFileServer : HTTP File server directory is /tmp/spark-9d70954a-f43e-4db3-8845-88c70601aece/httpd-e2de5e2c-c6c2-4d00-8027-c068a2cca4c5
+16/02/04 18:15:45 INFO org.apache.spark.HttpServer : Starting HTTP Server
+16/02/04 18:15:45 DEBUG org.apache.spark.HttpServer : HttpServer is not using security
+16/02/04 18:15:45 INFO org.apache.spark.util.Utils : Successfully started service 'HTTP file server' on port 57411.
+16/02/04 18:15:45 DEBUG org.apache.spark.HttpFileServer : HTTP file server started at: http://10.12.167.42:57411
+16/02/04 18:15:45 INFO org.apache.spark.SparkContext : Added JAR file:/home/yuzt/software/bigdata/spark-1.6.0-bin-hadoop2.6.0-withouthive/bin/examples/learn.spark-1.0-SNAPSHOT.jar at http://10.12.167.42:57411/jars/learn.spark-1.0-SNAPSHOT.jar with timestamp 1454580945958
+16/02/04 18:15:46 DEBUG org.apache.spark.scheduler.cluster.YarnClientSchedulerBackend : ClientArguments called with: --arg 10.12.167.42:35160 --executor-memory 512m --executor-memory 512m --name WordcountTest
+16/02/04 18:15:46 INFO org.apache.hadoop.yarn.client.RMProxy : Connecting to ResourceManager at /0.0.0.0:8032
+16/02/04 18:15:46 INFO org.apache.spark.deploy.yarn.Client : Requesting a new application from cluster with 1 NodeManagers
+16/02/04 18:15:46 INFO org.apache.spark.deploy.yarn.Client : Verifying our application has not requested more than the maximum memory capability of the cluster (8192 MB per container)
+16/02/04 18:15:46 INFO org.apache.spark.deploy.yarn.Client : Will allocate AM container, with 896 MB memory including 384 MB overhead
+16/02/04 18:15:46 INFO org.apache.spark.deploy.yarn.Client : Setting up container launch context for our AM
+16/02/04 18:15:46 INFO org.apache.spark.deploy.yarn.Client : Setting up the launch environment for our AM container
+16/02/04 18:15:46 DEBUG org.apache.spark.deploy.yarn.Client : Using the default YARN application classpath: $HADOOP_CONF_DIR,$HADOOP_COMMON_HOME/share/hadoop/common/*,$HADOOP_COMMON_HOME/share/hadoop/common/lib/*,$HADOOP_HDFS_HOME/share/hadoop/hdfs/*,$HADOOP_HDFS_HOME/share/hadoop/hdfs/lib/*,$HADOOP_YARN_HOME/share/hadoop/yarn/*,$HADOOP_YARN_HOME/share/hadoop/yarn/lib/*
+16/02/04 18:15:46 DEBUG org.apache.spark.deploy.yarn.Client : Using the default MR application classpath: $HADOOP_MAPRED_HOME/share/hadoop/mapreduce/*,$HADOOP_MAPRED_HOME/share/hadoop/mapreduce/lib/*
+16/02/04 18:15:46 INFO org.apache.spark.deploy.yarn.Client : Preparing resources for our AM container
+16/02/04 18:15:46 DEBUG  : address: yuzt-Aspire-TC-606/127.0.1.1 isLoopbackAddress: true, with host 127.0.1.1 yuzt-Aspire-TC-606
+16/02/04 18:15:46 DEBUG io.netty.util.internal.NativeLibraryLoader : -Dio.netty.tmpdir: /tmp (java.io.tmpdir)
+16/02/04 18:15:46 DEBUG io.netty.util.internal.NativeLibraryLoader : -Dio.netty.netty.workdir: /tmp (io.netty.tmpdir)
+16/02/04 18:15:46 INFO org.apache.spark.deploy.yarn.Client : Uploading resource file:/home/yuzt/software/bigdata/spark-1.6.0-bin-hadoop2.6.0-withouthive/lib/spark-assembly-1.6.0-hadoop2.6.0.jar -> hdfs://hadoop.bit.com:9000/user/yuzt/.sparkStaging/application_1453270984424_0041/spark-assembly-1.6.0-hadoop2.6.0.jar
+16/02/04 18:15:49 INFO org.apache.spark.deploy.yarn.Client : Uploading resource file:/tmp/spark-9d70954a-f43e-4db3-8845-88c70601aece/__spark_conf__5110078612365858487.zip -> hdfs://hadoop.bit.com:9000/user/yuzt/.sparkStaging/application_1453270984424_0041/__spark_conf__5110078612365858487.zip
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client : ===============================================================================
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client : YARN AM launch context:
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :     user class: N/A
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :     env:
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :         CLASSPATH -> {{PWD}}<CPS>{{PWD}}/__spark_conf__<CPS>{{PWD}}/__spark__.jar<CPS>$HADOOP_CONF_DIR<CPS>$HADOOP_COMMON_HOME/share/hadoop/common/*<CPS>$HADOOP_COMMON_HOME/share/hadoop/common/lib/*<CPS>$HADOOP_HDFS_HOME/share/hadoop/hdfs/*<CPS>$HADOOP_HDFS_HOME/share/hadoop/hdfs/lib/*<CPS>$HADOOP_YARN_HOME/share/hadoop/yarn/*<CPS>$HADOOP_YARN_HOME/share/hadoop/yarn/lib/*<CPS>$HADOOP_MAPRED_HOME/share/hadoop/mapreduce/*<CPS>$HADOOP_MAPRED_HOME/share/hadoop/mapreduce/lib/*
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :         SPARK_YARN_CACHE_FILES_FILE_SIZES -> 146237573
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :         SPARK_YARN_STAGING_DIR -> .sparkStaging/application_1453270984424_0041
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :         SPARK_YARN_CACHE_FILES_VISIBILITIES -> PRIVATE
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :         SPARK_USER -> yuzt
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :         SPARK_YARN_MODE -> true
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :         SPARK_YARN_CACHE_FILES_TIME_STAMPS -> 1454580949870
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :         SPARK_YARN_CACHE_FILES -> hdfs://hadoop.bit.com:9000/user/yuzt/.sparkStaging/application_1453270984424_0041/spark-assembly-1.6.0-hadoop2.6.0.jar#__spark__.jar
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :     resources:
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :         __spark__.jar -> resource { scheme: "hdfs" host: "hadoop.bit.com" port: 9000 file: "/user/yuzt/.sparkStaging/application_1453270984424_0041/spark-assembly-1.6.0-hadoop2.6.0.jar" } size: 146237573 timestamp: 1454580949870 type: FILE visibility: PRIVATE
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :         __spark_conf__ -> resource { scheme: "hdfs" host: "hadoop.bit.com" port: 9000 file: "/user/yuzt/.sparkStaging/application_1453270984424_0041/__spark_conf__5110078612365858487.zip" } size: 75701 timestamp: 1454580949968 type: ARCHIVE visibility: PRIVATE
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :     command:
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client :         {{JAVA_HOME}}/bin/java -server -Xmx512m -Djava.io.tmpdir={{PWD}}/tmp -Dspark.yarn.app.container.log.dir=<LOG_DIR> -XX:MaxPermSize=256m org.apache.spark.deploy.yarn.ExecutorLauncher --arg '10.12.167.42:35160' --executor-memory 512m --executor-cores 1 --properties-file {{PWD}}/__spark_conf__/__spark_conf__.properties 1> <LOG_DIR>/stdout 2> <LOG_DIR>/stderr
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client : ===============================================================================
+16/02/04 18:15:50 INFO org.apache.spark.SecurityManager : Changing view acls to: yuzt
+16/02/04 18:15:50 INFO org.apache.spark.SecurityManager : Changing modify acls to: yuzt
+16/02/04 18:15:50 INFO org.apache.spark.SecurityManager : SecurityManager: authentication disabled; ui acls disabled; users with view permissions: Set(yuzt); users with modify permissions: Set(yuzt)
+16/02/04 18:15:50 DEBUG org.apache.spark.SSLOptions : No SSL protocol specified
+16/02/04 18:15:50 DEBUG org.apache.spark.SSLOptions : No SSL protocol specified
+16/02/04 18:15:50 DEBUG org.apache.spark.SSLOptions : No SSL protocol specified
+16/02/04 18:15:50 DEBUG org.apache.spark.SecurityManager : SSLConfiguration for file server: SSLOptions{enabled=false, keyStore=None, keyStorePassword=None, trustStore=None, trustStorePassword=None, protocol=None, enabledAlgorithms=Set()}
+16/02/04 18:15:50 DEBUG org.apache.spark.SecurityManager : SSLConfiguration for Akka: SSLOptions{enabled=false, keyStore=None, keyStorePassword=None, trustStore=None, trustStorePassword=None, protocol=None, enabledAlgorithms=Set()}
+16/02/04 18:15:50 DEBUG org.apache.spark.deploy.yarn.Client : spark.yarn.maxAppAttempts is not set. Cluster's default value will be used.
+16/02/04 18:15:50 INFO org.apache.spark.deploy.yarn.Client : Submitting application 41 to ResourceManager
+16/02/04 18:15:50 INFO org.apache.hadoop.yarn.client.api.impl.YarnClientImpl : Submitted application application_1453270984424_0041
+16/02/04 18:15:51 INFO org.apache.spark.deploy.yarn.Client : Application report for application_1453270984424_0041 (state: ACCEPTED)
+16/02/04 18:15:51 DEBUG org.apache.spark.deploy.yarn.Client :
+	 client token: N/A
+	 diagnostics: N/A
+	 ApplicationMaster host: N/A
+	 ApplicationMaster RPC port: -1
+	 queue: default
+	 start time: 1454580950082
+	 final status: UNDEFINED
+	 tracking URL: http://yuzt-Aspire-TC-606:8088/proxy/application_1453270984424_0041/
+	 user: yuzt
+16/02/04 18:15:52 INFO org.apache.spark.deploy.yarn.Client : Application report for application_1453270984424_0041 (state: ACCEPTED)
+16/02/04 18:15:52 DEBUG org.apache.spark.deploy.yarn.Client :
+	 client token: N/A
+	 diagnostics: N/A
+	 ApplicationMaster host: N/A
+	 ApplicationMaster RPC port: -1
+	 queue: default
+	 start time: 1454580950082
+	 final status: UNDEFINED
+	 tracking URL: http://yuzt-Aspire-TC-606:8088/proxy/application_1453270984424_0041/
+	 user: yuzt
+16/02/04 18:15:53 INFO org.apache.spark.deploy.yarn.Client : Application report for application_1453270984424_0041 (state: ACCEPTED)
+16/02/04 18:15:53 DEBUG org.apache.spark.deploy.yarn.Client :
+	 client token: N/A
+	 diagnostics: N/A
+	 ApplicationMaster host: N/A
+	 ApplicationMaster RPC port: -1
+	 queue: default
+	 start time: 1454580950082
+	 final status: UNDEFINED
+	 tracking URL: http://yuzt-Aspire-TC-606:8088/proxy/application_1453270984424_0041/
+	 user: yuzt
+16/02/04 18:15:54 INFO org.apache.spark.deploy.yarn.Client : Application report for application_1453270984424_0041 (state: ACCEPTED)
+16/02/04 18:15:54 DEBUG org.apache.spark.deploy.yarn.Client :
+	 client token: N/A
+	 diagnostics: N/A
+	 ApplicationMaster host: N/A
+	 ApplicationMaster RPC port: -1
+	 queue: default
+	 start time: 1454580950082
+	 final status: UNDEFINED
+	 tracking URL: http://yuzt-Aspire-TC-606:8088/proxy/application_1453270984424_0041/
+	 user: yuzt
+16/02/04 18:15:54 DEBUG io.netty.util.ResourceLeakDetector : -Dio.netty.leakDetectionLevel: simple
+16/02/04 18:15:54 DEBUG io.netty.util.Recycler : -Dio.netty.recycler.maxCapacity.default: 262144
+16/02/04 18:15:55 INFO org.apache.spark.deploy.yarn.Client : Application report for application_1453270984424_0041 (state: ACCEPTED)
+16/02/04 18:15:55 DEBUG org.apache.spark.deploy.yarn.Client :
+	 client token: N/A
+	 diagnostics: N/A
+	 ApplicationMaster host: N/A
+	 ApplicationMaster RPC port: -1
+	 queue: default
+	 start time: 1454580950082
+	 final status: UNDEFINED
+	 tracking URL: http://yuzt-Aspire-TC-606:8088/proxy/application_1453270984424_0041/
+	 user: yuzt
+16/02/04 18:15:56 INFO org.apache.spark.deploy.yarn.Client : Application report for application_1453270984424_0041 (state: ACCEPTED)
+16/02/04 18:15:56 DEBUG org.apache.spark.deploy.yarn.Client :
+	 client token: N/A
+	 diagnostics: N/A
+	 ApplicationMaster host: N/A
+	 ApplicationMaster RPC port: -1
+	 queue: default
+	 start time: 1454580950082
+	 final status: UNDEFINED
+	 tracking URL: http://yuzt-Aspire-TC-606:8088/proxy/application_1453270984424_0041/
+	 user: yuzt
+16/02/04 18:15:57 INFO org.apache.spark.deploy.yarn.Client : Application report for application_1453270984424_0041 (state: ACCEPTED)
+16/02/04 18:15:57 DEBUG org.apache.spark.deploy.yarn.Client :
+	 client token: N/A
+	 diagnostics: N/A
+	 ApplicationMaster host: N/A
+	 ApplicationMaster RPC port: -1
+	 queue: default
+	 start time: 1454580950082
+	 final status: UNDEFINED
+	 tracking URL: http://yuzt-Aspire-TC-606:8088/proxy/application_1453270984424_0041/
+	 user: yuzt
+16/02/04 18:15:58 INFO org.apache.spark.deploy.yarn.Client : Application report for application_1453270984424_0041 (state: ACCEPTED)
+16/02/04 18:15:58 DEBUG org.apache.spark.deploy.yarn.Client :
+	 client token: N/A
+	 diagnostics: N/A
+	 ApplicationMaster host: N/A
+	 ApplicationMaster RPC port: -1
+	 queue: default
+	 start time: 1454580950082
+	 final status: UNDEFINED
+	 tracking URL: http://yuzt-Aspire-TC-606:8088/proxy/application_1453270984424_0041/
+	 user: yuzt
+16/02/04 18:15:59 INFO org.apache.spark.deploy.yarn.Client : Application report for application_1453270984424_0041 (state: ACCEPTED)
+16/02/04 18:15:59 DEBUG org.apache.spark.deploy.yarn.Client :
+	 client token: N/A
+	 diagnostics: N/A
+	 ApplicationMaster host: N/A
+	 ApplicationMaster RPC port: -1
+	 queue: default
+	 start time: 1454580950082
+	 final status: UNDEFINED
+	 tracking URL: http://yuzt-Aspire-TC-606:8088/proxy/application_1453270984424_0041/
+	 user: yuzt
+16/02/04 18:15:59 INFO org.apache.spark.scheduler.cluster.YarnSchedulerBackend$YarnSchedulerEndpoint : ApplicationMaster registered as NettyRpcEndpointRef(null)
+16/02/04 18:15:59 INFO org.apache.spark.scheduler.cluster.YarnClientSchedulerBackend : Add WebUI Filter. org.apache.hadoop.yarn.server.webproxy.amfilter.AmIpFilter, Map(PROXY_HOSTS -> yuzt-Aspire-TC-606, PROXY_URI_BASES -> http://yuzt-Aspire-TC-606:8088/proxy/application_1453270984424_0041), /proxy/application_1453270984424_0041
+16/02/04 18:15:59 INFO org.apache.spark.ui.JettyUtils : Adding filter: org.apache.hadoop.yarn.server.webproxy.amfilter.AmIpFilter
+16/02/04 18:16:00 INFO org.apache.spark.deploy.yarn.Client : Application report for application_1453270984424_0041 (state: RUNNING)
+16/02/04 18:16:00 DEBUG org.apache.spark.deploy.yarn.Client :
+	 client token: N/A
+	 diagnostics: N/A
+	 ApplicationMaster host: 10.12.167.42
+	 ApplicationMaster RPC port: 0
+	 queue: default
+	 start time: 1454580950082
+	 final status: UNDEFINED
+	 tracking URL: http://yuzt-Aspire-TC-606:8088/proxy/application_1453270984424_0041/
+	 user: yuzt
+16/02/04 18:16:00 INFO org.apache.spark.scheduler.cluster.YarnClientSchedulerBackend : Application application_1453270984424_0041 has started running.
+16/02/04 18:16:00 DEBUG org.apache.spark.network.server.TransportServer : Shuffle server started on port :53787
+16/02/04 18:16:00 INFO org.apache.spark.util.Utils : Successfully started service 'org.apache.spark.network.netty.NettyBlockTransferService' on port 53787.
+16/02/04 18:16:00 INFO org.apache.spark.network.netty.NettyBlockTransferService : Server created on 53787
+16/02/04 18:16:00 INFO org.apache.spark.storage.BlockManagerMaster : Trying to register BlockManager
+16/02/04 18:16:00 INFO org.apache.spark.storage.BlockManagerMasterEndpoint : Registering block manager 10.12.167.42:53787 with 511.5 MB RAM, BlockManagerId(driver, 10.12.167.42, 53787)
+16/02/04 18:16:00 INFO org.apache.spark.storage.BlockManagerMaster : Registered BlockManager
+16/02/04 18:16:07 INFO org.apache.spark.scheduler.cluster.YarnClientSchedulerBackend : Registered executor NettyRpcEndpointRef(null) (10.12.167.42:37405) with ID 1
+16/02/04 18:16:07 INFO org.apache.spark.storage.BlockManagerMasterEndpoint : Registering block manager 10.12.167.42:59595 with 143.6 MB RAM, BlockManagerId(1, 10.12.167.42, 59595)
+16/02/04 18:16:08 INFO org.apache.spark.scheduler.cluster.YarnClientSchedulerBackend : Registered executor NettyRpcEndpointRef(null) (10.12.167.42:37408) with ID 2
+16/02/04 18:16:08 INFO org.apache.spark.scheduler.cluster.YarnClientSchedulerBackend : SchedulerBackend is ready for scheduling beginning after reached minRegisteredResourcesRatio: 0.8
+16/02/04 18:16:08 INFO org.apache.spark.storage.BlockManagerMasterEndpoint : Registering block manager 10.12.167.42:42292 with 143.6 MB RAM, BlockManagerId(2, 10.12.167.42, 42292)
+Waiting 120000 milliseconds to continue
+^C16/02/04 18:16:09 INFO org.apache.spark.SparkContext : Invoking stop() from shutdown hook
+16/02/04 18:16:09 INFO org.apache.spark.ui.SparkUI : Stopped Spark web UI at http://10.12.167.42:4040
+16/02/04 18:16:09 INFO org.apache.spark.scheduler.cluster.YarnClientSchedulerBackend : Shutting down all executors
+16/02/04 18:16:09 INFO org.apache.spark.scheduler.cluster.YarnClientSchedulerBackend : Interrupting monitor thread
+16/02/04 18:16:09 INFO org.apache.spark.scheduler.cluster.YarnClientSchedulerBackend : Asking each executor to shut down
+16/02/04 18:16:09 INFO org.apache.spark.scheduler.cluster.YarnClientSchedulerBackend : Stopped
+16/02/04 18:16:09 INFO org.apache.spark.MapOutputTrackerMasterEndpoint : MapOutputTrackerMasterEndpoint stopped!
+16/02/04 18:16:09 INFO org.apache.spark.storage.MemoryStore : MemoryStore cleared
+16/02/04 18:16:09 INFO org.apache.spark.storage.BlockManager : BlockManager stopped
+16/02/04 18:16:09 INFO org.apache.spark.storage.BlockManagerMaster : BlockManagerMaster stopped
+16/02/04 18:16:09 INFO org.apache.spark.scheduler.OutputCommitCoordinator$OutputCommitCoordinatorEndpoint : OutputCommitCoordinator stopped!
+16/02/04 18:16:09 INFO akka.remote.RemoteActorRefProvider$RemotingTerminator : Shutting down remote daemon.
+16/02/04 18:16:09 INFO akka.remote.RemoteActorRefProvider$RemotingTerminator : Remote daemon shut down; proceeding with flushing remote transports.
+16/02/04 18:16:09 INFO org.apache.spark.SparkContext : Successfully stopped SparkContext
+16/02/04 18:16:09 INFO org.apache.spark.util.ShutdownHookManager : Shutdown hook called
+16/02/04 18:16:09 INFO org.apache.spark.util.ShutdownHookManager : Deleting directory /tmp/spark-9d70954a-f43e-4db3-8845-88c70601aece
+16/02/04 18:16:09 INFO org.apache.spark.util.ShutdownHookManager : Deleting directory /tmp/spark-9d70954a-f43e-4db3-8845-88c70601aece/httpd-e2de5e2c-c6c2-4d00-8027-c068a2cca4c5

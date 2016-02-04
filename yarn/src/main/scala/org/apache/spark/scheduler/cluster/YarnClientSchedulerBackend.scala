@@ -26,6 +26,13 @@ import org.apache.spark.deploy.yarn.{Client, ClientArguments, YarnSparkHadoopUti
 import org.apache.spark.launcher.SparkAppHandle
 import org.apache.spark.scheduler.TaskSchedulerImpl
 
+/**
+  * YarnClientSchedulerBackend继承自YarnSchedulerBackend
+  * YarnClusterSChedulerBackend也继承自YarnSchedulerBackend
+
+  * @param scheduler
+  * @param sc
+  */
 private[spark] class YarnClientSchedulerBackend(
     scheduler: TaskSchedulerImpl,
     sc: SparkContext)
@@ -41,7 +48,7 @@ private[spark] class YarnClientSchedulerBackend(
    *
    * 在Yarn-Client模式下，SparkContext创建时，逻辑会执行到YarnClientSchedulerBackend的start方法
    *
-   * 这个方法，将启动ApplicationMaster
+   * 这个方法，将启动ApplicationMaster,也就是说在Yarn-Client模式下，Driver负责启动ApplicationMaster进程()
    */
   override def start() {
     val driverHost = conf.get("spark.driver.host")
@@ -64,6 +71,9 @@ private[spark] class YarnClientSchedulerBackend(
     totalExpectedExecutors = args.numExecutors
     client = new Client(args, conf)
 
+    /**
+      *  client.submitApplication提交并运行,在client.submitApplication中会指定AM的类
+      */
     val submitApplication = client.submitApplication()
     bindToYarn(submitApplication, None)
 
@@ -124,6 +134,8 @@ private[spark] class YarnClientSchedulerBackend(
    * Report the state of the application until it is running.
    * If the application has finished, failed or been killed in the process, throw an exception.
    * This assumes both `client` and `appId` have already been set.
+    *
+    * Driver等待Application运行起来
    */
   private def waitForApplication(): Unit = {
     assert(client != null && appId.isDefined, "Application has not been submitted yet!")

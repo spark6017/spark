@@ -82,6 +82,10 @@ private[spark] class TaskSetManager(
   val numTasks = tasks.length
   val copiesRunning = new Array[Int](numTasks)
   val successful = new Array[Boolean](numTasks)
+
+  /**
+    * 长度为numTask的数组，每个元素的值是对应Task的失败次数
+    */
   private val numFailures = new Array[Int](numTasks)
   // key is taskId, value is a Map of executor id to when it failed
   private val failedExecutors = new HashMap[Int, HashMap[String, Long]]()
@@ -661,6 +665,8 @@ private[spark] class TaskSetManager(
   /**
    * Marks the task as failed, re-adds it to the list of pending tasks, and notifies the
    * DAG Scheduler.
+    *
+    * handleFailedTask处理失败重试的问题
    */
   def handleFailedTask(tid: Long, state: TaskState, reason: TaskEndReason) {
     val info = taskInfos(tid)
@@ -740,11 +746,20 @@ private[spark] class TaskSetManager(
     failedExecutors.getOrElseUpdate(index, new HashMap[String, Long]()).
       put(info.executorId, clock.getTimeMillis())
     sched.dagScheduler.taskEnded(tasks(index), reason, null, accumUpdates, info)
+
+    /***
+      * 为什么不先检查是否已经超过最大失败数再添加到PendingTask中
+      */
+
     addPendingTask(index)
     if (!isZombie && state != TaskState.KILLED
         && reason.isInstanceOf[TaskFailedReason]
         && reason.asInstanceOf[TaskFailedReason].countTowardsTaskFailures) {
       assert (null != failureReason)
+
+      /**
+        * 失败失败次数加1
+        */
       numFailures(index) += 1
       if (numFailures(index) >= maxTaskFailures) {
         logError("Task %d in stage %s failed %d times; aborting job".format(

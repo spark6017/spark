@@ -122,6 +122,7 @@ private[spark] class Executor(
       attemptNumber: Int,
       taskName: String,
       serializedTask: ByteBuffer): Unit = {
+//    logInfo(s"Executor##launchTask: taskId :$taskId, attemptNumber: $attemptNumber, taskName: $taskName")
     val tr = new TaskRunner(context, taskId = taskId, attemptNumber = attemptNumber, taskName,
       serializedTask)
     runningTasks.put(taskId, tr)

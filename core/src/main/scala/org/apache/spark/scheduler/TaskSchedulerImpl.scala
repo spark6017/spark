@@ -56,6 +56,11 @@ private[spark] class TaskSchedulerImpl(
     isLocal: Boolean = false)
   extends TaskScheduler with Logging
 {
+  /**
+    * 只有一个SparkContext参数的构造函数，失败重试次数默认是4，由spark.task.maxFailures决定
+    * @param sc
+    * @return
+    */
   def this(sc: SparkContext) = this(sc, sc.conf.getInt("spark.task.maxFailures", 4))
 
   val conf = sc.conf
@@ -300,7 +305,7 @@ private[spark] class TaskSchedulerImpl(
    *
    * Driver拿出所有可用的资源，TaskScheduler根据这些资源进行任务分配，TaskScheduler调度时会考虑数据本地性
    *
-   *  NOTE：这个是所有的TaskScheduler实现类通用的方法
+   *  NOTE：这个是所有的TaskScheduler实现类通用的方法，包括本地模式以及CoarseGrained模式
    *
    */
   def resourceOffers(offers: Seq[WorkerOffer]): Seq[Seq[TaskDescription]] = synchronized {
@@ -322,8 +327,16 @@ private[spark] class TaskSchedulerImpl(
 
     // Randomly shuffle offers to avoid always placing tasks on the same set of workers.
     val shuffledOffers = Random.shuffle(offers)
-    // Build a list of tasks to assign to each worker.
+
+    /**
+      * Build a list of tasks to assign to each worker.
+      * shuffledOffers是WorkerOffer类型的集合，map操作是将每个WorkerOffer转换为一个TaskDescription的ArrayBuffer集合，这个ArrayBuffer的长度是o.cores
+      */
     val tasks = shuffledOffers.map(o => new ArrayBuffer[TaskDescription](o.cores))
+
+    /**
+      * 每个WorkerOffer拥有的cores
+      */
     val availableCpus = shuffledOffers.map(o => o.cores).toArray
 
     /**
@@ -331,7 +344,7 @@ private[spark] class TaskSchedulerImpl(
      */
     val sortedTaskSets = rootPool.getSortedTaskSetQueue
     for (taskSet <- sortedTaskSets) {
-      logDebug("parentName: %s, name: %s, runningTasks: %s".format(
+      logInfo("parentName: %s, name: %s, runningTasks: %s".format(
         taskSet.parent.name, taskSet.name, taskSet.runningTasks))
       if (newExecAvail) {
         taskSet.executorAdded()

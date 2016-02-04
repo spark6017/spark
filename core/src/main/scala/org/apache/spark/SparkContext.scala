@@ -2332,8 +2332,12 @@ object SparkContext extends Logging {
       master: String): (SchedulerBackend, TaskScheduler) = {
     import SparkMasterRegex._
 
-    // When running locally, don't try to re-execute tasks on failure.
-    val MAX_LOCAL_TASK_FAILURES = 1
+
+    /**
+      * When running locally, don't try to re-execute tasks on failure.
+      * 本地模式下，最大失败次数为1，这个是不可配置的，那么在CoarseGrainedScheduler模式下，最大重试次数是多少？
+      */
+    val MAX_LOCAL_TASK_FAILURES = 2
 
     master match {
       case "local" =>

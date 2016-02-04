@@ -59,6 +59,10 @@ private[spark] class LocalEndpoint(
     localExecutorId, localExecutorHostname, SparkEnv.get, userClassPath, isLocal = true)
 
   override def receive: PartialFunction[Any, Unit] = {
+
+    /**
+      * 本地模式下收到TaskScheduler的ReviveOffers请求
+      */
     case ReviveOffers =>
       reviveOffers()
 

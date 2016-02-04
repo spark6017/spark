@@ -117,13 +117,26 @@ private[spark] class TaskSetManager(
   // back at the head of the stack. They are also only cleaned up lazily;
   // when a task is launched, it remains in all the pending lists except
   // the one that it was launched from, but gets removed from them later.
+
+  /**
+   * PROCESS_LOCAL级别的任务
+   *
+   */
   private val pendingTasksForExecutor = new HashMap[String, ArrayBuffer[Int]]
 
   // Set of pending tasks for each host. Similar to pendingTasksForExecutor,
   // but at host level.
+
+  /**
+   * NODE LOCAL级别的任务
+   */
   private val pendingTasksForHost = new HashMap[String, ArrayBuffer[Int]]
 
   // Set of pending tasks for each rack -- similar to the above.
+
+  /**
+   * Rack级别的任务
+   */
   private val pendingTasksForRack = new HashMap[String, ArrayBuffer[Int]]
 
   // Set containing pending tasks with no locality preferences.
@@ -438,6 +451,9 @@ private[spark] class TaskSetManager(
         }
       }
 
+      /**
+       * 调用dequeueTask方法
+       */
       dequeueTask(execId, host, allowedLocality) match {
         case Some((index, taskLocality, speculative)) => {
           // Found a task; do some bookkeeping and return a task description
@@ -485,6 +501,9 @@ private[spark] class TaskSetManager(
           logInfo(s"Starting $taskName (TID $taskId, $host, partition ${task.partitionId}," +
             s"$taskLocality, ${serializedTask.limit} bytes)")
 
+          /**
+           * 通知DAGScheduler，任务已经开始
+           */
           sched.dagScheduler.taskStarted(task, info)
           return Some(new TaskDescription(taskId = taskId, attemptNumber = attemptNum, execId,
             taskName, index, serializedTask))
@@ -869,6 +888,8 @@ private[spark] class TaskSetManager(
   /**
    * Compute the locality levels used in this TaskSet. Assumes that all tasks have already been
    * added to queues using addPendingTask.
+   *
+   * 计算有效的本地性级别，返回一个数组
    *
    */
   private def computeValidLocalityLevels(): Array[TaskLocality.TaskLocality] = {

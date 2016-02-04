@@ -787,6 +787,11 @@ class DAGScheduler(
     submitWaitingStages()
   }
 
+  /**
+   * 任务开始启动，就提交等待的stage？
+   * @param task
+   * @param taskInfo
+   */
   private[scheduler] def handleBeginEvent(task: Task[_], taskInfo: TaskInfo) {
     // Note that there is a chance that this task is launched after the stage is cancelled.
     // In that case, we wouldn't have the stage anymore in stageIdToStage.
@@ -966,6 +971,10 @@ class DAGScheduler(
         outputCommitCoordinator.stageStart(
           stage = s.id, maxPartitionId = s.rdd.partitions.length - 1)
     }
+
+    /**
+     * taskIdToLocations是Id和TaskLocation的集合，其中的Id是partitionId,也用作taskId
+     */
     val taskIdToLocations: Map[Int, Seq[TaskLocation]] = try {
       stage match {
         case s: ShuffleMapStage =>

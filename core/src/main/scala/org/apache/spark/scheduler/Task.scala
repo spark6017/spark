@@ -106,6 +106,10 @@ private[spark] abstract class Task[T](
 
   def runTask(context: TaskContext): T
 
+  /**
+   * Task有个属性 preferredLocations
+   * @return
+   */
   def preferredLocations: Seq[TaskLocation] = Nil
 
   // Map output tracker epoch. Will be set by TaskScheduler.

@@ -125,7 +125,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         }
 
       /**
-       * 收到CoarseGrainedSchedulerBackend的ReviveOffers消息，调用Driver的makeOffers方法
+       * Driver Endpoint收到CoarseGrainedSchedulerBackend的ReviveOffers消息，调用Driver的makeOffers方法
        */
       case ReviveOffers =>
         makeOffers()

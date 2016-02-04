@@ -156,6 +156,10 @@ private[spark] class TaskSchedulerImpl(
     waitBackendReady()
   }
 
+  /**
+   * TaskScheduler将TaskSet加入到调度队列中
+   * @param taskSet
+   */
   override def submitTasks(taskSet: TaskSet) {
     val tasks = taskSet.tasks
     logInfo("Adding task set " + taskSet.id + " with " + tasks.length + " tasks")
@@ -176,6 +180,11 @@ private[spark] class TaskSchedulerImpl(
         throw new IllegalStateException(s"more than one active taskSet for stage $stage:" +
           s" ${stageTaskSets.toSeq.map{_._2.taskSet.id}.mkString(",")}")
       }
+
+      /**
+       * 将TaskSetManager加入到调度队列中，
+       * 问题：在什么时候从调度队列中读取任务执行，任务的本地性如何决定的？
+       */
       schedulableBuilder.addTaskSetManager(manager, manager.taskSet.properties)
 
       if (!isLocal && !hasReceivedTask) {
@@ -257,6 +266,10 @@ private[spark] class TaskSchedulerImpl(
       val host = shuffledOffers(i).host
       if (availableCpus(i) >= CPUS_PER_TASK) {
         try {
+
+          /**
+           * TaskSet还有resourceOffer方法
+           */
           for (task <- taskSet.resourceOffer(execId, host, maxLocality)) {
             tasks(i) += task
             val tid = task.taskId
@@ -285,8 +298,10 @@ private[spark] class TaskSchedulerImpl(
    * sets for tasks in order of priority. We fill each node with tasks in a round-robin manner so
    * that tasks are balanced across the cluster.
    *
-   * 这个是所有的TaskScheduler实现类通用的方法
-   * TaskScheduler调度时会考虑数据本地性
+   * Driver拿出所有可用的资源，TaskScheduler根据这些资源进行任务分配，TaskScheduler调度时会考虑数据本地性
+   *
+   *  NOTE：这个是所有的TaskScheduler实现类通用的方法
+   *
    */
   def resourceOffers(offers: Seq[WorkerOffer]): Seq[Seq[TaskDescription]] = synchronized {
     // Mark each slave as alive and remember its hostname
@@ -310,6 +325,10 @@ private[spark] class TaskSchedulerImpl(
     // Build a list of tasks to assign to each worker.
     val tasks = shuffledOffers.map(o => new ArrayBuffer[TaskDescription](o.cores))
     val availableCpus = shuffledOffers.map(o => o.cores).toArray
+
+    /**
+     * 此处是从调度队列中取出在队列中等待调度的TaskSet
+     */
     val sortedTaskSets = rootPool.getSortedTaskSetQueue
     for (taskSet <- sortedTaskSets) {
       logDebug("parentName: %s, name: %s, runningTasks: %s".format(
@@ -323,6 +342,8 @@ private[spark] class TaskSchedulerImpl(
     // of locality levels so that it gets a chance to launch local tasks on all of them.
     // NOTE: the preferredLocality order: PROCESS_LOCAL, NODE_LOCAL, NO_PREF, RACK_LOCAL, ANY
     var launchedTask = false
+
+    /**两次循环，对每个taskSet，编译所有的localityLevels*/
     for (taskSet <- sortedTaskSets; maxLocality <- taskSet.myLocalityLevels) {
       do {
         launchedTask = resourceOfferSingleTaskSet(

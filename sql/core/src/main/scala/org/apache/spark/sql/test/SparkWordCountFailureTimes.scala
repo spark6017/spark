@@ -16,10 +16,14 @@ object SparkWordCountFailureTimes {
     val sc = new SparkContext(conf)
     val rdd = sc.parallelize(List(1))
     val curTime = System.currentTimeMillis()
+    val fixOnFailure = false
     rdd.map(x => {
       val file = new java.io.File("/home/yuzt/123.txt." + curTime)
       if (!file.exists()) {
-        file.createNewFile();
+        if (fixOnFailure) {
+          file.createNewFile();
+        }
+
         throw new FileNotFoundException("File doesn't exist for the first time");
       }
       x

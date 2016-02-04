@@ -110,12 +110,20 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
 
     override def receive: PartialFunction[Any, Unit] = {
+
+      /***
+        * 任务执行完成，归还executor使用的core，为什么不归还内存
+        */
       case StatusUpdate(executorId, taskId, state, data) =>
         scheduler.statusUpdate(taskId, state, data.value)
         if (TaskState.isFinished(state)) {
           executorDataMap.get(executorId) match {
             case Some(executorInfo) =>
               executorInfo.freeCores += scheduler.CPUS_PER_TASK
+
+              /***
+                * makeOffers以executorId作为参数
+                */
               makeOffers(executorId)
             case None =>
               // Ignoring the update since we don't know about the executor.
@@ -235,7 +243,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           "messages.")))
     }
 
-    // Make fake resource offers on just one executor
+    /**
+      * Make fake resource offers on just one executor
+      * 当一个executor执行完任务，就可以针对这个executor重新分配任务了
+      * @param executorId
+      */
     private def makeOffers(executorId: String) {
       // Filter out executors under killing
       if (executorIsAlive(executorId)) {

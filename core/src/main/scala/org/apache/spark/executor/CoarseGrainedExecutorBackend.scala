@@ -122,6 +122,12 @@ private[spark] class CoarseGrainedExecutorBackend(
     }
   }
 
+  /**
+    * ExecutorBackend向Driver发送任务状态消息
+    * @param taskId
+    * @param state
+    * @param data
+    */
   override def statusUpdate(taskId: Long, state: TaskState, data: ByteBuffer) {
     val msg = StatusUpdate(executorId, taskId, state, data)
     driver match {

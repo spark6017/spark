@@ -150,6 +150,14 @@ private[spark] class Executor(
     ManagementFactory.getGarbageCollectorMXBeans.asScala.map(_.getCollectionTime).sum
   }
 
+  /**
+    * TaskRunner是包装了ShuffleMapTask或者ResultTask任务执行体的Runnable（线程任务体）
+    * @param execBackend
+    * @param taskId
+    * @param attemptNumber
+    * @param taskName
+    * @param serializedTask
+    */
   class TaskRunner(
       execBackend: ExecutorBackend,
       val taskId: Long,
@@ -178,19 +186,36 @@ private[spark] class Executor(
       }
     }
 
+    /**
+      * Executor线程池执行的任务
+      */
     override def run(): Unit = {
       val taskMemoryManager = new TaskMemoryManager(env.memoryManager, taskId)
       val deserializeStartTime = System.currentTimeMillis()
       Thread.currentThread.setContextClassLoader(replClassLoader)
       val ser = env.closureSerializer.newInstance()
       logInfo(s"Running $taskName (TID $taskId)")
+
+      /**
+        * ExecutorBackend更新任务状态为Running状态
+        */
       execBackend.statusUpdate(taskId, TaskState.RUNNING, EMPTY_BYTE_BUFFER)
+
+
       var taskStart: Long = 0
       startGCTime = computeTotalGcTime()
 
       try {
+
+        /**
+          * 反序列化任务得到任务执行需要文件、jar以及任务本身的字节码
+          */
         val (taskFiles, taskJars, taskBytes) = Task.deserializeWithDependencies(serializedTask)
         updateDependencies(taskFiles, taskJars)
+
+        /**
+          * 反序列化任务本身的字节码，得到Task实例，这个是Task类型，实际类型是MapShuffleTask或者ResultTask
+          */
         task = ser.deserialize[Task[Any]](taskBytes, Thread.currentThread.getContextClassLoader)
         task.setTaskMemoryManager(taskMemoryManager)
 
@@ -277,20 +302,23 @@ private[spark] class Executor(
           }
         }
 
+        /**
+          * 发送任务执行完成消息
+          */
         execBackend.statusUpdate(taskId, TaskState.FINISHED, serializedResult)
 
       } catch {
         case ffe: FetchFailedException =>
           val reason = ffe.toTaskEndReason
-          execBackend.statusUpdate(taskId, TaskState.FAILED, ser.serialize(reason))
+          execBackend.statusUpdate(taskId, TaskState.FAILED, ser.serialize(reason)) /**任务失败状态**/
 
         case _: TaskKilledException | _: InterruptedException if task.killed =>
           logInfo(s"Executor killed $taskName (TID $taskId)")
-          execBackend.statusUpdate(taskId, TaskState.KILLED, ser.serialize(TaskKilled))
+          execBackend.statusUpdate(taskId, TaskState.KILLED, ser.serialize(TaskKilled)) /**任务杀死状态**/
 
         case cDE: CommitDeniedException =>
           val reason = cDE.toTaskEndReason
-          execBackend.statusUpdate(taskId, TaskState.FAILED, ser.serialize(reason))
+          execBackend.statusUpdate(taskId, TaskState.FAILED, ser.serialize(reason)) /**任务失败状态**/
 
         case t: Throwable =>
           // Attempt to exit cleanly by informing the driver of our failure.
@@ -319,7 +347,7 @@ private[spark] class Executor(
                 ser.serialize(new ExceptionFailure(t, accumulatorUpdates, preserveCause = false))
             }
           }
-          execBackend.statusUpdate(taskId, TaskState.FAILED, serializedTaskEndReason)
+          execBackend.statusUpdate(taskId, TaskState.FAILED, serializedTaskEndReason)  /**最终所有的异常都标记为任务失败状态**/
 
           // Don't forcibly exit unless the exception was inherently fatal, to avoid
           // stopping other tasks unnecessarily.

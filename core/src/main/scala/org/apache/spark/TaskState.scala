@@ -21,12 +21,24 @@ import org.apache.mesos.Protos.{TaskState => MesosTaskState}
 
 private[spark] object TaskState extends Enumeration {
 
+
+  /**
+    * 任务状态：启动、运行、结束、失败、杀死、丢失
+    */
   val LAUNCHING, RUNNING, FINISHED, FAILED, KILLED, LOST = Value
 
+  /**
+    * 结束、失败、杀死、丢失
+    */
   val FINISHED_STATES = Set(FINISHED, FAILED, KILLED, LOST)
 
   type TaskState = Value
 
+  /**
+    * 任务杀死不算是失败
+    * @param state
+    * @return
+    */
   def isFailed(state: TaskState): Boolean = (LOST == state) || (FAILED == state)
 
   def isFinished(state: TaskState): Boolean = FINISHED_STATES.contains(state)

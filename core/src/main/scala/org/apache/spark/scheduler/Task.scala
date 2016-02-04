@@ -78,6 +78,7 @@ private[spark] abstract class Task[T](
       kill(interruptThread = false)
     }
     try {
+      /**任务执行完成*/
       runTask(context)
     } finally {
       context.markTaskCompleted()

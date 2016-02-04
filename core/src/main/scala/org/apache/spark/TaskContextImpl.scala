@@ -50,11 +50,21 @@ private[spark] class TaskContextImpl(
   // Whether the task has completed.
   @volatile private var completed: Boolean = false
 
+  /**
+    * 任务执行完成事件监听器
+    * @param listener
+    * @return
+    */
   override def addTaskCompletionListener(listener: TaskCompletionListener): this.type = {
     onCompleteCallbacks += listener
     this
   }
 
+  /**
+    * 任务执行完成事件监听器,
+    * @param f 定义回调函数，以完成任务的TaskContext为参数
+    * @return
+    */
   override def addTaskCompletionListener(f: TaskContext => Unit): this.type = {
     onCompleteCallbacks += new TaskCompletionListener {
       override def onTaskCompletion(context: TaskContext): Unit = f(context)
@@ -62,7 +72,10 @@ private[spark] class TaskContextImpl(
     this
   }
 
-  /** Marks the task as completed and triggers the listeners. */
+  /**
+    * Marks the task as completed and triggers the listeners.
+    * 发出任务已经结束的消息
+    */
   private[spark] def markTaskCompleted(): Unit = {
     completed = true
     val errorMsgs = new ArrayBuffer[String](2)

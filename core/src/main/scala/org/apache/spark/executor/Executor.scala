@@ -114,6 +114,9 @@ private[spark] class Executor(
   private val heartbeatReceiverRef =
     RpcUtils.makeDriverRef(HeartbeatReceiver.ENDPOINT_NAME, conf, env.rpcEnv)
 
+  /**
+    * 启动Executor向Driver汇报心跳的线程
+    */
   startDriverHeartbeater()
 
   def launchTask(
@@ -148,6 +151,14 @@ private[spark] class Executor(
 
   /** Returns the total amount of time this JVM process has spent in garbage collection. */
   private def computeTotalGcTime(): Long = {
+
+    /**
+      * 获取JVM GC时间的方法
+      *
+      * ManagementFactory.getGarbageCollectorMXBeans是获取GarbageCollectorMXBean的集合
+      *
+      *
+      */
     ManagementFactory.getGarbageCollectorMXBeans.asScala.map(_.getCollectionTime).sum
   }
 
@@ -483,11 +494,18 @@ private[spark] class Executor(
    * Schedules a task to report heartbeat and partial metrics for active tasks to driver.
    */
   private def startDriverHeartbeater(): Unit = {
+
+    /**
+      *每隔10秒汇报一次心跳
+      */
     val intervalMs = conf.getTimeAsMs("spark.executor.heartbeatInterval", "10s")
 
     // Wait a random interval so the heartbeats don't end up in sync
     val initialDelay = intervalMs + (math.random * intervalMs).asInstanceOf[Int]
 
+    /**
+      * 汇报的内容
+      */
     val heartbeatTask = new Runnable() {
       override def run(): Unit = Utils.logUncaughtExceptions(reportHeartBeat())
     }

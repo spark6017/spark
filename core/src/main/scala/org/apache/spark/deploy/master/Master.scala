@@ -754,6 +754,10 @@ private[deploy] class Master(
     true
   }
 
+  /**
+    * 删除Worker，如果Worker上运行的Driver，那么也需要处理
+    * @param worker
+    */
   private def removeWorker(worker: WorkerInfo) {
     logInfo("Removing worker " + worker.id + " on " + worker.host + ":" + worker.port)
     worker.setState(WorkerState.DEAD)

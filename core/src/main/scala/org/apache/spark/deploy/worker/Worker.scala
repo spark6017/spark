@@ -359,6 +359,10 @@ private[deploy] class Worker(
         logInfo("Successfully registered with master " + masterRef.address.toSparkURL)
         registered = true
         changeMaster(masterRef, masterWebUiUrl)
+
+        /**
+          * Worker注册成功后，向Master周期性发送SendHeartbeat消息，默认15秒钟发送一次
+          */
         forwordMessageScheduler.scheduleAtFixedRate(new Runnable {
           override def run(): Unit = Utils.tryLogNonFatalError {
             self.send(SendHeartbeat)

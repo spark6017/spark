@@ -100,6 +100,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
     override def onStart() {
       // Periodically revive offers to allow delay scheduling to work
+
+      /**
+        * 每隔1秒中发起1次ReviveOffers，目的是给延时调度的任务执行的机会
+        * 延时调度的任务等待一定的时间才被调度
+        */
       val reviveIntervalMs = conf.getTimeAsMs("spark.scheduler.revive.interval", "1s")
 
       reviveThread.scheduleAtFixedRate(new Runnable {

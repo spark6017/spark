@@ -49,8 +49,16 @@ private[spark] class CoarseGrainedExecutorBackend(
   // to be changed so that we don't share the serializer instance across threads
   private[this] val ser: SerializerInstance = env.closureSerializer.newInstance()
 
+  /**
+    * CoarseGrainedExecutorBackend进程启动时，第一个事情是向Driver注册Executor
+    */
   override def onStart() {
     logInfo("Connecting to driver: " + driverUrl)
+
+    //rpcEnv.asyncSetupEndpointRefByURI(driverUrl)返回Future[RpcEndpointRef]
+    //flatMap是Future的方法,这个方法是一个Curry函数，第一个参数是一个function，第二个参数是scala.concurrent.ExecutionContext类型的变量
+    //第一个function的类型是RpcEndpointRef=>Future,这里的Future是通过ref.ask返回的
+    //flatmap方法返回一个Future对象，因此有onComplete方法,onComplete方法也是一个Curry函数
     rpcEnv.asyncSetupEndpointRefByURI(driverUrl).flatMap { ref =>
       // This is a very fast action so we can use "ThreadUtils.sameThread"
       driver = Some(ref)

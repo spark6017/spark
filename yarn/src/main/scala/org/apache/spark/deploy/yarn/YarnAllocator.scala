@@ -249,6 +249,9 @@ private[yarn] class YarnAllocator(
    * executors we have currently running and our target number of executors.
    *
    * Visible for testing.
+    *
+    * getPendingAllocate表示正在申请的数量
+    *
    */
   def updateResourceRequests(): Unit = {
     val pendingAllocate = getPendingAllocate

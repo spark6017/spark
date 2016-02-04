@@ -39,6 +39,8 @@ import org.apache.spark.util._
 
 /**
  * Common application master functionality for Spark on Yarn.
+  *
+  * application	master starts	the	driver program	before	allocating	resources	for executors
  */
 private[spark] class ApplicationMaster(
     args: ApplicationMasterArguments,
@@ -284,6 +286,12 @@ private[spark] class ApplicationMaster(
       _sparkConf.get("spark.driver.host"),
       _sparkConf.get("spark.driver.port").toInt,
       CoarseGrainedSchedulerBackend.ENDPOINT_NAME).toString
+
+
+    /**
+      * 调用YarnRMClient的register方法，返回一个YarnAllocator对象，
+      * 具体分配多少个Container在什么地方设置的？
+      */
     allocator = client.register(driverUrl,
       driverRef,
       yarnConf,
@@ -316,6 +324,11 @@ private[spark] class ApplicationMaster(
     driverEndpoint
   }
 
+  /**
+    * 在startUserAplicaion执行用户程序中的main然后等SparkContext初始化成功
+    *
+    * @param securityMgr
+    */
   private def runDriver(securityMgr: SecurityManager): Unit = {
     addAmIpFilter()
     userClassThread = startUserApplication()
@@ -332,9 +345,13 @@ private[spark] class ApplicationMaster(
     } else {
       rpcEnv = sc.env.rpcEnv
       val driverRef = runAMEndpoint(
-        sc.getConf.get("spark.driver.host"),
+        sc.getConf.get("spark.drivr.host"), //SparkContext会把host和port记录在SparkConf中
         sc.getConf.get("spark.driver.port"),
         isClusterMode = true)
+
+      /**
+        * 注册AM
+        */
       registerAM(rpcEnv, driverRef, sc.ui.map(_.appUIAddress).getOrElse(""), securityMgr)
       userClassThread.join()
     }

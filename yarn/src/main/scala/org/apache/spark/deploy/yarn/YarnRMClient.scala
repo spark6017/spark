@@ -61,16 +61,29 @@ private[spark] class YarnRMClient(args: ApplicationMasterArguments) extends Logg
       uiHistoryAddress: String,
       securityMgr: SecurityManager
     ): YarnAllocator = {
+
+    /**
+      * 初始化AM向RM发送RPC请求的Client
+      */
     amClient = AMRMClient.createAMRMClient()
     amClient.init(conf)
     amClient.start()
     this.uiHistoryAddress = uiHistoryAddress
 
     logInfo("Registering the ApplicationMaster")
+
+    /**
+      * 向RM发送registerApplicationMaster请求
+      */
     synchronized {
       amClient.registerApplicationMaster(Utils.localHostName(), 0, uiAddress)
       registered = true
     }
+
+    /**
+      * 初始化一个YarnAllocator对象,args是一个关键对象,它是ApplicationMasterArguments类型的的对象
+      * ApplicationMasterArguments包含了一个--properties-file参数，这个参数指定了要申请多少个executor
+      */
     new YarnAllocator(driverUrl, driverRef, conf, sparkConf, amClient, getAttemptId(), args,
       securityMgr)
   }

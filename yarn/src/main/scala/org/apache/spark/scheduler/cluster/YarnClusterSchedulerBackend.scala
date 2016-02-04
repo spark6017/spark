@@ -25,6 +25,11 @@ import org.apache.spark.deploy.yarn.{ApplicationMaster, YarnSparkHadoopUtil}
 import org.apache.spark.scheduler.TaskSchedulerImpl
 import org.apache.spark.util.Utils
 
+/**
+  * 对于YARN CLUSTER模式，application	master starts	the	driver program	before	allocating	resources	for executors.
+  * @param scheduler
+  * @param sc
+  */
 private[spark] class YarnClusterSchedulerBackend(
     scheduler: TaskSchedulerImpl,
     sc: SparkContext)
@@ -34,6 +39,10 @@ private[spark] class YarnClusterSchedulerBackend(
     val attemptId = ApplicationMaster.getAttemptId
     bindToYarn(attemptId.getApplicationId(), Some(attemptId))
     super.start()
+
+    /**
+      * 计算需要的Executor个数
+      */
     totalExpectedExecutors = YarnSparkHadoopUtil.getInitialTargetExecutorNumber(sc.conf)
   }
 

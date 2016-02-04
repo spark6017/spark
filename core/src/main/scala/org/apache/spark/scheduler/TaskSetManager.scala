@@ -465,10 +465,18 @@ private[spark] class TaskSetManager(
           val taskId = sched.newTaskId()
           // Do various bookkeeping
           copiesRunning(index) += 1
+
+          /**
+            * 获取attemptNum
+            */
           val attemptNum = taskAttempts(index).size
           val info = new TaskInfo(taskId, index, attemptNum, curTime,
             execId, host, taskLocality, speculative)
           taskInfos(taskId) = info
+
+          /**
+            * taskAttempts（index）是一个List,往该List中添加一个TaskInfo
+            */
           taskAttempts(index) = info :: taskAttempts(index)
           // Update our locality level for delay scheduling
           // NO_PREF will not affect the variables related to delay scheduling
@@ -509,6 +517,10 @@ private[spark] class TaskSetManager(
            * 通知DAGScheduler，任务已经开始
            */
           sched.dagScheduler.taskStarted(task, info)
+
+          /**
+            * TaskDescription在此处构造
+            */
           return Some(new TaskDescription(taskId = taskId, attemptNumber = attemptNum, execId,
             taskName, index, serializedTask))
         }

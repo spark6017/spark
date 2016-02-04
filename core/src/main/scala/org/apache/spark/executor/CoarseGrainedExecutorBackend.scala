@@ -74,6 +74,10 @@ private[spark] class CoarseGrainedExecutorBackend(
   }
 
   override def receive: PartialFunction[Any, Unit] = {
+
+    /**
+      * 每个 CoarseGrainedExecutorBackend持有一个Executor对象，也就是说CoarseGrainedExecutorBackend和Executor是一一对应的关系
+      */
     case RegisteredExecutor(hostname) =>
       logInfo("Successfully registered with driver")
       executor = new Executor(executorId, hostname, env, userClassPath, isLocal = false)
@@ -82,6 +86,10 @@ private[spark] class CoarseGrainedExecutorBackend(
       logError("Slave registration failed: " + message)
       System.exit(1)
 
+    /**
+      * LaunchTask关联的data可以序列化为TaskDescription，TaskDescription有个属性attemptNumber
+      * 问题：attemptNumber这个属性是如何设置到TaskDescription上的，尤其是，当任务失败时，这个值是怎么更新的
+      */
     case LaunchTask(data) =>
       if (executor == null) {
         logError("Received LaunchTask command but executor was null")

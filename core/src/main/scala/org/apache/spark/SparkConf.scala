@@ -464,6 +464,9 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
       }
     }
 
+    /**
+      * SPARK_CLASSPATH已经被deprecated，如果指定了参数，那么Spark会同时把配置的ClassPath加到Driver和Executor上
+      */
     sys.env.get("SPARK_CLASSPATH").foreach { value =>
       val warning =
         s"""

@@ -92,6 +92,12 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
     tracker.getPreferredLocationsForShuffle(dep, partition.index)
   }
 
+  /***
+    * 对于ShuffledRDD，从磁盘读取Shuffled的数据
+    * @param split
+    * @param context
+    * @return
+    */
   override def compute(split: Partition, context: TaskContext): Iterator[(K, C)] = {
     val dep = dependencies.head.asInstanceOf[ShuffleDependency[K, V, C]]
     SparkEnv.get.shuffleManager.getReader(dep.shuffleHandle, split.index, split.index + 1, context)

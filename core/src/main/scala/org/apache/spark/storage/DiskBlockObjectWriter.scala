@@ -42,7 +42,7 @@ private[spark] class DiskBlockObjectWriter(
     // These write metrics concurrently shared with other active DiskBlockObjectWriters who
     // are themselves performing writes. All updates must be relative.
     writeMetrics: ShuffleWriteMetrics,
-    val blockId: BlockId = null)
+    val blockId: BlockId = null)  /**blockId没用到。。。**/
   extends OutputStream
   with Logging {
 

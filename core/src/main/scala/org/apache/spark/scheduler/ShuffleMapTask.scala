@@ -61,6 +61,14 @@ private[spark] class ShuffleMapTask(
     if (locs == null) Nil else locs.toSet.toSeq
   }
 
+  /**
+    * ShuffleMapTask执行结果是一个MapStatus,
+    * MapStatus包含两方面信息：
+    *   1. BlockManagerId(BlockManager的唯一标识，BlockManagerId包括host、port、executorId)
+    *   2. 数据大小(估算值)
+    * @param context
+    * @return
+    */
   override def runTask(context: TaskContext): MapStatus = {
     // Deserialize the RDD using the broadcast variable.
     val deserializeStartTime = System.currentTimeMillis()
@@ -75,7 +83,8 @@ private[spark] class ShuffleMapTask(
       val manager = SparkEnv.get.shuffleManager
       writer = manager.getWriter[Any, Any](dep.shuffleHandle, partitionId, context)
       writer.write(rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
-      writer.stop(success = true).get
+      val result = writer.stop(success = true)
+      result.get
     } catch {
       case e: Exception =>
         try {

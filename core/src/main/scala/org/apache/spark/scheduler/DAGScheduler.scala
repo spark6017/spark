@@ -1213,18 +1213,28 @@ class DAGScheduler(
                 logInfo("Ignoring result from " + rt + " because its job has finished")
             }
 
+          /**
+            * 如果是ShuffleMapTask，那么需要记录该ShuffleMapTask落到磁盘的Shuffle数据信息
+            */
           case smt: ShuffleMapTask =>
             val shuffleStage = stage.asInstanceOf[ShuffleMapStage]
             updateAccumulators(event)
+
+            /**从结果中取出MapStatus对象*/
             val status = event.result.asInstanceOf[MapStatus]
+
+            /**MapStatus的executorId*/
             val execId = status.location.executorId
             logDebug("ShuffleMapTask finished on " + execId)
             if (failedEpoch.contains(execId) && smt.epoch <= failedEpoch(execId)) {
               logInfo(s"Ignoring possibly bogus $smt completion from executor $execId")
             } else {
+
+              /**更新ShuffleMapStage的OutputLoc信息*/
               shuffleStage.addOutputLoc(smt.partitionId, status)
             }
 
+            /**ShuffleMapStage的所有任务都已经完成**/
             if (runningStages.contains(shuffleStage) && shuffleStage.pendingPartitions.isEmpty) {
               markStageAsFinished(shuffleStage)
               logInfo("looking for newly runnable stages")
@@ -1238,9 +1248,13 @@ class DAGScheduler(
               // epoch incremented to refetch them.
               // TODO: Only increment the epoch number if this is not the first time
               //       we registered these map outputs.
+
+              /***
+                * 注册mapOutputs?
+                */
               mapOutputTracker.registerMapOutputs(
-                shuffleStage.shuffleDep.shuffleId,
-                shuffleStage.outputLocInMapOutputTrackerFormat(),
+                shuffleStage.shuffleDep.shuffleId,  ////ShuffleId
+                shuffleStage.outputLocInMapOutputTrackerFormat(), ////该ShuffleStage所有的MapStatus
                 changeEpoch = true)
 
               clearCacheLocs()

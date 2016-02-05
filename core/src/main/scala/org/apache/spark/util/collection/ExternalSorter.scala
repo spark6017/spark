@@ -105,7 +105,16 @@ private[spark] class ExternalSorter[K, V, C](
     if (shouldPartition) partitioner.get.getPartition(key) else 0
   }
 
+  /**
+    * ExternalSorter在SortShuffleWriter中创建，SortShuffleWriter也通过SparkEnv.get.blockManager持有一个blockManager对象
+    * ExternalSorter页通过SparkEnv.get.blockManager持有了一个BlockerManager对象
+    */
   private val blockManager = SparkEnv.get.blockManager
+
+
+  /**
+    * 存储介质为磁盘的BlockManager
+    */
   private val diskBlockManager = blockManager.diskBlockManager
   private val ser = Serializer.getSerializer(serializer)
   private val serInstance = ser.newInstance()
@@ -246,6 +255,10 @@ private[spark] class ExternalSorter[K, V, C](
     def openWriter(): Unit = {
       assert (writer == null && spillMetrics == null)
       spillMetrics = new ShuffleWriteMetrics
+
+      /**
+        * BlockManager的DiskWriter
+        */
       writer = blockManager.getDiskWriter(blockId, file, serInstance, fileBufferSize, spillMetrics)
     }
     openWriter()

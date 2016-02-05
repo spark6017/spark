@@ -239,6 +239,10 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       /**
        * 调用TaskScheduler的resourceOffers方法，这个方法有点名不副实，
        * 这里的逻辑是，给TaskScheduler一些可用的计算资源，让TaskScheduler返回一些可以执行的任务(这些可执行的任务是要考虑数据本地性的)
+        *
+        * 给定TaskScheduler一些可用资源返回一些可运行的任务，TaskScheduler吧这个职责给谁了？
+        *   1. 首先TaskScheduler需要到Pool池中把待调度的任务取出来过一遍?取出来的是TaskSetManager
+        *   2. Pool中的每个任务属于一个TaskSetManager，因此，这个应该是TaskSetManager的职责
        */
       val tasks = scheduler.resourceOffers(workOffers)
 

@@ -29,6 +29,9 @@ import org.apache.spark.storage.BlockManagerId
  * DAGScheduler for each stage, and are responsible for sending the tasks to the cluster, running
  * them, retrying if there are failures, and mitigating stragglers. They return events to the
  * DAGScheduler.
+  * TaskScheduler是low level的调度
+  * TaskScheduler持有Pool对象，Pool是TaskSetManager，将一个Job的并行Stage放到Pool进行调度
+  *
  */
 private[spark] trait TaskScheduler {
 

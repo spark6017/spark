@@ -43,6 +43,14 @@ import org.apache.spark.util.{Clock, SystemClock, Utils}
  *
  * THREADING: This class is designed to only be called from code with a lock on the
  * TaskScheduler (e.g. its event handlers). It should not be called from other threads.
+  *
+  *
+  * TaskSetManager的职责：
+  *   1. 为TaskSchedulerImpl中的一个TaskSet提供任务调度
+  *   2. 任务失败重试
+  *   3. 通过延迟调度以增加数据本地性支持
+  *   4. TaskSetManager的resourceOffer方法是给TaskSetManager一个资源，让它返回可运行的Task(使用TaskDescription描述)
+  *   5. TaskSetManager的statusUpdate方法，通知它任务状态改变
  *
  * @param sched           the TaskSchedulerImpl associated with the TaskSetManager
  * @param taskSet         the TaskSet to manage scheduling for

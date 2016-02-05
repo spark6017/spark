@@ -49,6 +49,11 @@ import org.apache.spark.util.{ThreadUtils, Utils}
  * SchedulerBackends synchronize on themselves when they want to send events here, and then
  * acquire a lock on us, so we need to make sure that we don't try to lock the backend while
  * we are holding a lock on ourselves.
+  *
+  * TaskSchedulerImpl的构造参数有一个maxTaskFailures，负责失败重试？
+  *
+  * TaskSchedulerImpl持有一个SchedulerBackend，负责将
+  *
  */
 private[spark] class TaskSchedulerImpl(
     val sc: SparkContext,
@@ -105,12 +110,25 @@ private[spark] class TaskSchedulerImpl(
   // Listener object to pass upcalls into
   var dagScheduler: DAGScheduler = null
 
+
+  /**
+    * SchedulerBackend，最重要的功能是reviveOffers
+    */
   var backend: SchedulerBackend = null
 
   val mapOutputTracker = SparkEnv.get.mapOutputTracker
 
+  /**
+    * 将TaskSet封装为TaskSetManager，然后添加到任务队列中
+    */
   var schedulableBuilder: SchedulableBuilder = null
+
+  /**
+    * 调度实体，两种调度实体，Pool和TaskSetManager
+    */
   var rootPool: Pool = null
+
+
   // default scheduler is FIFO
   private val schedulingModeConf = conf.get("spark.scheduler.mode", "FIFO")
   val schedulingMode: SchedulingMode = try {
@@ -127,6 +145,13 @@ private[spark] class TaskSchedulerImpl(
     this.dagScheduler = dagScheduler
   }
 
+  /**
+    * TaskScheduler的初始化方法，包括：
+    * 1. 初始化SchedulerBackend
+    * 2. 初始化Pool
+    * 3. 初始化调度模式
+    * @param backend
+    */
   def initialize(backend: SchedulerBackend) {
     this.backend = backend
     // temporarily set rootPool name to empty
@@ -173,6 +198,13 @@ private[spark] class TaskSchedulerImpl(
      * 为TaskSet创建TaskSetManager
      */
     this.synchronized {
+
+      /**
+        * TaskSetManager也有maxTaskFailures信息，TaskSchedulerImpl的maxTaskFailures只在创建TaskSetManager用到了
+        * 也就是说，失败重试是在TaskSetManager中管理的。
+        *
+        * 另外TaskSetManager通过持有TaskSchedulerImpl实例，通过访问TaskSchedulerImpl持有的DAGScheduler实例，从而调用DAGScheduler的方法来通知任务状态
+        */
       val manager = createTaskSetManager(taskSet, maxTaskFailures)
       val stage = taskSet.stageId
       val stageTaskSets =
@@ -259,8 +291,8 @@ private[spark] class TaskSchedulerImpl(
       .format(manager.taskSet.id, manager.parent.name))
   }
 
-  private def resourceOfferSingleTaskSet(
-      taskSet: TaskSetManager,
+  private def resourceOfferSingleTaskSetManager(
+      taskSetManager: TaskSetManager,
       maxLocality: TaskLocality,
       shuffledOffers: Seq[WorkerOffer],
       availableCpus: Array[Int],
@@ -273,12 +305,12 @@ private[spark] class TaskSchedulerImpl(
         try {
 
           /**
-           * TaskSet还有resourceOffer方法
+           * TaskSetManager的resourceOffer方法是提供一个计算资源，返回一个Option[TaskDescription]，这里使用for循环
            */
-          for (task <- taskSet.resourceOffer(execId, host, maxLocality)) {
+          for (task <- taskSetManager.resourceOffer(execId, host, maxLocality)) {
             tasks(i) += task
             val tid = task.taskId
-            taskIdToTaskSetManager(tid) = taskSet
+            taskIdToTaskSetManager(tid) = taskSetManager
             taskIdToExecutorId(tid) = execId
             executorIdToTaskCount(execId) += 1
             executorsByHost(host) += execId
@@ -288,7 +320,7 @@ private[spark] class TaskSchedulerImpl(
           }
         } catch {
           case e: TaskNotSerializableException =>
-            logError(s"Resource offer failed, task set ${taskSet.name} was not serializable")
+            logError(s"Resource offer failed, task set ${taskSetManager.name} was not serializable")
             // Do not offer resources for this task, but don't throw an error to allow other
             // task sets to be submitted.
             return launchedTask
@@ -340,14 +372,16 @@ private[spark] class TaskSchedulerImpl(
     val availableCpus = shuffledOffers.map(o => o.cores).toArray
 
     /**
-     * 此处是从调度队列中取出在队列中等待调度的TaskSet
+     * 此处是从调度队列中取出在队列中等待调度的TaskSetManager，
+      * sortedTaskSets是元素类型为TaskSetManager的ArrayBuffer
      */
-    val sortedTaskSets = rootPool.getSortedTaskSetQueue
-    for (taskSet <- sortedTaskSets) {
+    val sortedTaskSetManagers = rootPool.getSortedTaskSetQueue
+
+    for (taskSetManager <- sortedTaskSetManagers) {
       logInfo("parentName: %s, name: %s, runningTasks: %s".format(
-        taskSet.parent.name, taskSet.name, taskSet.runningTasks))
+        taskSetManager.parent.name, taskSetManager.name, taskSetManager.runningTasks))
       if (newExecAvail) {
-        taskSet.executorAdded()
+        taskSetManager.executorAdded()
       }
     }
 
@@ -357,10 +391,10 @@ private[spark] class TaskSchedulerImpl(
     var launchedTask = false
 
     /**两次循环，对每个taskSet，编译所有的localityLevels*/
-    for (taskSet <- sortedTaskSets; maxLocality <- taskSet.myLocalityLevels) {
+    for (taskSetManager <- sortedTaskSetManagers; maxLocality <- taskSetManager.myLocalityLevels) {
       do {
-        launchedTask = resourceOfferSingleTaskSet(
-            taskSet, maxLocality, shuffledOffers, availableCpus, tasks)
+        launchedTask = resourceOfferSingleTaskSetManager(
+            taskSetManager, maxLocality, shuffledOffers, availableCpus, tasks)
       } while (launchedTask)
     }
 

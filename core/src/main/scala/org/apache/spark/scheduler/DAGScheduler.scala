@@ -108,6 +108,13 @@ import org.apache.spark.util._
  *
  *  - When adding a new data structure, update `DAGSchedulerSuite.assertDataStructuresEmpty` to
  *    include the new structure. This will help to catch memory leaks.
+  *  High level 调度
+  *   1. DAGScheduler负责对SparkContext提交的Job进行Stage划分，将Stage内的并行任务构造为TaskSet（任务集）
+  *   2. DAGScheduler构造时需要传入TaskScheduler，DAGScheduler会将Stage内的并行任务封装为TaskSet交给TaskScheduler做调度
+  *   3. DAGScheduler会接收任务执行成功、失败的消息
+  *
+  *
+  *
  */
 private[spark]
 class DAGScheduler(

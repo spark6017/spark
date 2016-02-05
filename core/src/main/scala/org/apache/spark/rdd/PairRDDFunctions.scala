@@ -67,6 +67,10 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    *
    * In addition, users can control the partitioning of the output RDD, and whether to perform
    * map-side aggregation (if a mapper can produce multiple items with the same key).
+   *
+   * combineByKeyWithClassTag的mapSideCombine默认为true，比如reduceByKey调用combineByKeyWithClassTag时没有指定mapSideCombine
+   *
+   * 而groupByKey则显式指定mapSideCombine为false
    */
   @Experimental
   def combineByKeyWithClassTag[C](
@@ -77,7 +81,7 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
       mapSideCombine: Boolean = true,
       serializer: Serializer = null)(implicit ct: ClassTag[C]): RDD[(K, C)] = self.withScope {
     require(mergeCombiners != null, "mergeCombiners must be defined") // required as of Spark 0.9.0
-    if (keyClass.isArray) {
+    if (keyClass.isArray) { /**如果Key是数组类型，那么不能使用map side combine，同时也不能使用Hash算法进行分区**/
       if (mapSideCombine) {
         throw new SparkException("Cannot use map-side combining with array keys.")
       }
@@ -85,6 +89,10 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
         throw new SparkException("Default partitioner cannot partition array keys.")
       }
     }
+
+    /**
+     * 创建Aggregate对象，传入createCombiner、mergeValue以及mergeCombiners
+     */
     val aggregator = new Aggregator[K, V, C](
       self.context.clean(createCombiner),
       self.context.clean(mergeValue),
@@ -303,6 +311,10 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    * Merge the values for each key using an associative reduce function. This will also perform
    * the merging locally on each mapper before sending results to a reducer, similarly to a
    * "combiner" in MapReduce.
+   *
+   * reduceByKey：
+   *    1. 执行Map端的Combine
+   *    2. 对每个Key执行一个幂等的reduce函数
    */
   def reduceByKey(partitioner: Partitioner, func: (V, V) => V): RDD[(K, V)] = self.withScope {
     combineByKeyWithClassTag[V]((v: V) => v, func, func, partitioner)

@@ -76,6 +76,14 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
     this
   }
 
+  /**
+   * 获得该ShuffleRDD的依赖，它只有一个依赖，类型是ShuffleDependency
+   *
+   * getDependencies这个方法是说该RDD如何依赖它的父RDD，是窄依赖还是宽依赖。
+   * ShuffleDependency看它的构造函数属性，有六个参数
+   *
+   * @return
+   */
   override def getDependencies: Seq[Dependency[_]] = {
     List(new ShuffleDependency(prev, part, serializer, keyOrdering, aggregator, mapSideCombine))
   }

@@ -187,6 +187,9 @@ private[spark] class ExternalSorter[K, V, C](
     // TODO: stop combining if we find that the reduction factor isn't high
     val shouldCombine = aggregator.isDefined
 
+    /**
+     * 首先进行Map端combine的处理逻辑
+     */
     if (shouldCombine) {
       // Combine values in-memory first using our AppendOnlyMap
       val mergeValue = aggregator.get.mergeValue
@@ -201,7 +204,7 @@ private[spark] class ExternalSorter[K, V, C](
         map.changeValue((getPartition(kv._1), kv._1), update)
         maybeSpillCollection(usingMap = true)
       }
-    } else {
+    } else { /**如果不进行Map端Combine，则使用PartitionedPairBuffer记录数据**/
       // Stick values into our buffer
       while (records.hasNext) {
         addElementsRead()

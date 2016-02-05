@@ -32,6 +32,9 @@ private[spark] class SortShuffleWriter[K, V, C](
     context: TaskContext)
   extends ShuffleWriter[K, V] with Logging {
 
+  /**
+   * dependency为什么使用handle传递，ShuffleHandle到底是干啥用的？
+   */
   private val dep = handle.dependency
 
   private val blockManager = SparkEnv.get.blockManager
@@ -47,7 +50,14 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   private val writeMetrics = context.taskMetrics().registerShuffleWriteMetrics()
 
-  /** Write a bunch of records to this task's output */
+  /**
+   * Write a bunch of records to this task's output
+   * 调用ExternalSorter的insertAll方法写入数据注意点：
+   *    1.  如果有map side combine，则如何将map端combine的数据写到磁盘
+   *    2. 如果有排序，比如sortByKey，则如何将有序的数据写到磁盘 --- ExternalSorter.insertAll并没有进行排序处理？是的，排序的数据逻辑是在ShufflerReader中完成的
+   *    3. 如果内存不够用，如何spill磁盘，最后如何做Merge？这个逻辑在ExternalSorter的writePartitionedFile方法中
+   *
+   * */
   override def write(records: Iterator[Product2[K, V]]): Unit = {
     sorter = if (dep.mapSideCombine) {
       require(dep.aggregator.isDefined, "Map-side combine without Aggregator specified!")
@@ -68,12 +78,25 @@ private[spark] class SortShuffleWriter[K, V, C](
     val output = shuffleBlockResolver.getDataFile(dep.shuffleId, mapId)
     val tmp = Utils.tempFileWith(output)
     val blockId = ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID)
+
+    /**
+     * 将通过ExternalSorter.insertAll方法写入的数据全部写入到文件中，如果insertAll过程中有spill，那么需要考虑归并排序
+     */
     val partitionLengths = sorter.writePartitionedFile(blockId, tmp)
     shuffleBlockResolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)
+
+    /**
+     * write方法的返回值是个Unit，这是只是给mapStatus赋值，并不返回；mapStatus返回是在stop方法中实现的，
+     */
     mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)
   }
 
-  /** Close this writer, passing along whether the map completed */
+  /**
+   *
+   * Close this writer, passing along whether the map completed
+   *  返回MapStatus对象
+   *
+    * */
   override def stop(success: Boolean): Option[MapStatus] = {
     try {
       if (stopping) {

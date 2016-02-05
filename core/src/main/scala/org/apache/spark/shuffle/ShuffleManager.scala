@@ -34,6 +34,8 @@ private[spark] trait ShuffleManager {
 
   /**
    * Register a shuffle with the manager and obtain a handle for it to pass to tasks.
+   *
+   * 这是一个抽象方法，需要由具体的ShuffleManager实现类进行实现
    */
   def registerShuffle[K, V, C](
       shuffleId: Int,

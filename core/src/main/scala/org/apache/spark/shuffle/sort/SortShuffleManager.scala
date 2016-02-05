@@ -84,7 +84,15 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
   override val shuffleBlockResolver = new IndexShuffleBlockResolver(conf)
 
   /**
-   * Register a shuffle with the manager and obtain a handle for it to pass to tasks.
+   *   Register a shuffle with the manager and obtain a handle for it to pass to tasks.
+
+   * @param shuffleId
+   * @param numMaps
+   * @param dependency
+   * @tparam K
+   * @tparam V
+   * @tparam C
+   * @return
    */
   override def registerShuffle[K, V, C](
       shuffleId: Int,
@@ -147,7 +155,7 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
           mapId,
           context,
           env.conf)
-      case other: BaseShuffleHandle[K @unchecked, V @unchecked, _] =>
+      case other: BaseShuffleHandle[K @unchecked, V @unchecked, _] => /**handle是getWriter的调用者，传入的参数**/
         new SortShuffleWriter(shuffleBlockResolver, other, mapId, context)
     }
   }

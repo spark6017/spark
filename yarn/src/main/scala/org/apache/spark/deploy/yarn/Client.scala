@@ -1165,6 +1165,11 @@ object Client extends Logging {
    *
    * This method first looks in the SparkConf object for the CONF_SPARK_JAR key, and in the
    * user environment if that is not found (for backwards compatibility).
+    *
+    *
+    * sparkJar是获得spark assembly jar的位置，如果没有配置，那么会查找Client类所在的jar(就是spark assembly jar)
+    *
+    *
    */
   private def sparkJar(conf: SparkConf): String = {
     if (conf.contains(CONF_SPARK_JAR)) {

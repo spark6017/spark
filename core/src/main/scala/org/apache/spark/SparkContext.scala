@@ -2265,6 +2265,9 @@ object SparkContext extends Logging {
   /**
    * Find the JAR from which a given class was loaded, to make it easy for users to pass
    * their JARs to SparkContext.
+    *
+    *
+    * 获取一个class类是从哪个jar包读取的
    */
   def jarOfClass(cls: Class[_]): Option[String] = {
     val uri = cls.getResource("/" + cls.getName.replace('.', '/') + ".class")

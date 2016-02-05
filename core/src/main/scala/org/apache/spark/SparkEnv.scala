@@ -305,7 +305,7 @@ object SparkEnv extends Logging {
     }
 
     /**
-      *
+      * 如果是Driver，那么就是MapOutputTrackerMaster,否则就是MapOutputTrackerWorker
       */
     val mapOutputTracker = if (isDriver) {
       new MapOutputTrackerMaster(conf)

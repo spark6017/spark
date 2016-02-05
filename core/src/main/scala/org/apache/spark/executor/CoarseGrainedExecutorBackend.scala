@@ -205,6 +205,9 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
         SparkHadoopUtil.get.startExecutorDelegationTokenRenewer(driverConf)
       }
 
+      /**
+        * ExecutorBackend创建SparkEnv
+        */
       val env = SparkEnv.createExecutorEnv(
         driverConf, executorId, hostname, port, cores, isLocal = false)
 

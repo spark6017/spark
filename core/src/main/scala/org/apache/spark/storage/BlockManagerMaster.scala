@@ -26,6 +26,10 @@ import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.storage.BlockManagerMessages._
 import org.apache.spark.util.{RpcUtils, ThreadUtils}
 
+/**
+  * BlockManagerMaster位于Master和Executor上，它们通过isDriver进行区分
+  * Driver上的BlockManagerMaster持有driverEndpoint，而Executor上的driverEndpoint只是一个endpoint Ref
+  */
 private[spark]
 class BlockManagerMaster(
     var driverEndpoint: RpcEndpointRef,

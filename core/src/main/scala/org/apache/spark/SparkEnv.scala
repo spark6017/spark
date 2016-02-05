@@ -164,6 +164,8 @@ object SparkEnv extends Logging {
 
   /**
    * Create a SparkEnv for the driver.
+    *
+    * 创建Driver的SparkEnv
    */
   private[spark] def createDriverEnv(
       conf: SparkConf,
@@ -177,7 +179,7 @@ object SparkEnv extends Logging {
     val port = conf.get("spark.driver.port").toInt
     create(
       conf,
-      SparkContext.DRIVER_IDENTIFIER,
+      SparkContext.DRIVER_IDENTIFIER, /**Driver的executorId是driver**/
       hostname,
       port,
       isDriver = true,
@@ -191,6 +193,8 @@ object SparkEnv extends Logging {
   /**
    * Create a SparkEnv for an executor.
    * In coarse-grained mode, the executor provides an RpcEnv that is already instantiated.
+    *
+    * 创建Executor的SparkEnv
    */
   private[spark] def createExecutorEnv(
       conf: SparkConf,
@@ -208,6 +212,10 @@ object SparkEnv extends Logging {
       isLocal = isLocal,
       numUsableCores = numCores
     )
+
+    /**
+      * 设置类似于ThreadLocal变量
+      */
     SparkEnv.set(env)
     env
   }
@@ -279,6 +287,12 @@ object SparkEnv extends Logging {
     val closureSerializer = instantiateClassFromConf[Serializer](
       "spark.closure.serializer", "org.apache.spark.serializer.JavaSerializer")
 
+    /**
+      *
+      * @param name
+      * @param endpointCreator
+      * @return
+      */
     def registerOrLookupEndpoint(
         name: String, endpointCreator: => RpcEndpoint):
       RpcEndpointRef = {
@@ -290,6 +304,9 @@ object SparkEnv extends Logging {
       }
     }
 
+    /**
+      *
+      */
     val mapOutputTracker = if (isDriver) {
       new MapOutputTrackerMaster(conf)
     } else {
@@ -321,18 +338,41 @@ object SparkEnv extends Logging {
 
     val blockTransferService = new NettyBlockTransferService(conf, securityManager, numUsableCores)
 
-    val blockManagerMaster = new BlockManagerMaster(registerOrLookupEndpoint(
-      BlockManagerMaster.DRIVER_ENDPOINT_NAME,
-      new BlockManagerMasterEndpoint(rpcEnv, isLocal, conf, listenerBus)),
-      conf, isDriver)
+    /**
+      * 不管是Driver还是Executor，都会创建爱你BlockManagerMasterEndpoint实例
+      */
+    val bmmEndpoint = new BlockManagerMasterEndpoint(rpcEnv, isLocal, conf, listenerBus)
+    val endpoint = registerOrLookupEndpoint(BlockManagerMaster.DRIVER_ENDPOINT_NAME, bmmEndpoint)
+
+    /***
+      * 不管是Executor还是Driver，都会创建BlockManagerMaster实例,这个实例创建完了会设置到BlockManager中
+      * BlockManagerMaster的endPoint实际上是指向Driver
+      *
+      * 也就是说，在Driver上BlockManagerMaster是真实存在的，在Executor上，BlockManagerMaster只是包含只想Driver的endpoint ref
+      */
+    val blockManagerMaster = new BlockManagerMaster(endpoint, conf, isDriver)
 
     // NB: blockManager is not valid until initialize() is called later.
+
+    /**
+      *  不管是Executor还是Driver， 都会创建BlockManager对象，
+      *
+      *  每个BlockManager会关联一个BlockManagerMaster，BlockManagerMaster持有Driver的Endpoint或者Endpoint Ref
+      *  BlockManager持有BlockManagerMaster以及BlockManagerSlaveEndpoint,BlockManagerMaster持有BlockManagerMasterEndpoint
+      */
     val blockManager = new BlockManager(executorId, rpcEnv, blockManagerMaster,
       serializer, conf, memoryManager, mapOutputTracker, shuffleManager,
       blockTransferService, securityManager, numUsableCores)
 
+
+    /**
+      * 不管是Executor还是Driver，都会创建BroadcastManager对象
+      */
     val broadcastManager = new BroadcastManager(isDriver, conf, securityManager)
 
+    /**
+      * 不管是Executor还是Driver，都会创建CacheManager对象
+      */
     val cacheManager = new CacheManager(blockManager)
 
     val metricsSystem = if (isDriver) {
@@ -354,11 +394,15 @@ object SparkEnv extends Logging {
     // this is a temporary directory; in distributed mode, this is the executor's current working
     // directory.
     val sparkFilesDir: String = if (isDriver) {
-      Utils.createTempDir(Utils.getLocalDir(conf), "userFiles").getAbsolutePath
+      val path = Utils.createTempDir(Utils.getLocalDir(conf), "userFiles").getAbsolutePath
+      path
     } else {
       "."
     }
 
+    /**
+      * 不管是Executor还是Driver，都有OutputCommitCoordinator对象
+      */
     val outputCommitCoordinator = mockOutputCommitCoordinator.getOrElse {
       new OutputCommitCoordinator(conf, isDriver)
     }

@@ -27,6 +27,9 @@ import org.apache.spark.util.{ThreadUtils, Utils}
 /**
  * An RpcEndpoint to take commands from the master to execute options. For example,
  * this is used to remove blocks from the slave's BlockManager.
+  *
+  *
+  * 每个BlockManagerSlaveEndpoint都会关联一个BlockManager,构造BlockManager时传入
  */
 private[storage]
 class BlockManagerSlaveEndpoint(
@@ -39,7 +42,12 @@ class BlockManagerSlaveEndpoint(
     ThreadUtils.newDaemonCachedThreadPool("block-manager-slave-async-thread-pool")
   private implicit val asyncExecutionContext = ExecutionContext.fromExecutorService(asyncThreadPool)
 
-  // Operations that involve removing blocks may be slow and should be done asynchronously
+  /**
+    * Operations that involve removing blocks may be slow and should be done asynchronously
+    *
+    * BlockManagerMasterEndpoint向BlockManagerSlaveEndpoint发送指令
+    *
+    */
   override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
     case RemoveBlock(blockId) =>
       doAsync[Boolean]("removing block " + blockId, context) {

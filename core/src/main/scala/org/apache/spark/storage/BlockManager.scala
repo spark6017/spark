@@ -135,6 +135,10 @@ private[spark] class BlockManager(
   // Whether to compress shuffle output temporarily spilled to disk
   private val compressShuffleSpill = conf.getBoolean("spark.shuffle.spill.compress", true)
 
+  /***
+    * BlockManager中构造BlockManagerSlaveEndpoint，因为Driver和Executor都会创建BlockManager，因此
+    * BlockManagerSlaveEndpoint在Driver和Executor上都会创建
+    */
   private val slaveEndpoint = rpcEnv.setupEndpoint(
     "BlockManagerEndpoint" + BlockManager.ID_GENERATOR.next,
     new BlockManagerSlaveEndpoint(rpcEnv, this, mapOutputTracker))
@@ -179,6 +183,9 @@ private[spark] class BlockManager(
       blockManagerId
     }
 
+    /***
+      * 注册BlockManager
+      */
     master.registerBlockManager(blockManagerId, maxMemory, slaveEndpoint)
 
     // Register Executors' configuration with the local shuffle service, if one should exist.

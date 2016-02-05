@@ -33,6 +33,11 @@ import org.apache.spark.util.{ThreadUtils, Utils}
 /**
  * BlockManagerMasterEndpoint is an [[ThreadSafeRpcEndpoint]] on the master node to track statuses
  * of all slaves' block managers.
+  *
+  *
+  * BlockManagerMasterEndpoint位于master node，这里的master何解？
+  *
+  * BlockManagerMasterEndpoint和BlockManagerSlaveEndpoint是一对通信实体
  */
 private[spark]
 class BlockManagerMasterEndpoint(
@@ -55,6 +60,13 @@ class BlockManagerMasterEndpoint(
   private implicit val askExecutionContext = ExecutionContext.fromExecutorService(askThreadPool)
 
   override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
+
+    /**
+      * 注册BlockManager，更新两个变量
+      *
+      * blockManagerIdByExecutor（<executorId, blockManagerId>）
+      * blockManagerInfo(<BlockManagerId, BlockManagerInfo>)
+      */
     case RegisterBlockManager(blockManagerId, maxMemSize, slaveEndpoint) =>
       register(blockManagerId, maxMemSize, slaveEndpoint)
       context.reply(true)

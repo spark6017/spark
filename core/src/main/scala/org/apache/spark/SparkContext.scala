@@ -259,6 +259,14 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
   private[spark] val listenerBus = new LiveListenerBus
 
   // This function allows components created by SparkEnv to be mocked in unit tests:
+
+  /**
+    * 在SparkContext中创建Driver的SparkEnv
+    * @param conf
+    * @param isLocal
+    * @param listenerBus
+    * @return
+    */
   private[spark] def createSparkEnv(
       conf: SparkConf,
       isLocal: Boolean,

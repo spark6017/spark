@@ -117,12 +117,13 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     override def receive: PartialFunction[Any, Unit] = {
 
       /***
-        * 任务执行完成，归还executor使用的core，为什么不归还内存
+        * Driver接收ExecutorBackend发送过来的任务状态更新消息，如果任务执行完则归还executor使用的core，为什么不归还内存
         */
       case StatusUpdate(executorId, taskId, state, data) =>
 
         /**
-          * Driver调用TaskScheduler的statusUpdate方法
+          * Driver调用TaskScheduler的statusUpdate方法, 告诉TaskScheduler，任务状态已更新
+          * 在scheduler的statusUpdate方法中，调用入成功队列、入失败队列以及调用taskId对应的TaskSetManager进行失败重试流程
           */
       scheduler.statusUpdate(taskId, state, data.value)
 
@@ -135,7 +136,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
               executorInfo.freeCores += scheduler.CPUS_PER_TASK
 
               /***
-                * makeOffers以executorId作为参数
+                * makeOffers以executorId作为参数，有一个资源给TaskScheduler，然后调用TaskSetManager选择一个合适的任务出来
                 */
               makeOffers(executorId)
             case None =>

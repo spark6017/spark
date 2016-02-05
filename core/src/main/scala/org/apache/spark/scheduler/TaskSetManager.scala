@@ -625,6 +625,8 @@ private[spark] class TaskSetManager(
 
   /**
    * Marks the task as getting result and notifies the DAG Scheduler
+    *
+    *
    */
   def handleTaskGettingResult(tid: Long): Unit = {
     val info = taskInfos(tid)
@@ -652,6 +654,8 @@ private[spark] class TaskSetManager(
 
   /**
    * Marks a task as successful and notifies the DAGScheduler that the task has ended.
+    * 通知DAGScheduler，任务完成
+    * 问题：这个方法如何调到
    */
   def handleSuccessfulTask(tid: Long, result: DirectTaskResult[_]): Unit = {
     val info = taskInfos(tid)
@@ -686,7 +690,8 @@ private[spark] class TaskSetManager(
    * Marks the task as failed, re-adds it to the list of pending tasks, and notifies the
    * DAG Scheduler.
     *
-    * handleFailedTask处理失败重试的问题
+    * handleFailedTask处理失败重试的问题，依然将结果通过DAGScheduler
+    * 问题：handleFailedTask如何触发调用的？
    */
   def handleFailedTask(tid: Long, state: TaskState, reason: TaskEndReason) {
     val info = taskInfos(tid)

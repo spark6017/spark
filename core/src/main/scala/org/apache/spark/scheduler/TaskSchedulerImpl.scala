@@ -404,6 +404,12 @@ private[spark] class TaskSchedulerImpl(
     return tasks
   }
 
+  /**
+    * 根据tid获得关联的TaskSetManager
+    * @param tid
+    * @param state
+    * @param serializedData
+    */
   def statusUpdate(tid: Long, state: TaskState, serializedData: ByteBuffer) {
     var failedExecutor: Option[String] = None
     synchronized {
@@ -420,7 +426,12 @@ private[spark] class TaskSchedulerImpl(
         }
         taskIdToTaskSetManager.get(tid) match {
           case Some(taskSet) =>
-            if (TaskState.isFinished(state)) {
+
+            /**
+              * 如果运行完成，那么就将<tid,TaskSetManager>从taskIdToTaskSetManager中移除，
+              * 原因是，taskIdToTaskSetManager这个Map的Key是taskId，不同的任务的taskId是不同的
+              */
+          if (TaskState.isFinished(state)) {
               taskIdToTaskSetManager.remove(tid)
               taskIdToExecutorId.remove(tid).foreach { execId =>
                 if (executorIdToTaskCount.contains(execId)) {
@@ -428,6 +439,10 @@ private[spark] class TaskSchedulerImpl(
                 }
               }
             }
+
+            /**
+              * 如果任务执行成功，则加入到运行成功队列中
+              */
             if (state == TaskState.FINISHED) {
               taskSet.removeRunningTask(tid)
               taskResultGetter.enqueueSuccessfulTask(taskSet, tid, serializedData)
@@ -482,6 +497,13 @@ private[spark] class TaskSchedulerImpl(
     taskSetManager.handleTaskGettingResult(tid)
   }
 
+  /**
+    * TaskScheduler将处理任务成功执行后的处理逻辑交给TaskSetManager
+    * 问题：一个TaskScheduler应该包含多个TaskSetManager才对
+    * @param taskSetManager
+    * @param tid
+    * @param taskResult
+    */
   def handleSuccessfulTask(
       taskSetManager: TaskSetManager,
       tid: Long,

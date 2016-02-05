@@ -49,6 +49,12 @@ private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedul
     }
   }
 
+  /**
+    * 将任务加入到成功队列
+    * @param taskSetManager
+    * @param tid taskId，这个ID应该是TaskSet内部可识别的，taskId + taskSetManager唯一确定一个Task
+    * @param serializedData
+    */
   def enqueueSuccessfulTask(
       taskSetManager: TaskSetManager,
       tid: Long,

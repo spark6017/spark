@@ -199,7 +199,7 @@ private[spark] class Executor(
     }
 
     /**
-      * Executor线程池执行的任务
+      * Executor线程池执行的任务，执行任务过程中，会调用ExecutorBackend的statusUpdate方法进行任务状态更新
       */
     override def run(): Unit = {
       val taskMemoryManager = new TaskMemoryManager(env.memoryManager, taskId)
@@ -209,7 +209,7 @@ private[spark] class Executor(
       logInfo(s"Running $taskName (TID $taskId)")
 
       /**
-        * ExecutorBackend更新任务状态为Running状态
+        * 在Executor的run方法中，ExecutorBackend更新任务状态为Running状态
         */
       execBackend.statusUpdate(taskId, TaskState.RUNNING, EMPTY_BYTE_BUFFER)
 
@@ -322,15 +322,15 @@ private[spark] class Executor(
       } catch {
         case ffe: FetchFailedException =>
           val reason = ffe.toTaskEndReason
-          execBackend.statusUpdate(taskId, TaskState.FAILED, ser.serialize(reason)) /**任务失败状态**/
+          execBackend.statusUpdate(taskId, TaskState.FAILED, ser.serialize(reason)) /**发送任务失败消息**/
 
         case _: TaskKilledException | _: InterruptedException if task.killed =>
           logInfo(s"Executor killed $taskName (TID $taskId)")
-          execBackend.statusUpdate(taskId, TaskState.KILLED, ser.serialize(TaskKilled)) /**任务杀死状态**/
+          execBackend.statusUpdate(taskId, TaskState.KILLED, ser.serialize(TaskKilled)) /**发送任务杀死消息**/
 
         case cDE: CommitDeniedException =>
           val reason = cDE.toTaskEndReason
-          execBackend.statusUpdate(taskId, TaskState.FAILED, ser.serialize(reason)) /**任务失败状态**/
+          execBackend.statusUpdate(taskId, TaskState.FAILED, ser.serialize(reason)) /**发送任务失败消息**/
 
         case t: Throwable =>
           // Attempt to exit cleanly by informing the driver of our failure.
@@ -359,7 +359,7 @@ private[spark] class Executor(
                 ser.serialize(new ExceptionFailure(t, accumulatorUpdates, preserveCause = false))
             }
           }
-          execBackend.statusUpdate(taskId, TaskState.FAILED, serializedTaskEndReason)  /**最终所有的异常都标记为任务失败状态**/
+          execBackend.statusUpdate(taskId, TaskState.FAILED, serializedTaskEndReason)  /**所有的异常都标记为任务失败状态**/
 
           // Don't forcibly exit unless the exception was inherently fatal, to avoid
           // stopping other tasks unnecessarily.

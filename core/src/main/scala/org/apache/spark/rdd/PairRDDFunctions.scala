@@ -116,7 +116,14 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    * classtag information to the shuffle.
    *
    * @see [[combineByKeyWithClassTag]]
+   *
+   *   把类型为<K,V>的RDD转换为类型为<K,C>的RDD，V和C的类型可以一样，也可以不一样
+   *
+   *   createCombiner:对于给定的<K,V>，如果K尚未进行处理，那么首先将V的值转换为K对应的初始值
+   *   mergeValue：给定<K,V>，如果已经处理过K，那么将K对应的V，累加到C上，(C,V)=>C，入参C表示K已经累加的值，V表示K对应要转换的V
+   *   mergeCombiners: 在最后分区间进行Combine，(C,C)=>C
    */
+
   def combineByKey[C](
       createCombiner: V => C,
       mergeValue: (C, V) => C,
@@ -165,6 +172,9 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    * partition, and the latter is used for merging values between partitions. To avoid memory
    * allocation, both of these functions are allowed to modify and return their first argument
    * instead of creating a new U.
+   *
+   *
+   * 对于不同的Key，每个Key在aggravate时，都会首先携带zeroValue
    */
   def aggregateByKey[U: ClassTag](zeroValue: U, partitioner: Partitioner)(seqOp: (U, V) => U,
       combOp: (U, U) => U): RDD[(K, U)] = self.withScope {
@@ -190,6 +200,13 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    * partition, and the latter is used for merging values between partitions. To avoid memory
    * allocation, both of these functions are allowed to modify and return their first argument
    * instead of creating a new U.
+   *
+   *
+   * 将类型为<K,V>的RDD转换为类型为<K,U>的RDD
+   *
+   * zeroValue表示初值
+   * seqOp表示累加(is used for merging values within a partition)
+   * combOp表示分区间Combine(combOp is used for merging values between partitions)
    */
   def aggregateByKey[U: ClassTag](zeroValue: U, numPartitions: Int)(seqOp: (U, V) => U,
       combOp: (U, U) => U): RDD[(K, U)] = self.withScope {
@@ -214,20 +231,48 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    * Merge the values for each key using an associative function and a neutral "zero value" which
    * may be added to the result an arbitrary number of times, and must not change the result
    * (e.g., Nil for list concatenation, 0 for addition, or 1 for multiplication.).
+   *
+   *
+   * 何为foldByKey? foldByKey最后也是调用combineByKeyWithClassTag实现Aggregation，因此，需要确定foldByKey如何提供combineByKeyWithClassTag
+   * 聚合所需要的三个函数
+   *
+   *  foldByKey类似于reduceByKey也是不改变类型的，即输入<K,V>类型的RDD，输出也是<K,V>类型的RDD
+   *
+   *
+   *
+   *
    */
   def foldByKey(
       zeroValue: V,
       partitioner: Partitioner)(func: (V, V) => V): RDD[(K, V)] = self.withScope {
     // Serialize the zero value to a byte array so that we can get a new clone of it on each key
+    //将zeroValue进行序列化为一个数组zeroArray
     val zeroBuffer = SparkEnv.get.serializer.newInstance().serialize(zeroValue)
     val zeroArray = new Array[Byte](zeroBuffer.limit)
     zeroBuffer.get(zeroArray)
 
     // When deserializing, use a lazy val to create just one instance of the serializer per task
     lazy val cachedSerializer = SparkEnv.get.serializer.newInstance()
+
+
+    //createZero是一个函数常量，它的类型是入参为空，返回值类型是V，值是zeroValue
     val createZero = () => cachedSerializer.deserialize[V](ByteBuffer.wrap(zeroArray))
 
+    //对func进行clean
     val cleanedFunc = self.context.clean(func)
+
+
+    /**
+     * 第一个参数是createCombiner，本身的定义是入参是V，结果是C的函数V=>C
+     *此处的createCobminer是(v: V) => cleanedFunc(createZero(), v),它的含义是入参是v，然后调用cleanedFunc方法，方法的两个参数是V,V
+     * createZero()方法是执行createZero方法，入参是空，结果是zeroValue
+     *
+     * mergeValues和mergeCombines函数都是cleanedFunc
+     *
+     *
+     * foldByKey的功能是针对每个不同的K，都会首先使用zeroValue
+     *
+     */
     combineByKeyWithClassTag[V]((v: V) => cleanedFunc(createZero(), v),
       cleanedFunc, cleanedFunc, partitioner)
   }

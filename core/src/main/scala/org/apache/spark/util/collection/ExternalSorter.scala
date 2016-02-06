@@ -150,6 +150,10 @@ private[spark] class ExternalSorter[K, V, C](
   // user. (A partial ordering means that equal keys have comparator.compare(k, k) = 0, but some
   // non-equal keys also have this, so we need to do a later pass to find truly equal keys).
   // Note that we ignore this if no aggregator and no ordering are given.
+
+  /**
+   *  keyComparator，默认是ordering，如果没有指定ordering，那么比较Key的hashCode值
+   */
   private val keyComparator: Comparator[K] = ordering.getOrElse(new Comparator[K] {
     override def compare(a: K, b: K): Int = {
       val h1 = if (a == null) 0 else a.hashCode()
@@ -158,6 +162,11 @@ private[spark] class ExternalSorter[K, V, C](
     }
   })
 
+  /**
+   * 只要定义了ordering或者aggregator，那么就返回keyComparator
+   * 否则返回None
+   * @return
+   */
   private def comparator: Option[Comparator[K]] = {
     if (ordering.isDefined || aggregator.isDefined) {
       Some(keyComparator)
@@ -183,6 +192,11 @@ private[spark] class ExternalSorter[K, V, C](
    */
   private[spark] def numSpills: Int = spills.size
 
+  /**
+   * records是否已经有序？？
+   * insertAll在插入过程中，并没有进行排序, 只有spill到磁盘时才进行排序
+   * @param records
+   */
   def insertAll(records: Iterator[Product2[K, V]]): Unit = {
     // TODO: stop combining if we find that the reduction factor isn't high
     val shouldCombine = aggregator.isDefined

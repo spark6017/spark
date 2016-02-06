@@ -23,6 +23,12 @@ import org.apache.spark.{Logging, Partitioner, RangePartitioner}
 import org.apache.spark.annotation.DeveloperApi
 
 /**
+ *  <K,V>类型的RDD的K是可排序的，可排序的含义是指，存在一个隐式转换，将类型K转换为Ordered类型， Ordering[K]
+ *
+ *  所有的基本类型都是可排序的，原因是Ordering[Int],Ordering[String]都是Scala语言内置的
+ *
+ *  用户可以自定义比较逻辑，比如实现大小写不敏感的Ordering[String]
+ *
  * Extra functions available on RDDs of (key, value) pairs where the key is sortable through
  * an implicit conversion. They will work with any key type `K` that has an implicit `Ordering[K]`
  * in scope. Ordering objects already exist for all of the standard primitive types. Users can also
@@ -54,12 +60,21 @@ class OrderedRDDFunctions[K : Ordering : ClassTag,
    * `collect` or `save` on the resulting RDD will return or output an ordered list of records
    * (in the `save` case, they will be written to multiple `part-X` files in the filesystem, in
    * order of the keys).
+   *
+   * sortByKey是全局排序还是局部排序？  sortByKey是全局排序，为什么说是全局排序，因为
+   *      1. 因为sortByKey使用RangePartitioner进行划分分区，也就是说，A分区的数据肯定比B分区的数据要么全部大，要么全部小(数据大小是按照Key的维度来进行比较的)
+   *      2. 又因为是sortByKey，那么分区内继续排序？
+   *
    */
   // TODO: this currently doesn't work on P other than Tuple2!
   def sortByKey(ascending: Boolean = true, numPartitions: Int = self.partitions.length)
       : RDD[(K, V)] = self.withScope
   {
     val part = new RangePartitioner(numPartitions, self, ascending)
+
+    /**
+     *  ShuffledRDD，分区算法是RangePartitioner，排序算法是ordering
+     */
     new ShuffledRDD[K, V, V](self, part)
       .setKeyOrdering(if (ascending) ordering else ordering.reverse)
   }
@@ -70,6 +85,8 @@ class OrderedRDDFunctions[K : Ordering : ClassTag,
    *
    * This is more efficient than calling `repartition` and then sorting within each partition
    * because it can push the sorting down into the shuffle machinery.
+   *
+   * 分区内有序？
    */
   def repartitionAndSortWithinPartitions(partitioner: Partitioner): RDD[(K, V)] = self.withScope {
     new ShuffledRDD[K, V, V](self, partitioner).setKeyOrdering(ordering)

@@ -37,6 +37,8 @@ object CommandUtils extends Logging {
   /**
    * Build a ProcessBuilder based on the given parameters.
    * The `env` argument is exposed for testing.
+   *
+   * 构造ProcessBuilder对象，ProcessBuilder是java.lang包，即是Java标准的Process Builder API
    */
   def buildProcessBuilder(
       command: Command,

@@ -433,6 +433,9 @@ private[deploy] class Worker(
       logInfo(s"Master with url $masterUrl requested this worker to reconnect.")
       registerWithMaster()
 
+    /**
+     * LaunchExecutor消息
+     */
     case LaunchExecutor(masterUrl, appId, execId, appDesc, cores_, memory_) =>
       if (masterUrl != activeMasterUrl) {
         logWarning("Invalid Master (" + masterUrl + ") attempted to launch executor.")
@@ -457,6 +460,10 @@ private[deploy] class Worker(
             }.toSeq
           }
           appDirectories(appId) = appLocalDirs
+
+          /** *
+            * 创建ExecutorRunner对象
+            */
           val manager = new ExecutorRunner(
             appId,
             execId,
@@ -473,6 +480,8 @@ private[deploy] class Worker(
             workerUri,
             conf,
             appLocalDirs, ExecutorState.RUNNING)
+
+
           executors(appId + "/" + execId) = manager
           manager.start()
           coresUsed += cores_

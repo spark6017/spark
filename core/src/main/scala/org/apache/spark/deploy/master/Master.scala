@@ -717,11 +717,24 @@ private[deploy] class Master(
     startExecutorsOnWorkers()
   }
 
+  /**
+   * 向Worker发起启动Executor的消息，所谓的启动Executor就是通过创建ExecutorRunner对象，然后启动CoarseGrainedExecutorBackend进程
+   * @param worker
+   * @param exec
+   */
   private def launchExecutor(worker: WorkerInfo, exec: ExecutorDesc): Unit = {
     logInfo("Launching executor " + exec.fullId + " on worker " + worker.id)
     worker.addExecutor(exec)
+
+    /**
+     * 给Worker发送启动Executor消息
+     */
     worker.endpoint.send(LaunchExecutor(masterUrl,
       exec.application.id, exec.id, exec.application.desc, exec.cores, exec.memory))
+
+    /**
+     * 给Driver发送ExecutorAdded消息
+     */
     exec.application.driver.send(
       ExecutorAdded(exec.id, worker.id, worker.hostPort, exec.cores, exec.memory))
   }

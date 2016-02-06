@@ -1383,6 +1383,20 @@ abstract class RDD[T: ClassTag](
 
   /**
    * Save this RDD as a SequenceFile of serialized objects.
+   *
+   *
+   * saveAsObjectFile是将RDD中的元素(对象)进行序列化保存到文件中
+   * 这个文件的格式是SequenceFile,SequenceFile的格式是K,V类型，K是NullWritable，V是BytesWritable, BytesWritable包装了对象序列化的字节
+   * saveAsSequenceFile依然是RDD的方法，不过这个RDD的K，V的K和V必须都是继承自Writable接口的
+   *
+   * 这个是定义在SequenceFileRDDFunction中的
+   *
+   *
+   * Utils.serialize方法是使用的Java内置的序列化方法
+   *
+   *
+   * saveAsObjectFile方法对应SparkContext的objectFile方法
+   *
    */
   def saveAsObjectFile(path: String): Unit = withScope {
     this.mapPartitions(iter => iter.grouped(10).map(_.toArray))

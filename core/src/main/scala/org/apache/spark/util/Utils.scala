@@ -75,7 +75,13 @@ private[spark] object Utils extends Logging {
   @volatile private var localRootDirs: Array[String] = null
 
 
-  /** Serialize an object using Java serialization */
+  /**
+   *
+   * Serialize an object using Java serialization
+   *
+   *  使用Java的序列化机制，此处并没有Kyro序列化的影子
+   *
+   * */
   def serialize[T](o: T): Array[Byte] = {
     val bos = new ByteArrayOutputStream()
     val oos = new ObjectOutputStream(bos)
@@ -84,14 +90,24 @@ private[spark] object Utils extends Logging {
     bos.toByteArray
   }
 
-  /** Deserialize an object using Java serialization */
+  /**
+   *
+   * Deserialize an object using Java serialization
+   *
+   *  使用Java反序列化机制对字节数组进行反序列化
+   * */
   def deserialize[T](bytes: Array[Byte]): T = {
     val bis = new ByteArrayInputStream(bytes)
     val ois = new ObjectInputStream(bis)
     ois.readObject.asInstanceOf[T]
   }
 
-  /** Deserialize an object using Java serialization and the given ClassLoader */
+  /**
+   *
+   * Deserialize an object using Java serialization and the given ClassLoader
+   *
+   *  反序列化得到类型为T的对象
+   * */
   def deserialize[T](bytes: Array[Byte], loader: ClassLoader): T = {
     val bis = new ByteArrayInputStream(bytes)
     val ois = new ObjectInputStream(bis) {

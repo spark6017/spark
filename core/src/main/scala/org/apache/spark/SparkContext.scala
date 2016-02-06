@@ -1198,6 +1198,14 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
    * be pretty slow if you use the default serializer (Java serialization),
    * though the nice thing about it is that there's very little effort required to save arbitrary
    * objects.
+   *
+   * 调用sequenceFile对SequenceFile进行读取，K类型是NullWritable，V类型是BytesWritable，
+   *
+   *
+   * 调用sequenceFile对SequenceFile进行读取得到K,V类型的RDD，然后调用flatMap，对value进行转换
+   *
+   *
+   * Utils.deserialize[Array[T]](x._2.getBytes, Utils.getContextOrSparkClassLoader)得到的是Array类型的对象集合，为什么会是Array呢？
    */
   def objectFile[T: ClassTag](
       path: String,

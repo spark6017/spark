@@ -60,6 +60,12 @@ private[spark] class BlockStoreShuffleReader[K, C](
      */
     val blocksByAddress = mapOutputTracker.getMapSizesByExecutorId(handle.shuffleId, startPartition, endPartition)
 
+
+    /**
+     * 构造ShuffleBlockFetcherIterator，ShuffleBlockFetcherIterator的主构造器会调用initialize方法
+     *
+     * ShuffleBlockFetcherIterator是一个可遍历的集合(继承自Iterator)，因此它有map方法；并且该集合的元素类型是(BlockId,InputStream)
+     */
     val blockFetcherItr = new ShuffleBlockFetcherIterator(
       context,
       blockManager.shuffleClient,

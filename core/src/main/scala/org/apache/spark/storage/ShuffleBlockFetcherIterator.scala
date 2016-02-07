@@ -36,6 +36,8 @@ import org.apache.spark.util.Utils
  * This creates an iterator of (BlockID, InputStream) tuples so the caller can handle blocks
  * in a pipelined fashion as they are received.
  *
+ * 集合的元素类型是(BlockID,InputStream)，这在ShuffleBlockFetcherIterator继承的Iterator[(BlockId, InputStream)] 中可以看出来
+ *
  * The implementation throttles the remote fetches so they don't exceed maxBytesInFlight to avoid
  * using too much memory.
  *
@@ -109,6 +111,10 @@ final class ShuffleBlockFetcherIterator(
    */
   @volatile private[this] var isZombie = false
 
+
+  /**
+   * 初始化
+   */
   initialize()
 
   // Decrements the buffer reference count.
@@ -139,6 +145,10 @@ final class ShuffleBlockFetcherIterator(
     }
   }
 
+  /**
+   * 异步方式发起获取Shuffle数据的请求
+   * @param req
+   */
   private[this] def sendRequest(req: FetchRequest) {
     logDebug("Sending request for %d blocks (%s) from %s".format(
       req.blocks.size, Utils.bytesToString(req.size), req.address.hostPort))
@@ -261,9 +271,11 @@ final class ShuffleBlockFetcherIterator(
     // Split local and remote blocks.
     val remoteRequests = splitLocalRemoteBlocks()
     // Add the remote requests into our queue in a random order
+    //Remote Request
     fetchRequests ++= Utils.randomize(remoteRequests)
 
     // Send out initial requests for blocks, up to our maxBytesInFlight
+    //在 ShuffleBlockFetcherIterator的初始化方法中就发起Fetch数据的请求
     fetchUpToMaxBytes()
 
     val numFetches = remoteRequests.size - fetchRequests.size
@@ -274,6 +286,10 @@ final class ShuffleBlockFetcherIterator(
     logDebug("Got local blocks in " + Utils.getUsedTimeMs(startTime))
   }
 
+  /**
+   * 判断是否还有可遍历的元素的逻辑
+   * @return
+   */
   override def hasNext: Boolean = numBlocksProcessed < numBlocksToFetch
 
   /**
@@ -287,6 +303,10 @@ final class ShuffleBlockFetcherIterator(
   override def next(): (BlockId, InputStream) = {
     numBlocksProcessed += 1
     val startFetchWait = System.currentTimeMillis()
+
+    /**
+     * 阻塞等待results队列中有一个FetchResult
+     */
     currentResult = results.take()
     val result = currentResult
     val stopFetchWait = System.currentTimeMillis()
@@ -296,13 +316,16 @@ final class ShuffleBlockFetcherIterator(
       case SuccessFetchResult(_, _, size, _) => bytesInFlight -= size
       case _ =>
     }
-    // Send fetch requests up to maxBytesInFlight
+    /*** Send fetch requests up to maxBytesInFlight**/
     fetchUpToMaxBytes()
 
     result match {
       case FailureFetchResult(blockId, address, e) =>
         throwFetchFailedException(blockId, address, e)
 
+      /**
+       * 如果Fetch Result成功，那么就构造二元组，blockId和InputStream
+       */
       case SuccessFetchResult(blockId, address, _, buf) =>
         try {
           (result.blockId, new BufferReleasingInputStream(buf.createInputStream(), this))
@@ -313,6 +336,9 @@ final class ShuffleBlockFetcherIterator(
     }
   }
 
+  /**
+   *
+   */
   private def fetchUpToMaxBytes(): Unit = {
     // Send fetch requests up to maxBytesInFlight
     while (fetchRequests.nonEmpty &&

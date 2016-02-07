@@ -660,6 +660,8 @@ private[spark] class ExternalSorter[K, V, C](
 
   /**
    * Return an iterator over all the data written to this object, aggregated by our aggregator.
+   *
+   * ExternalSorter具有iterator方法
    */
   def iterator: Iterator[Product2[K, C]] = partitionedIterator.flatMap(pair => pair._2)
 

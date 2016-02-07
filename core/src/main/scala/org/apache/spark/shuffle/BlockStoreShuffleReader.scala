@@ -29,6 +29,10 @@ import org.apache.spark.util.collection.ExternalSorter
   *
   *
   * 读取Shuffle数据
+ *
+ * startPartition和endPartition通常只差1，表示只读取一个Partition的数据，参见
+ * @see [[org.apache.spark.rdd.ShuffledRDD#compute]]#compute
+ *
  */
 private[spark] class BlockStoreShuffleReader[K, C](
     handle: BaseShuffleHandle[K, _, C],
@@ -41,9 +45,18 @@ private[spark] class BlockStoreShuffleReader[K, C](
 
   private val dep = handle.dependency
 
-  /** Read the combined key-values for this reduce task */
+  /**
+   *
+   *  Shuffle Read
+    *
+    */
   override def read(): Iterator[Product2[K, C]] = {
 
+    /**
+     *blocksByAddress的类型是 Seq[(BlockManagerId, Seq[(BlockId, Long)])]
+     *
+     * 每个元素是一个二元组，每个元组的第一个元素是BlockManagerId，第二个元素又是一个元组，
+     */
     val blocksByAddress = mapOutputTracker.getMapSizesByExecutorId(handle.shuffleId, startPartition, endPartition)
 
     val blockFetcherItr = new ShuffleBlockFetcherIterator(

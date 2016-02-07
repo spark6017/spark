@@ -185,6 +185,8 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
     * 根据指定的shuffleId，获得MapStatus数组，什么需要fetch？
    */
   private def getStatuses(shuffleId: Int): Array[MapStatus] = {
+
+    //如果取出来的为NULL，那么首先进行fetch，否则直接返回statuses
     val statuses = mapStatuses.get(shuffleId).orNull
     if (statuses == null) {
       logInfo("Don't have map outputs for shuffle " + shuffleId + ", fetching them")

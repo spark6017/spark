@@ -45,12 +45,19 @@ private[spark] class ShuffleMapStage(
 
   private[this] var _mapStageJobs: List[ActiveJob] = Nil
 
+  /**
+   * 记录当前有多少个Map Task已经完成Shuffle Output
+   */
   private[this] var _numAvailableOutputs: Int = 0
 
   /**
    * List of [[MapStatus]] for each partition. The index of the array is the map partition id,
    * and each value in the array is the list of possible [[MapStatus]] for a partition
    * (a single task might run multiple times).
+   *
+   * outputLocs是个数组？这是个什么结构？
+   *
+   * outputLocs是长度为numPartitions的数组，其中每个元素是一个List[MapStatus]
    */
   private[this] val outputLocs = Array.fill[List[MapStatus]](numPartitions)(Nil)
 
@@ -93,6 +100,11 @@ private[spark] class ShuffleMapStage(
     missing
   }
 
+  /**
+   * 更新outputLocs变量，每个Partition对应
+   * @param partition
+   * @param status
+   */
   def addOutputLoc(partition: Int, status: MapStatus): Unit = {
     val prevList = outputLocs(partition)
     outputLocs(partition) = status :: prevList
@@ -114,6 +126,8 @@ private[spark] class ShuffleMapStage(
    * Returns an array of [[MapStatus]] (index by partition id). For each partition, the returned
    * value contains only one (i.e. the first) [[MapStatus]]. If there is no entry for the partition,
    * that position is filled with null.
+   *
+   * 将Array[List[MapStatus]]转换为Array[MapStatus]
    */
   def outputLocInMapOutputTrackerFormat(): Array[MapStatus] = {
     outputLocs.map(_.headOption.orNull)

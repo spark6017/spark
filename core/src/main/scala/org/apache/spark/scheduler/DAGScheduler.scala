@@ -117,6 +117,11 @@ import org.apache.spark.util._
   *
  */
 private[spark]
+
+/**
+ * DAGScheduler构造时包含BlockManagerMaster以及MapOutputTrackerMaster
+ *
+ */
 class DAGScheduler(
     private[scheduler] val sc: SparkContext,
     private[scheduler] val taskScheduler: TaskScheduler,
@@ -352,6 +357,8 @@ class DAGScheduler(
    * provided firstJobId.  If a stage for the shuffleId existed previously so that the shuffleId is
    * present in the MapOutputTracker, then the number and location of available outputs are
    * recovered from the MapOutputTracker
+   *
+   * 创建ShuffleMapStage时，需要注册Shuffle到mapOutputTracker
    */
   private def newOrUsedShuffleStage(
       shuffleDep: ShuffleDependency[_, _, _],
@@ -372,6 +379,10 @@ class DAGScheduler(
       // Kind of ugly: need to register RDDs with the cache and map output tracker here
       // since we can't do it in the RDD constructor because # of partitions is unknown
       logInfo("Registering RDD " + rdd.id + " (" + rdd.getCreationSite + ")")
+
+      /**
+       *  DAGScheduler在创建ShuffleMapStage的时候注册Shuffle
+       */
       mapOutputTracker.registerShuffle(shuffleDep.shuffleId, rdd.partitions.length)
     }
     stage
@@ -1214,7 +1225,7 @@ class DAGScheduler(
             }
 
           /**
-            * 如果是ShuffleMapTask，那么需要记录该ShuffleMapTask落到磁盘的Shuffle数据信息
+            * 如果是ShuffleMapTask，那么需要在Driver上记录该ShuffleMapTask落到磁盘的Shuffle数据信息
             */
           case smt: ShuffleMapTask =>
             val shuffleStage = stage.asInstanceOf[ShuffleMapStage]
@@ -1229,12 +1240,18 @@ class DAGScheduler(
             if (failedEpoch.contains(execId) && smt.epoch <= failedEpoch(execId)) {
               logInfo(s"Ignoring possibly bogus $smt completion from executor $execId")
             } else {
-
-              /**更新ShuffleMapStage的OutputLoc信息*/
+              /**更新ShuffleMapStage的OutputLoc信息，这是针对一个partitionId的更新，
+                *
+                * 将一个partitionId和MapStatus添加，
+                *
+                *
+                * 接下来会判断该Stage是否已经全部执行完，如果全部执行完，那么就会将该Stage的Shuffle信息记录到mapOutputTracker中
+                *
+                */
               shuffleStage.addOutputLoc(smt.partitionId, status)
             }
 
-            /**ShuffleMapStage的所有任务都已经完成**/
+            /**ShuffleMapStage的所有任务都已经完成，那么需要登记该Shuffle的mapOutputs信息**/
             if (runningStages.contains(shuffleStage) && shuffleStage.pendingPartitions.isEmpty) {
               markStageAsFinished(shuffleStage)
               logInfo("looking for newly runnable stages")
@@ -1250,7 +1267,8 @@ class DAGScheduler(
               //       we registered these map outputs.
 
               /***
-                * 注册mapOutputs?
+                * 在ShuffleMapTask结束时，将计算结果注册到mapOutputTracker中
+                *
                 */
               mapOutputTracker.registerMapOutputs(
                 shuffleStage.shuffleDep.shuffleId,  ////ShuffleId
@@ -1540,6 +1558,10 @@ class DAGScheduler(
     def visit(rdd: RDD[_]) {
       if (!visitedRdds(rdd)) {
         visitedRdds += rdd
+
+        /** *
+          * 遍历ShuffleDependency
+          */
         for (dep <- rdd.dependencies) {
           dep match {
             case shufDep: ShuffleDependency[_, _, _] =>

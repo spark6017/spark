@@ -303,6 +303,12 @@ private[spark] class MapOutputTrackerMaster(conf: SparkConf)
   protected val mapStatuses = new ConcurrentHashMap[Int, Array[MapStatus]]().asScala
   private val cachedSerializedStatuses = new ConcurrentHashMap[Int, Array[Byte]]().asScala
 
+  /**
+   * 所谓的registerShuffle，是把shuffleId和numMaps信息记录到mapStatuses这个Map，Key是shuffleId， value是MapStatus集合
+   *
+   * @param shuffleId
+   * @param numMaps
+   */
   def registerShuffle(shuffleId: Int, numMaps: Int) {
     if (mapStatuses.put(shuffleId, new Array[MapStatus](numMaps)).isDefined) {
       throw new IllegalArgumentException("Shuffle ID " + shuffleId + " registered twice")
@@ -316,7 +322,13 @@ private[spark] class MapOutputTrackerMaster(conf: SparkConf)
     }
   }
 
-  /** Register multiple map output information for the given shuffle */
+  /**
+   *   Register multiple map output information for the given shuffle
+    *  注册MapOutputs，所谓的registerMapOutputs就是将MapStatus数组append到mapStatuses数组上
+   *
+   *  NOTE:看实现不能算是append，空数组++Array[MapStatus]
+    *
+    */
   def registerMapOutputs(shuffleId: Int, statuses: Array[MapStatus], changeEpoch: Boolean = false) {
 
     /**shuffleId与MapStatus的对应关系**/

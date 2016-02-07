@@ -74,6 +74,8 @@ object Partitioner {
  * Java arrays have hashCodes that are based on the arrays' identities rather than their contents,
  * so attempting to partition an RDD[Array[_]] or RDD[(Array[_], _)] using a HashPartitioner will
  * produce an unexpected or incorrect result.
+ *
+ * Hash分区
  */
 class HashPartitioner(partitions: Int) extends Partitioner {
   require(partitions >= 0, s"Number of partitions ($partitions) cannot be negative.")
@@ -186,6 +188,11 @@ class RangePartitioner[K : Ordering : ClassTag, V](
     }
   }
 
+  /**
+   * 类型相同，rangeBound相同，ascending相同
+   * @param other
+   * @return
+   */
   override def equals(other: Any): Boolean = other match {
     case r: RangePartitioner[_, _] =>
       r.rangeBounds.sameElements(rangeBounds) && r.ascending == ascending

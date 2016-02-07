@@ -94,6 +94,18 @@ class CoGroupedRDD[K: ClassTag](
     this
   }
 
+  /**
+   * 将依赖的RDD转换为Dependency，如果父RDD的分区算法和ShuffledRDD的分区算法那么就是OneToOne依赖
+   * 否则就是宽依赖
+   *
+   * 问题：Partitioner相同的判定条件是什么？
+   *  1. 分区个数一样
+   *  2. Partitioner的类型一样，
+   *
+   *  可以参见HashPartitioner和RangePartitioner的equals方法
+   *
+   * @return
+   */
   override def getDependencies: Seq[Dependency[_]] = {
     rdds.map { rdd: RDD[_] =>
       if (rdd.partitioner == Some(part)) {

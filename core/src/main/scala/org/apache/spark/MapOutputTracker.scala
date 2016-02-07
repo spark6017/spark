@@ -192,6 +192,10 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
       logInfo("Don't have map outputs for shuffle " + shuffleId + ", fetching them")
       val startTime = System.currentTimeMillis
       var fetchedStatuses: Array[MapStatus] = null
+
+      /**
+       * fetching表示正在fetch的shuffleId
+       */
       fetching.synchronized {
         // Someone else is fetching it; wait for them to be done
         while (fetching.contains(shuffleId)) {
@@ -221,6 +225,10 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
           logInfo("Got the output locations")
           mapStatuses.put(shuffleId, fetchedStatuses)
         } finally {
+
+          /**
+           * fetching完成发出通知
+           */
           fetching.synchronized {
             fetching -= shuffleId
             fetching.notifyAll()

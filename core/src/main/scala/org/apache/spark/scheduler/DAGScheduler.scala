@@ -113,15 +113,10 @@ import org.apache.spark.util._
   *   2. DAGScheduler构造时需要传入TaskScheduler，DAGScheduler会将Stage内的并行任务封装为TaskSet交给TaskScheduler做调度
   *   3. DAGScheduler会接收任务执行成功、失败的消息
   *
-  *
-  *
- */
-private[spark]
-
-/**
- * DAGScheduler构造时包含BlockManagerMaster以及MapOutputTrackerMaster
+  *   DAGScheduler构造时包含BlockManagerMaster以及MapOutputTrackerMaster
  *
  */
+private[spark]
 class DAGScheduler(
     private[scheduler] val sc: SparkContext,
     private[scheduler] val taskScheduler: TaskScheduler,

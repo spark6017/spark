@@ -28,7 +28,7 @@ import org.apache.spark.util.collection.ExternalSorter
  * requesting them from other nodes' block stores.
   *
   *
-  * 读取Shuffle数据
+  * 读取Shuffle数据，因为Shuffle数据可能位于多个Node上，因此需要有数据传输的过程，这也是Shuffle影响性能的点，
  *
  * startPartition和endPartition通常只差1，表示只读取一个Partition的数据，参见
  * @see [[org.apache.spark.rdd.ShuffledRDD#compute]]#compute
@@ -53,9 +53,10 @@ private[spark] class BlockStoreShuffleReader[K, C](
   override def read(): Iterator[Product2[K, C]] = {
 
     /**
-     *blocksByAddress的类型是 Seq[(BlockManagerId, Seq[(BlockId, Long)])]
+     *blocksByAddress的类型是 Seq[(BlockManagerId, Seq[(BlockId, Long)])],
+     * 每个元素是一个二元组，每个元组的第一个元素是BlockManagerId，第二个元素是元组的集合，
      *
-     * 每个元素是一个二元组，每个元组的第一个元素是BlockManagerId，第二个元素又是一个元组，
+     *
      */
     val blocksByAddress = mapOutputTracker.getMapSizesByExecutorId(handle.shuffleId, startPartition, endPartition)
 

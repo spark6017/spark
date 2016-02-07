@@ -45,7 +45,7 @@ import org.apache.spark.util.Utils
  * @param blocksByAddress list of blocks to fetch grouped by the [[BlockManagerId]].
  *                        For each block we also require the size (in bytes as a long field) in
  *                        order to throttle the memory usage.
- * @param maxBytesInFlight max size (in bytes) of remote blocks to fetch at any given point.
+ * @param maxBytesInFlight max size (in bytes) of remote blocks to fetch at any given point.， 每个Reducer Task每次最多传输多大的数据量?不是这个含义，是说所有的传输最大字节
  */
 private[spark]
 final class ShuffleBlockFetcherIterator(
@@ -173,6 +173,10 @@ final class ShuffleBlockFetcherIterator(
     )
   }
 
+  /**
+   * 拆分Local和Remote Block
+   * @return
+   */
   private[this] def splitLocalRemoteBlocks(): ArrayBuffer[FetchRequest] = {
     // Make remote requests at most maxBytesInFlight / 5 in length; the reason to keep them
     // smaller than maxBytesInFlight is to allow multiple, parallel fetches from up to 5

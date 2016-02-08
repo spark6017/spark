@@ -707,6 +707,8 @@ private[deploy] class Master(
     // Drivers take strict precedence over executors
     val shuffledWorkers = Random.shuffle(workers) // Randomization helps balance drivers
     for (worker <- shuffledWorkers if worker.state == WorkerState.ALIVE) {
+
+      /**首先调度Driver*/
       for (driver <- waitingDrivers) {
         if (worker.memoryFree >= driver.desc.mem && worker.coresFree >= driver.desc.cores) {
           launchDriver(worker, driver)
@@ -714,6 +716,8 @@ private[deploy] class Master(
         }
       }
     }
+
+    /**在Worker上启动Executors，在Standalone模式下支持一个Worker启动多个Executor*/
     startExecutorsOnWorkers()
   }
 
@@ -742,6 +746,9 @@ private[deploy] class Master(
   private def registerWorker(worker: WorkerInfo): Boolean = {
     // There may be one or more refs to dead workers on this same node (w/ different ID's),
     // remove them.
+
+    //首先删除workers集合中记录下来的处于DEAD状态的worker(这些worker的信息与参数worker的host/port一致)
+    //因为removeWorker的时候，并没有从worker集合中删除
     workers.filter { w =>
       (w.host == worker.host && w.port == worker.port) && (w.state == WorkerState.DEAD)
     }.foreach { w =>
@@ -1067,6 +1074,7 @@ private[deploy] class Master(
     new DriverInfo(now, newDriverId(date), desc, date)
   }
 
+  /**给Worker发送LaunchDriver的消息*/
   private def launchDriver(worker: WorkerInfo, driver: DriverInfo) {
     logInfo("Launching driver " + driver.id + " on worker " + worker.id)
     worker.addDriver(driver)

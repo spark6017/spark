@@ -38,6 +38,16 @@ import org.apache.spark.annotation.DeveloperApi
  *
  * HashMap 是 Spark shuffle read 过程中频繁使用的、用于 aggregate 的数据结构，AppendOnlyMap是全内存的数据结构
  * AppendOnlyMap继承自Iterable[(K，V)]
+ *
+ *
+ * 说明：Spark代码中没有地方直接使用AppendOnlyMap， 不过SizeTrackingAppendOnlyMap继承自AppendOnlyMap
+ * 而PartitionedAppendOnlyMap继承自SizeTrackingAppendOnlyMap
+ *
+ * AppendOnlyMap的应用也不能说不广泛，因为ExternalAppendOnlyMap的底层数据结构是SizeTrackingAppendOnlyMap，而SizeTrackingAppendOnlyMap
+ * 就是一个AppendOnlyMap
+ *
+ * ExternalAppendOnlyMap应用的更为广泛，Shuffle Read基本上都改为使用ExternalAppendOnlyMap了，比如[[org.apache.spark.Aggregator]]
+ *
  */
 @DeveloperApi
 class AppendOnlyMap[K, V](initialCapacity: Int = 64)

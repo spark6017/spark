@@ -334,8 +334,8 @@ private[spark] class MapOutputTrackerMaster(conf: SparkConf)
 
   /**
    *   Register multiple map output information for the given shuffle
-    *  注册MapOutputs，所谓的registerMapOutputs就是将MapStatus数组append到mapStatuses数组上
-   *
+    *  注册MapOutputs，所谓的registerMapOutputs就是将MapStatus数组append到MapOutputTracker持有的mapStatuses Map上
+   *   mapStatuses是一个Map，Key是ShuffleId，Value是MapStatus的数组
    *  NOTE:看实现不能算是append，空数组++Array[MapStatus]
     *
     */

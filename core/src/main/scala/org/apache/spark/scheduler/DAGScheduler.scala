@@ -1262,7 +1262,7 @@ class DAGScheduler(
               //       we registered these map outputs.
 
               /***
-                * 在ShuffleMapTask结束时，将计算结果注册到mapOutputTracker中
+                * 在所有的ShuffleMapTask结束时，将计算结果注册到mapOutputTracker中
                 *
                 */
               mapOutputTracker.registerMapOutputs(

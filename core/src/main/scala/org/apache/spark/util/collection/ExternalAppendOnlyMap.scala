@@ -50,6 +50,14 @@ import org.apache.spark.util.collection.ExternalAppendOnlyMap.HashComparator
  * However, if the spill threshold is too low, we spill frequently and incur unnecessary disk
  * writes. This may lead to a performance regression compared to the normal case of using the
  * non-spilling AppendOnlyMap.
+ *
+ * HashMap 是 Spark shuffle read 过程中频繁使用的、用于 aggregate 的数据结构。ExternalAppendOnlyMap用于内存+磁盘
+ *
+ * 从ExternalAppendOnlyMap的构造函数参数可以看出，ExternalAppendOnlyMap的构造参数跟[[org.apache.spark.rdd.PairRDDFunctions]]的
+ * combineByKey的参数非常类似。
+ *
+ * 从ExternalAppendOnlyMap的构造参数可以大概看得出来，ExternalAppendOnlyMap主要用于聚合操作(比如map side combine)
+ *
  */
 @DeveloperApi
 class ExternalAppendOnlyMap[K, V, C](
@@ -81,9 +89,20 @@ class ExternalAppendOnlyMap[K, V, C](
 
   override protected[this] def taskMemoryManager: TaskMemoryManager = context.taskMemoryManager()
 
+  /**
+   * ExternalAppendOnlyMap通过currentMap持有一个AppendOnlyMap，这个是AppendOnlyMap的子类，SizeTrackingAppendOnlyMap
+   */
   private var currentMap = new SizeTrackingAppendOnlyMap[K, C]
+
+  /**
+   * DiskMapIterator是干啥用的？spilledMaps数组用于存放当前已经spill的数据
+   */
   private val spilledMaps = new ArrayBuffer[DiskMapIterator]
   private val sparkConf = SparkEnv.get.conf
+
+  /**
+   * 磁盘BlockManager？
+   */
   private val diskBlockManager = blockManager.diskBlockManager
 
   /**
@@ -112,17 +131,25 @@ class ExternalAppendOnlyMap[K, V, C](
   private var _peakMemoryUsedBytes: Long = 0L
   def peakMemoryUsedBytes: Long = _peakMemoryUsedBytes
 
+  /**
+   * keyComparator是对Hash值进行比较
+   */
   private val keyComparator = new HashComparator[K]
   private val ser = serializer.newInstance()
 
   /**
    * Number of files this map has spilled so far.
    * Exposed for testing.
+   *
+   * 当前已经spill的次数
    */
   private[collection] def numSpills: Int = spilledMaps.size
 
   /**
    * Insert the given key and value into the map.
+   *
+   * 将K,V插入到该Map中，它是调用insertAll方法，而insertAll方法接受一个Iterator参数，
+   * 因此这里将(key,value)单个元素构造为一个Iterator传给insertAll
    */
   def insert(key: K, value: V): Unit = {
     insertAll(Iterator((key, value)))
@@ -136,6 +163,9 @@ class ExternalAppendOnlyMap[K, V, C](
    * otherwise, spill the in-memory map to disk.
    *
    * The shuffle memory usage of the first trackMemoryThreshold entries is not tracked.
+   *
+   *
+   * 将类型为Iterator的集合插入到当前Map中(以combine的方式)
    */
   def insertAll(entries: Iterator[Product2[K, V]]): Unit = {
     if (currentMap == null) {
@@ -155,6 +185,10 @@ class ExternalAppendOnlyMap[K, V, C](
       if (estimatedSize > _peakMemoryUsedBytes) {
         _peakMemoryUsedBytes = estimatedSize
       }
+
+      /**
+       * 如果spill到磁盘，那么currentMap可以重建
+       */
       if (maybeSpill(currentMap, estimatedSize)) {
         currentMap = new SizeTrackingAppendOnlyMap[K, C]
       }
@@ -171,6 +205,8 @@ class ExternalAppendOnlyMap[K, V, C](
    * otherwise, spill the in-memory map to disk.
    *
    * The shuffle memory usage of the first trackMemoryThreshold entries is not tracked.
+   *
+   * 将类型为Iteratable的集合插入到该Map中
    */
   def insertAll(entries: Iterable[Product2[K, V]]): Unit = {
     insertAll(entries.iterator)
@@ -178,11 +214,15 @@ class ExternalAppendOnlyMap[K, V, C](
 
   /**
    * Sort the existing contents of the in-memory map and spill them to a temporary file on disk.
+   *
+   * 将collection集合中的元素spill到磁盘
    */
   override protected[this] def spill(collection: SizeTracker): Unit = {
     val (blockId, file) = diskBlockManager.createTempLocalBlock()
     curWriteMetrics = new ShuffleWriteMetrics()
     var writer = blockManager.getDiskWriter(blockId, file, ser, fileBufferSize, curWriteMetrics)
+
+    /**当前写到磁盘的数据数目，调用flush方法(调用了Writer的commitAndClose方法)后，重置为0*/
     var objectsWritten = 0
 
     // List of batch sizes (bytes) in the order they are written to disk
@@ -200,18 +240,29 @@ class ExternalAppendOnlyMap[K, V, C](
 
     var success = false
     try {
+
+      /**
+       * 调用AppendOnlyMap的destructiveSortedIterator对当前Map中的数据进行排序，然后再写磁盘
+       */
       val it = currentMap.destructiveSortedIterator(keyComparator)
       while (it.hasNext) {
         val kv = it.next()
         writer.write(kv._1, kv._2)
         objectsWritten += 1
 
+        /**
+         * 如果写的个数是serializerBatchSize，那么就写提交一次
+         */
         if (objectsWritten == serializerBatchSize) {
           flush()
           curWriteMetrics = new ShuffleWriteMetrics()
           writer = blockManager.getDiskWriter(blockId, file, ser, fileBufferSize, curWriteMetrics)
         }
       }
+
+      /**
+       * 最后还有少于serializerBatchSize个数的objects没有写完，则进行最后一次flush
+       */
       if (objectsWritten > 0) {
         flush()
       } else if (writer != null) {
@@ -228,7 +279,7 @@ class ExternalAppendOnlyMap[K, V, C](
           writer.revertPartialWritesAndClose()
         }
         if (file.exists()) {
-          if (!file.delete()) {
+          if (!file.delete()) { /**删除临时文件？*/
             logWarning(s"Error deleting ${file}")
           }
         }
@@ -241,15 +292,25 @@ class ExternalAppendOnlyMap[K, V, C](
   /**
    * Return a destructive iterator that merges the in-memory map with the spilled maps.
    * If no spill has occurred, simply return the in-memory map's iterator.
+   *
+   * 因为ExternalAppendOnlyMap实现了[[Iterable]]接口，因此它有iterator方法，转换为Iterator对象
    */
   override def iterator: Iterator[(K, C)] = {
     if (currentMap == null) {
       throw new IllegalStateException(
         "ExternalAppendOnlyMap.iterator is destructive and should only be called once.")
     }
+
+    /**
+     * 没有外排序，那么就返回CompletionIterator
+     */
     if (spilledMaps.isEmpty) {
       CompletionIterator[(K, C), Iterator[(K, C)]](currentMap.iterator, freeCurrentMap())
     } else {
+
+      /**
+       * 如果有外排序，那么就是用ExternalIterator进行内存Map和磁盘Map的归并排序
+       */
       new ExternalIterator()
     }
   }
@@ -261,11 +322,17 @@ class ExternalAppendOnlyMap[K, V, C](
 
   /**
    * An iterator that sort-merges (K, C) pairs from the in-memory map and the spilled maps
+   *
+   * 内存Map和磁盘Map进行归并排序？
    */
   private class ExternalIterator extends Iterator[(K, C)] {
 
     // A queue that maintains a buffer for each stream we are currently merging
     // This queue maintains the invariant that it only contains non-empty buffers
+
+    /**
+     *
+     */
     private val mergeHeap = new mutable.PriorityQueue[StreamBuffer]
 
     // Input streams are derived both from the in-memory map and spilled maps on disk
@@ -411,6 +478,8 @@ class ExternalAppendOnlyMap[K, V, C](
 
   /**
    * An iterator that returns (K, C) pairs in sorted order from an on-disk map
+   *
+   * 从磁盘map中获得一个排序的Iterator
    */
   private class DiskMapIterator(file: File, blockId: BlockId, batchSizes: ArrayBuffer[Long])
     extends Iterator[(K, C)]
@@ -530,10 +599,17 @@ class ExternalAppendOnlyMap[K, V, C](
     context.addTaskCompletionListener(context => cleanup())
   }
 
-  /** Convenience function to hash the given (K, C) pair by the key. */
+  /**
+   * Convenience function to hash the given (K, C) pair by the key.
+   * 调用ExternalAppendOnlyMap伴生对象的hash方法求Key的Hash值
+   */
   private def hashKey(kc: (K, C)): Int = ExternalAppendOnlyMap.hash(kc._1)
 }
 
+
+/**
+ * ExternalAppendOnlyMap类的伴生对象
+ */
 private[spark] object ExternalAppendOnlyMap {
 
   /**
@@ -545,6 +621,8 @@ private[spark] object ExternalAppendOnlyMap {
 
   /**
    * A comparator which sorts arbitrary keys based on their hash codes.
+   *
+   * 基于Hash Code进行排序，它实现了Java的Comparator接口，需要实现compare方法
    */
   private class HashComparator[K] extends Comparator[K] {
     def compare(key1: K, key2: K): Int = {

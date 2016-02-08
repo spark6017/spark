@@ -27,6 +27,10 @@ import org.apache.spark.util.collection.ExternalAppendOnlyMap
  * @param createCombiner function to create the initial value of the aggregation.
  * @param mergeValue function to merge a new value into the aggregation result.
  * @param mergeCombiners function to merge outputs from multiple mergeValue function.
+ *
+ *
+ *  在1.2版本，Aggregator类的方法根据isSpillEnabled来判断是使用AppendOnlyMap还是ExternalAppendOnlyMap
+ *  这个版本统一使用[[ExternalAppendOnlyMap]]
  */
 @DeveloperApi
 case class Aggregator[K, V, C] (

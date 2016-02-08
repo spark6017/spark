@@ -95,7 +95,7 @@ class ExternalAppendOnlyMap[K, V, C](
   private var currentMap = new SizeTrackingAppendOnlyMap[K, C]
 
   /**
-   * DiskMapIterator是干啥用的？spilledMaps数组用于存放当前已经spill的数据
+   * DiskMapIterator是干啥用的？每次 spill 完在磁盘上生成一个 spilledMap 文件，然后重新 new 出来一个 AppendOnlyMap
    */
   private val spilledMaps = new ArrayBuffer[DiskMapIterator]
   private val sparkConf = SparkEnv.get.conf
@@ -425,6 +425,8 @@ class ExternalAppendOnlyMap[K, V, C](
     /**
      * Select a key with the minimum hash, then combine all values with the same key from all
      * input streams.
+     *
+     * 调用next方法，返回minKey和minCombiner
      */
     override def next(): (K, C) = {
       if (mergeHeap.length == 0) {
@@ -449,6 +451,8 @@ class ExternalAppendOnlyMap[K, V, C](
       }
 
       // Repopulate each visited stream buffer and add it back to the queue if it is non-empty
+
+      //
       mergedBuffers.foreach { buffer =>
         if (buffer.isEmpty) {
           readNextHashCode(buffer.iterator, buffer.pairs)
@@ -468,8 +472,18 @@ class ExternalAppendOnlyMap[K, V, C](
      * Note that because when we spill data out, we only spill one value for each key, there is
      * at most one element for each key.
      *
+     *  在spill前做combine使得每个Key Spill到磁盘时只有一个Value
+     *  也就是说，在StreamBuffer中，相同的Key只有一个值
+     *
      * StreamBuffers are ordered by the minimum key hash currently available in their stream so
      * that we can put them into a heap and sort that.
+     *
+     * StreamBuffer可以放到基于堆排序的优先级队列中是因为StreamBuffer是可排序的(实现了Comparable接口)，
+     *
+     * StreamBuffer中的所有元素的Key的hash值都是一样的，没事每个K对应的Value是不同的
+     *
+     *
+     * StreamBuffer 里面包含的 records 需要具有相同的 hash(key)，
      */
     private class StreamBuffer(
         val iterator: BufferedIterator[(K, C)],

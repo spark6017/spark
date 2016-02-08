@@ -433,6 +433,7 @@ class ExternalAppendOnlyMap[K, V, C](
         throw new NoSuchElementException
       }
       // Select a key from the StreamBuffer that holds the lowest key hash
+      //mergeHeap这个优先级队列的头元素是minBuffer
       val minBuffer = mergeHeap.dequeue()
       val minPairs = minBuffer.pairs
       val minHash = minBuffer.minKeyHash
@@ -443,10 +444,14 @@ class ExternalAppendOnlyMap[K, V, C](
 
       // For all other streams that may have this key (i.e. have the same minimum key hash),
       // merge in the corresponding value (if any) from that stream
+      //难道此处是放了一个元素(minBuffer)的ArrayBuffer
       val mergedBuffers = ArrayBuffer[StreamBuffer](minBuffer)
+
+      //mergeHeap有出队操作
       while (mergeHeap.length > 0 && mergeHeap.head.minKeyHash == minHash) {
         val newBuffer = mergeHeap.dequeue()
         minCombiner = mergeIfKeyExists(minKey, minCombiner, newBuffer)
+        //将newBuffer加到mergedBuffers数组中
         mergedBuffers += newBuffer
       }
 

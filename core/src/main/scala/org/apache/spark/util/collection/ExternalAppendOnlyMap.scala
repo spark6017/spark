@@ -331,19 +331,32 @@ class ExternalAppendOnlyMap[K, V, C](
     // This queue maintains the invariant that it only contains non-empty buffers
 
     /**
-     *
+     * 元素是StreamBuffer的优先级队列
      */
     private val mergeHeap = new mutable.PriorityQueue[StreamBuffer]
 
     // Input streams are derived both from the in-memory map and spilled maps on disk
     // The in-memory map is sorted in place, while the spilled maps are already in sorted order
+    /***当前内存Map进行排序后的集合***/
     private val sortedMap = CompletionIterator[(K, C), Iterator[(K, C)]](
       currentMap.destructiveSortedIterator(keyComparator), freeCurrentMap())
+
+      /** sortedMap和spilledMaped集合分别对应着内存和磁盘的集合
+        *
+        * buffered是Iterator的方法，何解？
+        */
     private val inputStreams = (Seq(sortedMap) ++ spilledMaps).map(it => it.buffered)
 
+    /**
+     * 针对inputStream中的每个iterator.buffered(可重复读？)
+     */
     inputStreams.foreach { it =>
       val kcPairs = new ArrayBuffer[(K, C)]
       readNextHashCode(it, kcPairs)
+
+      /** *
+        * 加入到mergeHeap对象中
+        */
       if (kcPairs.length > 0) {
         mergeHeap.enqueue(new StreamBuffer(it, kcPairs))
       }
@@ -355,7 +368,9 @@ class ExternalAppendOnlyMap[K, V, C](
      *
      * Assumes the given iterator is in sorted order of hash code.
      *
-     * @param it iterator to read from
+     * 将Hash值相同的K,C写入到ArrayBuffer中
+     *
+     * @param it iterator to read from，这是一个排序的集合
      * @param buf buffer to write the results into
      */
     private def readNextHashCode(it: BufferedIterator[(K, C)], buf: ArrayBuffer[(K, C)]): Unit = {
@@ -463,12 +478,20 @@ class ExternalAppendOnlyMap[K, V, C](
 
       def isEmpty: Boolean = pairs.length == 0
 
-      // Invalid if there are no more pairs in this stream
+      /** *
+        * StreamBuffer中的第一个元素的Key哈希值最小
+        * @return
+        */
       def minKeyHash: Int = {
         assert(pairs.length > 0)
         hashKey(pairs.head)
       }
 
+      /**
+       * 比较最小Hash
+       * @param other
+       * @return
+       */
       override def compareTo(other: StreamBuffer): Int = {
         // descending order because mutable.PriorityQueue dequeues the max, not the min
         if (other.minKeyHash < minKeyHash) -1 else if (other.minKeyHash == minKeyHash) 0 else 1

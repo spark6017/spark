@@ -48,6 +48,12 @@ final class UnsafeExternalRowSorter {
 
   private final StructType schema;
   private final PrefixComputer prefixComputer;
+
+  /**
+   * Unsafe External Sorter
+   *
+   * @see [[ExternalSorter]]
+   */
   private final UnsafeExternalSorter sorter;
 
   public abstract static class PrefixComputer {

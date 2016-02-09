@@ -198,19 +198,19 @@ private[spark] object SortShuffleManager extends Logging {
     val numPartitions = dependency.partitioner.numPartitions
     val serializer = Serializer.getSerializer(dependency.serializer)
     if (!serializer.supportsRelocationOfSerializedObjects) {
-      log.debug(s"Can't use serialized shuffle for shuffle $shufId because the serializer, " +
+      log.info(s"Can't use serialized shuffle for shuffle $shufId because the serializer, " +
         s"${serializer.getClass.getName}, does not support object relocation")
       false
     } else if (dependency.aggregator.isDefined) {
-      log.debug(
+      log.info(
         s"Can't use serialized shuffle for shuffle $shufId because an aggregator is defined")
       false
     } else if (numPartitions > MAX_SHUFFLE_OUTPUT_PARTITIONS_FOR_SERIALIZED_MODE) {
-      log.debug(s"Can't use serialized shuffle for shuffle $shufId because it has more than " +
+      log.info(s"Can't use serialized shuffle for shuffle $shufId because it has more than " +
         s"$MAX_SHUFFLE_OUTPUT_PARTITIONS_FOR_SERIALIZED_MODE partitions")
       false
     } else {
-      log.debug(s"Can use serialized shuffle for shuffle $shufId")
+      log.info(s"Can use serialized shuffle for shuffle $shufId")
       true
     }
   }

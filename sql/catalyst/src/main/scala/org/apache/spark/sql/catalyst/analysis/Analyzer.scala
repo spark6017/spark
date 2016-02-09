@@ -454,6 +454,8 @@ class Analyzer(
 
       // When resolve `SortOrder`s in Sort based on child, don't report errors as
       // we still have chance to resolve it based on its descendants
+
+        /**Sort逻辑计划解析**/
       case s @ Sort(ordering, global, child) if child.resolved && !s.resolved =>
         val newOrdering = resolveSortOrders(ordering, child, throws = false)
         Sort(newOrdering, global, child)

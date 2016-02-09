@@ -206,6 +206,12 @@ class SQLContext private[sql](
   @transient
   protected[sql] val sqlParser: ParserInterface = new SparkQl(conf)
 
+
+  /**
+   * 在Spark SQL中，调用SparkQl的parsePlan方法， SparkQl继承自CatalystQl，此处调用CatalystQl的parsePlan方法
+   * @param sql
+   * @return
+   */
   protected[sql] def parseSql(sql: String): LogicalPlan = sqlParser.parsePlan(sql)
 
   protected[sql] def executeSql(sql: String):
@@ -790,6 +796,9 @@ class SQLContext private[sql](
   /**
    * Executes a SQL query using Spark, returning the result as a [[DataFrame]]. The dialect that is
    * used for SQL parsing can be configured with 'spark.sql.dialect'.
+   *
+   *
+   * SQLContext.sql("select * from TBL_STUDENT")
    *
    * @group basic
    * @since 1.3.0

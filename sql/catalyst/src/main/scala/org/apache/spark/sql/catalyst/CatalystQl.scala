@@ -69,8 +69,14 @@ private[sql] class CatalystQl(val conf: ParserConf = SimpleParserConf()) extends
   }
 
   /** Creates LogicalPlan for a given SQL string. */
-  def parsePlan(sql: String): LogicalPlan =
-    safeParse(sql, ParseDriver.parsePlan(sql, conf))(nodeToPlan)
+  def parsePlan(sql: String): LogicalPlan = {
+
+    /**解析出计划(抽象语法树节点)**/
+   val planASTNode = ParseDriver.parsePlan(sql, conf)
+
+    /**柯里化函数，nodeToPlan是一个函数**/
+    safeParse(sql, planASTNode)(nodeToPlan)
+  }
 
   /** Creates Expression for a given SQL string. */
   def parseExpression(sql: String): Expression =
@@ -211,6 +217,11 @@ https://cwiki.apache.org/confluence/display/Hive/Enhanced+Aggregation%2C+Cube%2C
     (keys, bitmasks)
   }
 
+  /**
+   * 将Hive的ASTNode转换为Spark SQL的LogicalPlan
+   * @param node
+   * @return
+   */
   protected def nodeToPlan(node: ASTNode): LogicalPlan = node match {
     case Token("TOK_SHOWFUNCTIONS", args) =>
       // Skip LIKE.

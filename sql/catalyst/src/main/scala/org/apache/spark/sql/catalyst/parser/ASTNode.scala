@@ -20,6 +20,14 @@ import org.antlr.runtime.{Token, TokenRewriteStream}
 
 import org.apache.spark.sql.catalyst.trees.{Origin, TreeNode}
 
+/**
+ * ASTNode
+ * @param token AntLR定义的Token对象，
+ * @param startIndex 文本中该Token的起始位置
+ * @param stopIndex 文本中该Token的结束位置
+ * @param children ASTNode的子ASTNode
+ * @param stream
+ */
 case class ASTNode(
     token: Token,
     startIndex: Int,
@@ -66,6 +74,10 @@ case class ASTNode(
     stream.toString(stopIndex + 1, stream.size() - 1).trim()
   }
 
+  /**
+   * Token的文本内容
+   * @return
+   */
   def text: String = token.getText
 
   def tokenType: Int = token.getType
@@ -95,5 +107,5 @@ case class ASTNode(
     }
   }
 
-  override def simpleString: String = s"$text $line, $startIndex, $stopIndex, $positionInLine "
+  override def simpleString: String = s"tokenText: $text, tokenType: $tokenType,  $line, $startIndex, $stopIndex, $positionInLine "
 }

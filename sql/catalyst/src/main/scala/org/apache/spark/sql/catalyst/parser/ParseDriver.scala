@@ -43,10 +43,17 @@ object ParseDriver extends Logging {
     parser.tableName().getTree
   }
 
+  /**
+   * 柯里化函数
+   * @param command
+   * @param conf
+   * @param toTree
+   * @return
+   */
   private def parse(
       command: String,
-      conf: ParserConf)(
-      toTree: SparkSqlParser => CommonTree): ASTNode = {
+      conf: ParserConf)
+      (toTree: SparkSqlParser => CommonTree): ASTNode = {
     logInfo(s"Parsing command: $command")
 
     // Setup error collection.

@@ -120,6 +120,8 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
 
   /**
    * Used to plan the aggregate operator for expressions based on the AggregateFunction2 interface.
+   *
+   * 将逻辑计划plan转换为物理计划的集合Seq[SparkPlan]
    */
   object Aggregation extends Strategy {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
@@ -295,9 +297,16 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
       case r: RunnableCommand => ExecutedCommand(r) :: Nil
 
+      /** *
+        * Distinct在逻辑计划优化阶段被优化为Aggregation
+        */
       case logical.Distinct(child) =>
         throw new IllegalStateException(
           "logical distinct operator should have been replaced by aggregate in the optimizer")
+
+      /**
+       * 求交集(Intersect)在逻辑计划优化阶段被优化为半连接
+       */
       case logical.Intersect(left, right) =>
         throw new IllegalStateException(
           "logical intersect operator should have been replaced by semi-join in the optimizer")

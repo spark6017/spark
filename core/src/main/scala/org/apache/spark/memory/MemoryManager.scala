@@ -168,6 +168,10 @@ private[spark] abstract class MemoryManager(
   /**
    * Tracks whether Tungsten memory will be allocated on the JVM heap or off-heap using
    * sun.misc.Unsafe.
+   *
+   * On Heap or  Off Heap
+   *
+   * 如果是Off Heap，那么需要设置Off Heap的容量
    */
   final val tungstenMemoryMode: MemoryMode = {
     if (conf.getBoolean("spark.memory.offHeap.enabled", false)) {
@@ -185,13 +189,33 @@ private[spark] abstract class MemoryManager(
    * If user didn't explicitly set "spark.buffer.pageSize", we figure out the default value
    * by looking at the number of cores available to the process, and the total amount of memory,
    * and then divide it by a factor of safety.
+   *
+   * 内存管理，每页的字节数
    */
   val pageSizeBytes: Long = {
+
+    /**
+     * 每页最小1M
+     */
     val minPageSize = 1L * 1024 * 1024   // 1MB
+
+    /**
+     * 每页最大6M
+     */
     val maxPageSize = 64L * minPageSize  // 64MB
+
+    /**
+     * 内核数，不指定则取全部的Processors
+     */
     val cores = if (numCores > 0) numCores else Runtime.getRuntime.availableProcessors()
     // Because of rounding to next power of 2, we may have safetyFactor as 8 in worst case
     val safetyFactor = 16
+
+
+    /**
+     * 如果是ON_HEAP,那么取
+     * 如果是OFF_HEAP，那么取
+     */
     val maxTungstenMemory: Long = tungstenMemoryMode match {
       case MemoryMode.ON_HEAP => onHeapExecutionMemoryPool.poolSize
       case MemoryMode.OFF_HEAP => offHeapExecutionMemoryPool.poolSize

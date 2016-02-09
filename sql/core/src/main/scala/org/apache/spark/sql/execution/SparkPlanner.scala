@@ -27,12 +27,16 @@ class SparkPlanner(val sqlContext: SQLContext) extends SparkStrategies {
 
   def numPartitions: Int = sqlContext.conf.numShufflePartitions
 
+  /**
+   * 逻辑计划转换为物理计划的策略
+   * @return
+   */
   def strategies: Seq[Strategy] =
     sqlContext.experimental.extraStrategies ++ (
       DataSourceStrategy ::
       DDLStrategy ::
       TakeOrderedAndProject ::
-      Aggregation ::
+      Aggregation :: /**Aggregation策略**/
       LeftSemiJoin ::
       EquiJoinSelection ::
       InMemoryScans ::

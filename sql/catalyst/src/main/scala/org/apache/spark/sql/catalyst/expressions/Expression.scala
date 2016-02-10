@@ -78,6 +78,10 @@ abstract class Expression extends TreeNode[Expression] {
    */
   def deterministic: Boolean = children.forall(_.deterministic)
 
+  /**
+   * 表达式是否是空值
+   * @return
+   */
   def nullable: Boolean
 
   def references: AttributeSet = AttributeSet(children.flatMap(_.references.iterator))
@@ -131,6 +135,8 @@ abstract class Expression extends TreeNode[Expression] {
   /**
    * Returns the [[DataType]] of the result of evaluating this expression.  It is
    * invalid to query the dataType of an unresolved expression (i.e., when `resolved` == false).
+   *
+   * 表达式结果的类型
    */
   def dataType: DataType
 
@@ -239,6 +245,8 @@ abstract class Expression extends TreeNode[Expression] {
 /**
  * An expression that cannot be evaluated. Some expressions don't live past analysis or optimization
  * time (e.g. Star). This trait is used by those expressions.
+ *
+ * 不支持表达式求值和代码生成的表达式
  */
 trait Unevaluable extends Expression {
 

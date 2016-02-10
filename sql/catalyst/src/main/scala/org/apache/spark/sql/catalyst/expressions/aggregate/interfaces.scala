@@ -190,6 +190,8 @@ sealed abstract class AggregateFunction extends Expression with ImplicitCastInpu
  * Correct ImperativeAggregate evaluation depends on the correctness of `mutableAggBufferOffset` and
  * `inputAggBufferOffset`, but not on the correctness of the attribute ids in `aggBufferAttributes`
  * and `inputAggBufferAttributes`.
+ *
+ * @see [[DeclarativeAggregate]]
  */
 abstract class ImperativeAggregate extends AggregateFunction with CodegenFallback {
 
@@ -293,6 +295,14 @@ abstract class ImperativeAggregate extends AggregateFunction with CodegenFallbac
  * we create this function in DataFrame API). So, if there is any fields in
  * the implemented class that need to access fields of its children, please make
  * those fields `lazy val`s.
+ *
+ *
+ * 何为声明式Aggregate? 基于表达式的Aggregate
+ *
+ * 跟map-side combine的思路差不多
+ *        initialize
+ *       update
+ *       merge
  */
 abstract class DeclarativeAggregate
   extends AggregateFunction
@@ -301,11 +311,15 @@ abstract class DeclarativeAggregate
 
   /**
    * Expressions for initializing empty aggregation buffers.
+   *
+   * 初始化Aggregation Buffer
    */
   val initialValues: Seq[Expression]
 
   /**
    * Expressions for updating the mutable aggregation buffer based on an input row.
+   *
+   * 给定Input Row，更新Aggregation Buffer
    */
   val updateExpressions: Seq[Expression]
 
@@ -314,12 +328,16 @@ abstract class DeclarativeAggregate
    * expressions, you can use the syntax `attributeName.left` and `attributeName.right` to refer
    * to the attributes corresponding to each of the buffers being merged (this magic is enabled
    * by the [[RichAttribute]] implicit class).
+   *
+   * merge两个Aggregation Buffer
    */
   val mergeExpressions: Seq[Expression]
 
   /**
    * An expression which returns the final value for this aggregate function. Its data type should
    * match this expression's [[dataType]].
+   *
+   * 计算表达式的值
    */
   val evaluateExpression: Expression
 

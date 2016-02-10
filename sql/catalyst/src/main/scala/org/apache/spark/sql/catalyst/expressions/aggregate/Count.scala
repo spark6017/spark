@@ -21,11 +21,20 @@ import org.apache.spark.sql.catalyst.dsl.expressions._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.types._
 
+/** *
+  * Count是基于DeclarativeAggregate
+  *
+  * 对于select count(name) from tbl_student;如果name为空，那么count将不对它进行计数
+  * @param children
+  */
 case class Count(children: Seq[Expression]) extends DeclarativeAggregate {
 
   override def nullable: Boolean = false
 
-  // Return data type.
+  /**
+   * Count的返回值是Long类型
+   * @return
+   */
   override def dataType: DataType = LongType
 
   // Expected input data type.
@@ -35,19 +44,30 @@ case class Count(children: Seq[Expression]) extends DeclarativeAggregate {
 
   override lazy val aggBufferAttributes = count :: Nil
 
+  /**
+   * 初值是Literal(0)的Seq
+   */
   override lazy val initialValues = Seq(
     /* count = */ Literal(0L)
   )
 
+  /**
+    * 更新表达式，即使更新count
+    */
   override lazy val updateExpressions = {
+    /**
+     * 过滤出nullable的child集合
+     */
     val nullableChildren = children.filter(_.nullable)
     if (nullableChildren.isEmpty) {
       Seq(
         /* count = */ count + 1L
       )
     } else {
+      //将nullableChildren的所有元素map成IsNull，然后对这些IsNull做reduce操作(使用Or运算符)
+      val condition = nullableChildren.map(IsNull).reduce(Or)
       Seq(
-        /* count = */ If(nullableChildren.map(IsNull).reduce(Or), count, count + 1L)
+        /* count = */ If(condition, count, count + 1L)
       )
     }
   }
@@ -56,6 +76,9 @@ case class Count(children: Seq[Expression]) extends DeclarativeAggregate {
     /* count = */ count.left + count.right
   )
 
+  /**
+   * 结果表达式，count
+   */
   override lazy val evaluateExpression = count
 
   override def defaultResult: Option[Literal] = Option(Literal(0L))

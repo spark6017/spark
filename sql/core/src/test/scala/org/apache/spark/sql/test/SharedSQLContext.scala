@@ -21,7 +21,7 @@ import org.apache.spark.sql.SQLContext
 
 
 /**
- * Helper trait for SQL test suites where all tests share a single [[TestSQLContext]].
+ * Helper trait for SQL SparkSQLTestCount suites where all tests share a single [[TestSQLContext]].
  */
 trait SharedSQLContext extends SQLTestUtils {
 
@@ -29,7 +29,7 @@ trait SharedSQLContext extends SQLTestUtils {
    * The [[TestSQLContext]] to use for all tests in this suite.
    *
    * By default, the underlying [[org.apache.spark.SparkContext]] will be run in local
-   * mode with the default test configurations.
+   * mode with the default SparkSQLTestCount configurations.
    */
   private var _ctx: TestSQLContext = null
 

@@ -282,6 +282,13 @@ case class Range(
   }
 }
 
+/**
+ *  Aggregate是一个一元逻辑表达式，具有分组表达式和命名的聚合表达式
+ *  何为aggregateExpression？
+ * @param groupingExpressions
+ * @param aggregateExpressions
+ * @param child
+ */
 case class Aggregate(
     groupingExpressions: Seq[Expression],
     aggregateExpressions: Seq[NamedExpression],

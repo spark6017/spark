@@ -73,7 +73,10 @@ private[sql] case class ExecutedCommand(cmd: RunnableCommand) extends SparkPlan 
   override def argString: String = cmd.toString
 }
 
-
+/**
+ * Set操作
+ * @param kv
+ */
 case class SetCommand(kv: Option[(String, Option[String])]) extends RunnableCommand with Logging {
 
   private def keyValueOutput: Seq[Attribute] = {
@@ -111,6 +114,9 @@ case class SetCommand(kv: Option[(String, Option[String])]) extends RunnableComm
       }
       (keyValueOutput, runFunc)
 
+    /**
+     *  spark.sql.useAggregate2配置项，已经不建议使用，默认是true
+     */
     case Some((SQLConf.Deprecated.USE_SQL_AGGREGATE2, Some(value))) =>
       val runFunc = (sqlContext: SQLContext) => {
         logWarning(

@@ -181,6 +181,8 @@ case class NaNvl(left: Expression, right: Expression)
 
 /**
  * An expression that is evaluated to true if the input is null.
+ *
+ * SELECT  *  FROM tbl_student WHERE name IS NULL
  */
 case class IsNull(child: Expression) extends UnaryExpression with Predicate {
   override def nullable: Boolean = false

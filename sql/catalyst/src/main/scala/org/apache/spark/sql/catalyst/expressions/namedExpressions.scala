@@ -46,6 +46,10 @@ object ExprId {
 
 /**
  * An [[Expression]] that is named.
+ *
+ * 命名的表达式，NamedExpression有一个name函数，表示表达式的name
+ *
+ * NamedExpression没有多少实现类
  */
 trait NamedExpression extends Expression {
 

@@ -125,12 +125,22 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
    */
   object Aggregation extends Strategy {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
+
+      /**
+       *  resultExpression就是Aggregate构造函数中的aggregateExpressions
+       */
       case logical.Aggregate(groupingExpressions, resultExpressions, child) =>
         // A single aggregate expression might appear multiple times in resultExpressions.
         // In order to avoid evaluating an individual aggregate function multiple times, we'll
         // build a set of the distinct aggregate expressions and build a function which can
         // be used to re-write expressions so that they reference the single copy of the
         // aggregate function which actually gets computed.
+
+        /** 对resultExpressions进行去重，
+          *  每个是一个NamedExpression，而NamedExpression具有一个collect方法，接受偏函数
+          *
+          *  distinct是Seq集合的函数，用于去重
+          */
         val aggregateExpressions = resultExpressions.flatMap { expr =>
           expr.collect {
             case agg: AggregateExpression => agg
@@ -138,14 +148,30 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
         }.distinct
         // For those distinct aggregate expressions, we create a map from the
         // aggregate function to the corresponding attribute of the function.
+
+        /** *
+          * 创建一个Map，aggregateFunction到Attribute之间的映射，
+          * 问题： aggregationFunction是什么？ Attribute是什么？
+          *
+          * aggregateFunction是AggregationExpression的一个成员
+          *
+          */
         val aggregateFunctionToAttribute = aggregateExpressions.map { agg =>
           val aggregateFunction = agg.aggregateFunction
+          /**将Alias转换为Attribute*/
           val attribute = Alias(aggregateFunction, aggregateFunction.toString)().toAttribute
+
+          /**Map的成员，是二元组到Attribute的映射*/
           (aggregateFunction, agg.isDistinct) -> attribute
         }.toMap
 
+        /**
+         * AggregateExpression有一个isDistinct方法，进行分组
+         */
         val (functionsWithDistinct, functionsWithoutDistinct) =
           aggregateExpressions.partition(_.isDistinct)
+
+
         if (functionsWithDistinct.map(_.aggregateFunction.children).distinct.length > 1) {
           // This is a sanity check. We should not reach here when we have multiple distinct
           // column sets. Our MultipleDistinctRewriter should take care this case.
@@ -187,7 +213,12 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
           }.asInstanceOf[NamedExpression]
         }
 
+        /**
+          *  计算Aggregate Operator
+          */
         val aggregateOperator =
+
+          /**每个aggregateExpression的aggregateFunction中存在不支持Paritial的函数(!._supportPartial)*/
           if (aggregateExpressions.map(_.aggregateFunction).exists(!_.supportsPartial)) {
             if (functionsWithDistinct.nonEmpty) {
               sys.error("Distinct columns cannot exist in Aggregate operator containing " +

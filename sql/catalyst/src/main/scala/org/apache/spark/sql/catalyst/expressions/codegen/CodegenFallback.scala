@@ -21,10 +21,14 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, LeafExpression, No
 
 /**
  * A trait that can be used to provide a fallback mode for expression code generation.
+ *
+ * 如果一个表达式没有提供Codegen逻辑，那么可以mixIn这个trait以提供默认的genCode逻辑
  */
 trait CodegenFallback extends Expression {
 
   protected def genCode(ctx: CodegenContext, ev: ExprCode): String = {
+
+    /**foreach是TreeNode的方法，而Expression继承自TreeNode，因此TreeNode也有foreach方法*/
     foreach {
       case n: Nondeterministic => n.setInitialValues()
       case _ =>

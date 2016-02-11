@@ -210,6 +210,9 @@ case class RoundRobinPartitioning(numPartitions: Int) extends Partitioning {
   override def guarantees(other: Partitioning): Boolean = false
 }
 
+/**
+ * 分区数为1，Partitioning还有三个方法：satisfied、compatibleWith、guarantee
+ */
 case object SinglePartition extends Partitioning {
   val numPartitions = 1
 

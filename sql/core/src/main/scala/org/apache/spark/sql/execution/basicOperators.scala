@@ -72,7 +72,11 @@ case class Project(projectList: Seq[NamedExpression], child: SparkPlan)
   override def outputOrdering: Seq[SortOrder] = child.outputOrdering
 }
 
-
+/**
+ *  where子句
+ * @param condition
+ * @param child
+ */
 case class Filter(condition: Expression, child: SparkPlan) extends UnaryNode with CodegenSupport {
   override def output: Seq[Attribute] = child.output
 
@@ -84,6 +88,11 @@ case class Filter(condition: Expression, child: SparkPlan) extends UnaryNode wit
     child.asInstanceOf[CodegenSupport].upstream()
   }
 
+  /**
+   *
+   * @param ctx
+   * @return
+   */
   protected override def doProduce(ctx: CodegenContext): String = {
     child.asInstanceOf[CodegenSupport].produce(ctx, this)
   }
@@ -305,6 +314,11 @@ case class Union(children: Seq[SparkPlan]) extends SparkPlan {
  * this operator uses something similar to Spark's take method on the Spark driver. If it is not
  * terminal or is invoked using execute, we first take the limit on each partition, and then
  * repartition all the data to a single partition to compute the global limit.
+ *
+ *  Limit的两种处理逻辑
+ *  1. 如果不是terminal operator或者调用execute方法，那么在每个分区取limit个元素，最后repartitition到1个分区做全局分区
+ *  2.如果是terminal operator或者调用executeCollect方法，那么使用类似于在Driver上的take方法
+ *
  */
 case class Limit(limit: Int, child: SparkPlan)
   extends UnaryNode {
@@ -320,6 +334,10 @@ case class Limit(limit: Int, child: SparkPlan)
   override def executeCollect(): Array[InternalRow] = child.executeTake(limit)
 
   protected override def doExecute(): RDD[InternalRow] = {
+
+    /** *
+      * 每个RDD取limit个元素，然后把每个元素row映射为(false,row), 转换为KV值的目的是做最后的Shuffle
+      */
     val rdd: RDD[_ <: Product2[Boolean, InternalRow]] = if (sortBasedShuffleOn) {
       child.execute().mapPartitionsInternal { iter =>
         iter.take(limit).map(row => (false, row.copy()))
@@ -330,6 +348,10 @@ case class Limit(limit: Int, child: SparkPlan)
         iter.take(limit).map(row => mutablePair.update(false, row))
       }
     }
+
+    /**
+     * Limit要进行Shuffle，Shuffle取limit个元素
+     */
     val part = new HashPartitioner(1)
     val shuffled = new ShuffledRDD[Boolean, InternalRow, InternalRow](rdd, part)
     shuffled.setSerializer(new SparkSqlSerializer(child.sqlContext.sparkContext.getConf))
@@ -343,6 +365,11 @@ case class Limit(limit: Int, child: SparkPlan)
  * or having a [[Project]] operator between them.
  * This could have been named TopK, but Spark's top operator does the opposite in ordering
  * so we name it TakeOrdered to avoid confusion.
+ *
+ *
+ * select * fromm TBL_STUDENT order by name limit 3
+ *
+ *
  */
 case class TakeOrderedAndProject(
     limit: Int,
@@ -350,17 +377,29 @@ case class TakeOrderedAndProject(
     projectList: Option[Seq[NamedExpression]],
     child: SparkPlan) extends UnaryNode {
 
+  /**
+   * 如果有project那么输出就是project的属性，否则使用child的output作为输出
+   * @return
+   */
   override def output: Seq[Attribute] = {
     val projectOutput = projectList.map(_.map(_.toAttribute))
     projectOutput.getOrElse(child.output)
   }
 
+  /**
+   * TakeOrderedAndProject是单个分区
+   * @return
+   */
   override def outputPartitioning: Partitioning = SinglePartition
 
   // We need to use an interpreted ordering here because generated orderings cannot be serialized
   // and this ordering needs to be created on the driver in order to be passed into Spark core code.
   private val ord: InterpretedOrdering = new InterpretedOrdering(sortOrder, child.output)
 
+  /**
+   * 调用RDD的takeOrdered方法
+   * @return
+   */
   private def collectData(): Array[InternalRow] = {
     val data = child.execute().map(_.copy()).takeOrdered(limit)(ord)
     if (projectList.isDefined) {
@@ -377,6 +416,10 @@ case class TakeOrderedAndProject(
 
   // TODO: Terminal split should be implemented differently from non-terminal split.
   // TODO: Pick num splits based on |limit|.
+  /** *
+    * 调用SparkContext的makeRDD方法，分区数是1
+    * @return
+    */
   protected override def doExecute(): RDD[InternalRow] = sparkContext.makeRDD(collectData(), 1)
 
   override def outputOrdering: Seq[SortOrder] = sortOrder

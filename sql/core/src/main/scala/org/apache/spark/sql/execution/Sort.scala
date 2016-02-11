@@ -39,10 +39,22 @@ case class Sort(
     testSpillFrequency: Int = 0)
   extends UnaryNode {
 
+  /**
+   * 本算子的输出属性，Sort算子的输出属性依赖于child的output
+   * @return
+   */
   override def output: Seq[Attribute] = child.output
 
+  /**
+   *  这个算子执行结果(Output)要求排序，即本算子的输出是要求排序的
+   * @return
+   */
   override def outputOrdering: Seq[SortOrder] = sortOrder
 
+  /**
+   *  Child Distribution,如果是全量排序，那么要求孩子节点的Distribution是OrderedDistribution
+   * @return
+   */
   override def requiredChildDistribution: Seq[Distribution] =
     if (global) OrderedDistribution(sortOrder) :: Nil else UnspecifiedDistribution :: Nil
 

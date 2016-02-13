@@ -25,12 +25,18 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 
 /**
- * An iterator interface used to pull the output from generated function for multiple operators
- * (whole stage codegen).
+ * An iterator interface used to pull the output from generated function for multiple operators (whole stage codegen).
+ *
+ * 何为 *Buffered* Row？可以遍历多次？
+ *
+ * 有什么用？就是个适配器而已
  *
  * TODO: replaced it by batched columnar format.
  */
 public class BufferedRowIterator {
+  /**
+   * 当前要遍历的Row,遍历过后，置为NULL
+   */
   protected InternalRow currentRow;
   protected Iterator<InternalRow> input;
   // used when there is no column in output
@@ -43,6 +49,10 @@ public class BufferedRowIterator {
     return currentRow != null;
   }
 
+  /**
+   *
+   * @return
+   */
   public InternalRow next() {
     InternalRow r = currentRow;
     currentRow = null;

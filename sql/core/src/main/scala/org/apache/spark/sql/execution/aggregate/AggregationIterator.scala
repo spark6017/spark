@@ -154,7 +154,13 @@ abstract class AggregationIterator(
       .map(aggregateFunctions)
       .map(_.asInstanceOf[ImperativeAggregate])
 
-  // Initializing functions used to process a row.
+  /**
+   * 调用AggregateFunction的updateExpression、mergeExpression方法
+   * @param expressions
+   * @param functions
+   * @param inputAttributes
+   * @return
+   */
   protected def generateProcessRow(
       expressions: Seq[AggregateExpression],
       functions: Seq[AggregateFunction],
@@ -209,7 +215,10 @@ abstract class AggregationIterator(
     UnsafeProjection.create(groupingExpressions, inputAttributes)
   protected val groupingAttributes = groupingExpressions.map(_.toAttribute)
 
-  // Initializing the function used to generate the output row.
+    /**
+     *  Initializing the function used to generate the output row.
+     *  调用AggregateFunction的evaluateExpression方法，做最后的计算
+     */
   protected def generateResultProjection(): (UnsafeRow, MutableRow) => UnsafeRow = {
     val joinedRow = new JoinedRow
     val modes = aggregateExpressions.map(_.mode).distinct

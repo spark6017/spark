@@ -45,6 +45,9 @@ trait CodegenSupport extends SparkPlan {
 
   /**
     * Returns the RDD of InternalRow which generates the input rows.
+   *
+   * 获得输入RDD？这个跟SparkPlan的execute方法就什么分别？
+   *
     */
   def upstream(): RDD[InternalRow]
 
@@ -150,8 +153,13 @@ case class InputAdapter(child: SparkPlan) extends LeafNode with CodegenSupport {
 
   override def supportCodegen: Boolean = false
 
+  /**
+   * InputAdapter封装的child物理计划，这里的upstream就是调用的child(SparkPlan)的execute方法
+   * @return
+   */
   override def upstream(): RDD[InternalRow] = {
-    child.execute()
+   val rdd = child.execute()
+    rdd
   }
 
   override def doProduce(ctx: CodegenContext): String = {
@@ -246,14 +254,21 @@ case class WholeStageCodegen(plan: CodegenSupport, children: Seq[SparkPlan])
     // println(s"${CodeFormatter.format(source)}")
     CodeGenerator.compile(source)
 
-    plan.upstream().mapPartitions { iter =>
+    val upstream = plan.upstream();
+    upstream.mapPartitions { iter =>
 
       val clazz = CodeGenerator.compile(source)
       val buffer = clazz.generate(references).asInstanceOf[BufferedRowIterator]
       buffer.setInput(iter)
       new Iterator[InternalRow] {
-        override def hasNext: Boolean = buffer.hasNext
-        override def next: InternalRow = buffer.next()
+        override def hasNext: Boolean = {
+          val hasNext = buffer.hasNext
+          hasNext
+        }
+        override def next: InternalRow = {
+          val row = buffer.next()
+          row
+        }
       }
     }
   }

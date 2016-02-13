@@ -55,6 +55,8 @@ case class Count(children: Seq[Expression]) extends DeclarativeAggregate {
     * 更新表达式，即使更新count
     */
   override lazy val updateExpressions = {
+    println("Count#updateExpressions is called")
+
     /**
      * 过滤出nullable的child集合
      */
@@ -72,14 +74,20 @@ case class Count(children: Seq[Expression]) extends DeclarativeAggregate {
     }
   }
 
-  override lazy val mergeExpressions = Seq(
-    /* count = */ count.left + count.right
-  )
+  override lazy val mergeExpressions = {
+    println("Count#mergeExpressions is called")
+    Seq(
+      /* count = */ count.left + count.right
+    )
+  }
 
   /**
    * 结果表达式，count
    */
-  override lazy val evaluateExpression = count
+  override lazy val evaluateExpression = {
+    println("Count#evaluateExpression is called")
+    count
+  }
 
   override def defaultResult: Option[Literal] = Option(Literal(0L))
 }

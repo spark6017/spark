@@ -26,6 +26,16 @@ import org.apache.spark.sql.catalyst.plans.physical.{AllTuples, ClusteredDistrib
 import org.apache.spark.sql.execution.{SparkPlan, UnaryNode}
 import org.apache.spark.sql.execution.metric.SQLMetrics
 
+/**
+ *
+ * @param requiredChildDistributionExpressions
+ * @param groupingExpressions
+ * @param aggregateExpressions
+ * @param aggregateAttributes
+ * @param initialInputBufferOffset
+ * @param resultExpressions
+ * @param child
+ */
 case class SortBasedAggregate(
     requiredChildDistributionExpressions: Option[Seq[Expression]],
     groupingExpressions: Seq[NamedExpression],
@@ -67,6 +77,10 @@ case class SortBasedAggregate(
     groupingExpressions.map(SortOrder(_, Ascending))
   }
 
+  /**
+   * 返回的是一个RDD[InternalRow]，为什么返回的是一个Iterator？
+   * @return
+   */
   protected override def doExecute(): RDD[InternalRow] = attachTree(this, "execute") {
     val numInputRows = longMetric("numInputRows")
     val numOutputRows = longMetric("numOutputRows")
@@ -79,6 +93,12 @@ case class SortBasedAggregate(
         // so return an empty iterator.
         Iterator[UnsafeRow]()
       } else {
+        /**
+         * groupingExpressions
+         * resultExpressions
+         * aggregateExpressions
+         * aggregateAttributes
+         */
         val outputIter = new SortBasedAggregationIterator(
           groupingExpressions,
           child.output,

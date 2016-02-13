@@ -121,13 +121,14 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
   /**
    * Used to plan the aggregate operator for expressions based on the AggregateFunction2 interface.
    *
-   * 将逻辑计划plan转换为物理计划的集合Seq[SparkPlan]
+   * 将逻辑计划Aggregation转换为物理计划的集合Seq[SparkPlan]
    */
   object Aggregation extends Strategy {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
 
       /**
-       *  resultExpression就是Aggregate构造函数中的aggregateExpressions
+       *  resultExpression就是Aggregate算子有三个构造参数(属性),groupingExpressions, resultExpressionh和child
+       *  select classId, avg(grade) from TBL_STUDENT group by class_id
        */
       case logical.Aggregate(groupingExpressions, resultExpressions, child) =>
         // A single aggregate expression might appear multiple times in resultExpressions.
@@ -148,12 +149,15 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
         }.distinct
         // For those distinct aggregate expressions, we create a map from the
         // aggregate function to the corresponding attribute of the function.
-
+        /**何为function attribute？ 取Function的Alias**/
         /** *
           * 创建一个Map，aggregateFunction到Attribute之间的映射，
-          * 问题： aggregationFunction是什么？ Attribute是什么？
+          * 问题： aggregationFunction是什么？ Function Attribute是什么？
           *
-          * aggregateFunction是AggregationExpression的一个成员
+          * aggregateFunction是AggregationExpression的一个成员。 AggregationExpression有聚合函数，比如Count、Max、Min、Average等‘
+          *
+          *
+          * AggregateExpression的aggregateFunction的类型是AggregateFunction，
           *
           */
         val aggregateFunctionToAttribute = aggregateExpressions.map { agg =>
@@ -166,12 +170,20 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
         }.toMap
 
         /**
-         * AggregateExpression有一个isDistinct方法，进行分组
+         * AggregateExpression有一个isDistinct方法，按照distinct进行分组
+         *
+         * AggregationExpression有一个isDistinct属性，用于指明AggregationFunction是否有distinct关键字
+         *
+         * select count(name), count(distinct(name)) from TBL_STUDENT
          */
         val (functionsWithDistinct, functionsWithoutDistinct) =
           aggregateExpressions.partition(_.isDistinct)
 
 
+        /**
+         * functionsWithDistinct是AggregationExpression中的isDistinct为true的
+         * AggregateFunction的children是什么？
+         */
         if (functionsWithDistinct.map(_.aggregateFunction.children).distinct.length > 1) {
           // This is a sanity check. We should not reach here when we have multiple distinct
           // column sets. Our MultipleDistinctRewriter should take care this case.
@@ -179,6 +191,9 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
             "Spark user mailing list.")
         }
 
+        /** *
+          * 将groupingExpressions转换为NamedExpression
+          */
         val namedGroupingExpressions = groupingExpressions.map {
           case ne: NamedExpression => ne -> ne
           // If the expression is not a NamedExpressions, we add an alias.
@@ -218,7 +233,7 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
           */
         val aggregateOperator =
 
-          /**每个aggregateExpression的aggregateFunction中存在不支持Paritial的函数(!._supportPartial)*/
+          /**每个aggregateExpression的aggregateFunction中存在不支持Partial的函数(!._supportPartial)*/
           if (aggregateExpressions.map(_.aggregateFunction).exists(!_.supportsPartial)) {
             if (functionsWithDistinct.nonEmpty) {
               sys.error("Distinct columns cannot exist in Aggregate operator containing " +

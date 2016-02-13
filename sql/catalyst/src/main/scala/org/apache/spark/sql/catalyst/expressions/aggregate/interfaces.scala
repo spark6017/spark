@@ -30,6 +30,8 @@ private[sql] sealed trait AggregateMode
  * An [[AggregateFunction]] with [[Partial]] mode is used for partial aggregation.
  * This function updates the given aggregation buffer with the original input of this
  * function. When it has processed all input rows, the aggregation buffer is returned.
+ *
+ * aggregation buffer是什么概念？
  */
 private[sql] case object Partial extends AggregateMode
 
@@ -46,6 +48,8 @@ private[sql] case object PartialMerge extends AggregateMode
  * containing intermediate results for this function and then generate final result.
  * This function updates the given aggregation buffer by merging multiple aggregation buffers.
  * When it has processed all input rows, the final result of this function is returned.
+ *
+ * 在PartialMerge基础之上求final result
  */
 private[sql] case object Final extends AggregateMode
 
@@ -54,6 +58,8 @@ private[sql] case object Final extends AggregateMode
  * from original input rows without any partial aggregation.
  * This function updates the given aggregation buffer with the original input of this
  * function. When it has processed all input rows, the final result of this function is returned.
+ *
+ * Complete mode不需要做partial aggregation
  */
 private[sql] case object Complete extends AggregateMode
 
@@ -137,6 +143,8 @@ sealed abstract class AggregateFunction extends Expression with ImplicitCastInpu
   /**
    * Indicates if this function supports partial aggregation.
    * Currently Hive UDAF is the only one that doesn't support partial aggregation.
+   *
+   * 何谓partial aggregation？
    */
   def supportsPartial: Boolean = true
 
@@ -162,6 +170,8 @@ sealed abstract class AggregateFunction extends Expression with ImplicitCastInpu
    * and the flag indicating if this aggregation is distinct aggregation or not.
    * An [[AggregateFunction]] should not be used without being wrapped in
    * an [[AggregateExpression]].
+   *
+   * Aggregate Mode是什么概念？
    */
   def toAggregateExpression(isDistinct: Boolean): AggregateExpression = {
     AggregateExpression(aggregateFunction = this, mode = Complete, isDistinct = isDistinct)

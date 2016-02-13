@@ -30,6 +30,16 @@ import org.apache.spark.sql.execution.metric.SQLMetrics
 import org.apache.spark.sql.types.{DecimalType, StructType}
 import org.apache.spark.unsafe.KVIterator
 
+/**
+ *
+ * @param requiredChildDistributionExpressions
+ * @param groupingExpressions
+ * @param aggregateExpressions
+ * @param aggregateAttributes
+ * @param initialInputBufferOffset
+ * @param resultExpressions
+ * @param child
+ */
 case class TungstenAggregate(
     requiredChildDistributionExpressions: Option[Seq[Expression]],
     groupingExpressions: Seq[NamedExpression],
@@ -462,5 +472,6 @@ object TungstenAggregate {
   def supportsAggregate(aggregateBufferAttributes: Seq[Attribute]): Boolean = {
     val aggregationBufferSchema = StructType.fromAttributes(aggregateBufferAttributes)
     UnsafeFixedWidthAggregationMap.supportsAggregationBufferSchema(aggregationBufferSchema)
+    false
   }
 }

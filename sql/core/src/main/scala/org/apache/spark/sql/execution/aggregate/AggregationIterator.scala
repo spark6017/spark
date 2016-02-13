@@ -31,6 +31,12 @@ import org.apache.spark.sql.catalyst.expressions.aggregate._
  * 2. It creates two functions, `processRow` and `generateOutput` based on [[AggregateMode]] of
  *    its aggregate functions. `processRow` is the function to handle an input. `generateOutput`
  *    is used to generate result.
+ *
+ *
+ *    1. 初始化聚合函数，
+ *    2. 基于AggregateFunction的AggregateMode创建两个function，processRow和generateOutput
+ *
+ *    processRow用于处理输入，generateOutput用于生成结果
  */
 abstract class AggregationIterator(
     groupingExpressions: Seq[NamedExpression],
@@ -193,6 +199,9 @@ abstract class AggregationIterator(
     }
   }
 
+  /**
+   * 返回值是一个函数
+   */
   protected val processRow: (MutableRow, InternalRow) => Unit =
     generateProcessRow(aggregateExpressions, aggregateFunctions, inputAttributes)
 
@@ -246,6 +255,9 @@ abstract class AggregationIterator(
     }
   }
 
+  /**
+   * 返回值是一个函数
+   */
   protected val generateOutput: (UnsafeRow, MutableRow) => UnsafeRow =
     generateResultProjection()
 

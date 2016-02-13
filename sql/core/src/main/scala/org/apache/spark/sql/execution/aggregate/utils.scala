@@ -50,6 +50,17 @@ object Utils {
     ) :: Nil
   }
 
+  /**
+   * 创建Aggregation
+   * @param requiredChildDistributionExpressions
+   * @param groupingExpressions
+   * @param aggregateExpressions
+   * @param aggregateAttributes
+   * @param initialInputBufferOffset
+   * @param resultExpressions
+   * @param child
+   * @return
+   */
   private def createAggregate(
       requiredChildDistributionExpressions: Option[Seq[Expression]] = None,
       groupingExpressions: Seq[NamedExpression] = Nil,
@@ -92,6 +103,10 @@ object Utils {
     // 1. Create an Aggregate Operator for partial aggregations.
 
     val groupingAttributes = groupingExpressions.map(_.toAttribute)
+
+    /**
+     * partialAggregateExpressions只是把aggregateExpressions每个元素的mode改为Partial就是Partial的？
+     */
     val partialAggregateExpressions = aggregateExpressions.map(_.copy(mode = Partial))
     val partialAggregateAttributes =
       partialAggregateExpressions.flatMap(_.aggregateFunction.aggBufferAttributes)
@@ -99,6 +114,10 @@ object Utils {
       groupingAttributes ++
         partialAggregateExpressions.flatMap(_.aggregateFunction.inputAggBufferAttributes)
 
+    /**
+     * partialAggregate是一个SparkPlan，它作为finalAggregate的child
+     * 注意区分partialAggregate和finalAggregate的参数的区别
+     */
     val partialAggregate = createAggregate(
         requiredChildDistributionExpressions = None,
         groupingExpressions = groupingExpressions,
@@ -116,6 +135,9 @@ object Utils {
       expr => aggregateFunctionToAttribute(expr.aggregateFunction, expr.isDistinct)
     }
 
+    /**
+     * groupingAttributes和groupingExpressions有什么联系？相同点和不同点
+     */
     val finalAggregate = createAggregate(
         requiredChildDistributionExpressions = Some(groupingAttributes),
         groupingExpressions = groupingAttributes,
@@ -125,6 +147,9 @@ object Utils {
         resultExpressions = resultExpressions,
         child = partialAggregate)
 
+    /**
+     * 最后返回的是finalAggregate这个SparkPlan
+     */
     finalAggregate :: Nil
   }
 

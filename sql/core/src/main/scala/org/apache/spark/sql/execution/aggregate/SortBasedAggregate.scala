@@ -78,7 +78,8 @@ case class SortBasedAggregate(
   }
 
   /**
-   * 返回的是一个RDD[InternalRow]，为什么返回的是一个Iterator？
+   * 返回的是一个RDD[InternalRow]，为什么返回的是一个Iterator？不是Iterator，而是RDD[InternalRow]
+   * 原因是mapPartitionsInternal接受一个将Iterator转换为另一个Iterator的方法
    * @return
    */
   protected override def doExecute(): RDD[InternalRow] = attachTree(this, "execute") {

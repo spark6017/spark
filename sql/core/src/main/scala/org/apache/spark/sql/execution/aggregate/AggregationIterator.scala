@@ -170,11 +170,22 @@ abstract class AggregationIterator(
       val mergeExpressions = functions.zipWithIndex.flatMap {
         case (ae: DeclarativeAggregate, i) =>
           expressions(i).mode match {
-            case Partial | Complete => ae.updateExpressions
-            case PartialMerge | Final => ae.mergeExpressions
+            case Partial | Complete => {
+              val mode = expressions(i).mode
+              val e =  ae.updateExpressions
+              e
+            }
+            case PartialMerge | Final => {
+              val mode = expressions(i).mode
+              val e = ae.mergeExpressions
+              e
+            }
           }
         case (agg: AggregateFunction, _) => Seq.fill(agg.aggBufferAttributes.length)(NoOp)
       }
+
+
+
       val updateFunctions = functions.zipWithIndex.collect {
         case (ae: ImperativeAggregate, i) =>
           expressions(i).mode match {

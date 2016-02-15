@@ -110,6 +110,10 @@ case class Filter(condition: Expression, child: SparkPlan) extends UnaryNode wit
      """.stripMargin
   }
 
+  /**
+   * Filter的doExecute方法，依赖于子SparkPlan的执行结果
+   * @return
+   */
   protected override def doExecute(): RDD[InternalRow] = {
     val numInputRows = longMetric("numInputRows")
     val numOutputRows = longMetric("numOutputRows")

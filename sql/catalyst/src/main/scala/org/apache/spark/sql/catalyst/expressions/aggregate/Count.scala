@@ -40,8 +40,15 @@ case class Count(children: Seq[Expression]) extends DeclarativeAggregate {
   // Expected input data type.
   override def inputTypes: Seq[AbstractDataType] = Seq.fill(children.size)(AnyDataType)
 
+
+  /**
+   * Attribute 名称、类型和是否为空
+   */
   private lazy val count = AttributeReference("count", LongType, nullable = false)()
 
+  /**
+   * Count聚合函数对应的属性(可以认为是Output Attribute)
+   */
   override lazy val aggBufferAttributes = count :: Nil
 
   /**
@@ -52,7 +59,7 @@ case class Count(children: Seq[Expression]) extends DeclarativeAggregate {
   )
 
   /**
-    * 更新表达式，即使更新count
+    * 更新表达式，将count表达式转换为Add表达式,
     */
   override lazy val updateExpressions = {
     println("Count#updateExpressions is called")
@@ -69,7 +76,7 @@ case class Count(children: Seq[Expression]) extends DeclarativeAggregate {
       //将nullableChildren的所有元素map成IsNull，然后对这些IsNull做reduce操作(使用Or运算符)
       val condition = nullableChildren.map(IsNull).reduce(Or)
       Seq(
-        /* count = */ If(condition, count, count + 1L)
+        /* count = */ If(condition, count, count + 1L) /**count + 1转换为 Add(count ,1)，因为count是个Expression，*/
       )
     }
   }
@@ -77,7 +84,7 @@ case class Count(children: Seq[Expression]) extends DeclarativeAggregate {
   override lazy val mergeExpressions = {
     println("Count#mergeExpressions is called")
     Seq(
-      /* count = */ count.left + count.right
+      /* count = */ count.left + count.right  /**count.left + count.right 转换为Add(count.left, count.right)**/
     )
   }
 

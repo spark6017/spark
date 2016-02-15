@@ -49,8 +49,17 @@ class SortBasedAggregationIterator(
   /**
     * Creates a new aggregation buffer and initializes buffer values
     * for all aggregate functions.
+   *
+   * 所谓的Buffer或者AggregateBuffer其实是一个MutableRow，为什么是一个MutableRow
+   * 为什么是Row？原因是每个聚合函数都是一个值，比如Count, Max,Min, Avg, 所以一行就可以放下
+   * 为什么是Mutable的Row?原因是每个聚合函数都需要对结果按行聚合，
     */
   private def newBuffer: MutableRow = {
+
+    /**
+     * AggregateBuffer还有Schema？原因是每个Buffer是一个Row，所以需要有列信息
+     * 这个列信息是存放在AggregateFunction的aggBufferAttributes中的
+     */
     val bufferSchema = aggregateFunctions.flatMap(_.aggBufferAttributes)
     val bufferRowSize: Int = bufferSchema.length
 

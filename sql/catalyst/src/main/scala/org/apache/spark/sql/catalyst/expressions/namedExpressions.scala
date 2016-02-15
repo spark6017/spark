@@ -194,6 +194,8 @@ case class Alias(child: Expression, name: String)(
  * @param qualifiers a list of strings that can be used to referred to this attribute in a fully
  *                   qualified way. Consider the examples tableName.name, subQueryAlias.name.
  *                   tableName and subQueryAlias are possible qualifiers.
+ *
+ *  AttributeReferences的构造是使用的柯里化函数，第二个()里面有两个参数，都有默认值
  */
 case class AttributeReference(
     name: String,

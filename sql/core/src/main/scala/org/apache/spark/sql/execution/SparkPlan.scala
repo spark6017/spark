@@ -215,6 +215,12 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ
     }
   }
 
+  /**
+   * 动态生成条件过滤代码
+   * @param expression
+   * @param inputSchema
+   * @return
+   */
   protected def newPredicate(
       expression: Expression, inputSchema: Seq[Attribute]): (InternalRow) => Boolean = {
     try {

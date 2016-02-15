@@ -127,8 +127,11 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
 
       /**
-       *  resultExpression就是Aggregate算子有三个构造参数(属性),groupingExpressions, resultExpressionh和child
+       *  Aggregate算子有三个构造参数(属性),groupingExpressions, resultExpressionh和child
        *  select classId, avg(grade) from TBL_STUDENT group by class_id
+        *
+        *  那么class_id就是groupingExpressions
+        *  classId,avg(grade)是resultExpressions
        */
       case logical.Aggregate(groupingExpressions, resultExpressions, child) =>
         // A single aggregate expression might appear multiple times in resultExpressions.
@@ -137,26 +140,31 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
         // be used to re-write expressions so that they reference the single copy of the
         // aggregate function which actually gets computed.
 
-        /** 对resultExpressions进行去重，
-          *  每个是一个NamedExpression，而NamedExpression具有一个collect方法，接受偏函数
+        /**
+          *  从resultExpressions中解析出AggregateExpression，然后进行去重（distinct是Seq集合的函数，用于去重）
           *
-          *  distinct是Seq集合的函数，用于去重
+          *  可见AggregateExpression是包含在resultExpressions中的
+          *
           */
         val aggregateExpressions = resultExpressions.flatMap { expr =>
           expr.collect {
             case agg: AggregateExpression => agg
           }
         }.distinct
+
+
         // For those distinct aggregate expressions, we create a map from the
         // aggregate function to the corresponding attribute of the function.
-        /**何为function attribute？ 取Function的Alias**/
         /** *
-          * 创建一个Map，aggregateFunction到Attribute之间的映射，
-          * 问题： aggregationFunction是什么？ Function Attribute是什么？
-          *
-          * aggregateFunction是AggregationExpression的一个成员。 AggregationExpression有聚合函数，比如Count、Max、Min、Average等‘
           *
           *
+          *
+          * 创建一个Map，aggregateFunction到aggregate function attribute之间的映射，
+          *
+          * 何为function attribute？ 取Function的Alias
+          *
+          * 问题： aggregationFunction是什么？
+          * aggregateFunction是AggregationExpression的一个成员。 AggregationExpression有聚合函数，比如Count、Max、Min、Average等，这些聚合函数就用AggregateFunction表达
           * AggregateExpression的aggregateFunction的类型是AggregateFunction，
           *
           */
@@ -170,7 +178,7 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
         }.toMap
 
         /**
-         * AggregateExpression有一个isDistinct方法，按照distinct进行分组
+         * AggregateExpression有一个isDistinct方法，按照isDistinct进行分组
          *
          * AggregationExpression有一个isDistinct属性，用于指明AggregationFunction是否有distinct关键字
          *
@@ -192,7 +200,7 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
         }
 
         /** *
-          * 将groupingExpressions转换为NamedExpression
+          * 将groupingExpressions转换为Map
           */
         val namedGroupingExpressions = groupingExpressions.map {
           case ne: NamedExpression => ne -> ne
@@ -211,6 +219,12 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
         // which takes the grouping columns and final aggregate result buffer as input.
         // Thus, we must re-write the result expressions so that their attributes match up with
         // the attributes of the final result projection's input row:
+
+        /**
+          * resultExpressions分两种情况处理，AggregateExpression和普通的Expression
+          * 1. 如果是AggregateExpression，那么将AggregateFunction转换为Attribute（作为输出属性）
+          * 2. 如果是普通表达式，那么首先看是否是分组表达式，如果是则取分组表达式的Attribute；如果不是分组表达式，那么直接取表达式
+          */
         val rewrittenResultExpressions = resultExpressions.map { expr =>
           expr.transformDown {
             case AggregateExpression(aggregateFunction, _, isDistinct) =>

@@ -92,6 +92,15 @@ object Utils {
     }
   }
 
+  /**
+    *
+    * @param groupingExpressions
+    * @param aggregateExpressions
+    * @param aggregateFunctionToAttribute
+    * @param resultExpressions 改写后的结果表达式
+    * @param child
+    * @return
+    */
   def planAggregateWithoutDistinct(
       groupingExpressions: Seq[NamedExpression],
       aggregateExpressions: Seq[AggregateExpression],
@@ -102,19 +111,29 @@ object Utils {
 
     // 1. Create an Aggregate Operator for partial aggregations.
 
+    /**
+      * 将分组Expressions转换为分组Attribute
+      */
     val groupingAttributes = groupingExpressions.map(_.toAttribute)
 
     /**
-     * partialAggregateExpressions只是把aggregateExpressions每个元素的mode改为Partial就是Partial的？
+     * 根据分组表达式创建部分分组表达式
      */
     val partialAggregateExpressions = aggregateExpressions.map(_.copy(mode = Partial))
 
-    /**类型是AttributeReference**/
+    /**
+      *partialAggregateAttributes是类型为AttributeReference的集合
+      *
+      *取出AggregateFunction的aggBufferAttributes
+      */
     val partialAggregateAttributes =
       partialAggregateExpressions.flatMap(_.aggregateFunction.aggBufferAttributes)
 
     /**
       * partial result expression是grouping attributes 加上Aggregate Function的inputAggBufferAttributes
+      *
+      * 为什么不适用resultExpressions？而是使用分组Attributes和每个aggregateFunction的inputAggBufferAttributes
+      * aggregateFunction的inputAggBufferAttributes就是克隆的aggregateFunction.aggBufferAttributes
       */
     val partialResultExpressions =
       groupingAttributes ++
@@ -123,6 +142,8 @@ object Utils {
     /**
      * partialAggregate是一个SparkPlan，它作为finalAggregate的child
      * 注意区分partialAggregate和finalAggregate的参数的区别
+      *
+      * partialAggregate是一个SortBasedAggregate
      */
     val partialAggregate = createAggregate(
         requiredChildDistributionExpressions = None,
@@ -131,18 +152,27 @@ object Utils {
         aggregateAttributes = partialAggregateAttributes,
         initialInputBufferOffset = 0,
         resultExpressions = partialResultExpressions,
-        child = child)
+        child = child) /**Aggregate的child作为partialAggregate物理计划的child**/
 
     // 2. Create an Aggregate Operator for final aggregations.
     val finalAggregateExpressions = aggregateExpressions.map(_.copy(mode = Final))
     // The attributes of the final aggregation buffer, which is presented as input to the result
     // projection:
+    /**
+      * 调用aggregateFunctionToAttribute方法以获取final aggregate attributes
+      *
+      * aggregateFunctionToAttribute用于将AggregateFunction转换为AggregateAttribute
+      *
+      */
     val finalAggregateAttributes = finalAggregateExpressions.map {
       expr => aggregateFunctionToAttribute(expr.aggregateFunction, expr.isDistinct)
     }
 
     /**
      * groupingAttributes和groupingExpressions有什么联系？相同点和不同点
+      *  finalAggregate是一个SortBasedAggregate，因此一个物理计划树上有两个SortBasedAggregate，一个是partial，一个是final，
+      *  partial SortBasedAggregate是final SortBasedAggregate的child
+      *
      */
     val finalAggregate = createAggregate(
         requiredChildDistributionExpressions = Some(groupingAttributes),

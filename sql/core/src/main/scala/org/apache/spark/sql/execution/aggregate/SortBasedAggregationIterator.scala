@@ -91,6 +91,10 @@ class SortBasedAggregationIterator(
   private[this] var firstRowInNextGroup: InternalRow = _
 
   // Indicates if we has new group of rows from the sorted input iterator
+  /**
+    * 所谓的New Group是分组的新值吗？比如group by class_id，如果class_id有三个值，那么就有三个group？
+    *
+    */
   private[this] var sortedInputHasNewGroup: Boolean = false
 
   // The aggregation buffer used by the sort-based aggregation.
@@ -157,8 +161,15 @@ class SortBasedAggregationIterator(
   override final def hasNext: Boolean = sortedInputHasNewGroup
 
   override final def next(): UnsafeRow = {
+
+    /**
+      * 如果还有新组
+      */
     if (hasNext) {
       // Process the current group.
+      /**
+        * 处理当前组
+        */
       processCurrentSortedGroup()
       // Generate output row for the current group.
       val outputRow = generateOutput(currentGroupingKey, sortBasedAggregationBuffer)

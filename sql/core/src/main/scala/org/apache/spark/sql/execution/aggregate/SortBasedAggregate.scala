@@ -33,7 +33,7 @@ import org.apache.spark.sql.execution.metric.SQLMetrics
  * @param aggregateExpressions 聚合表达式，比如select count(id) from tbl_student group by class_id ---统计每个班的人数
  * @param aggregateAttributes  聚合属性
  * @param initialInputBufferOffset
- * @param resultExpressions 结果表达式，
+ * @param resultExpressions 结果表达式，resultExpressions是改写后的
  * @param child
  */
 case class SortBasedAggregate(
@@ -89,6 +89,9 @@ case class SortBasedAggregate(
 
   /**
     * 在Exchange的apply方法使用(apply方法调用Exchange的ensureDistributionAndOrdering)
+    *
+    * 因为这是Sort Based Aggregate，因此需要Child物理计划是已经排好序的，
+    * 所谓的Sort Based Aggregate，只是对分组列进行排序，然后对排好序的结果进行聚合
     * @return
     */
   override def requiredChildOrdering: Seq[Seq[SortOrder]] = {
@@ -96,7 +99,7 @@ case class SortBasedAggregate(
   }
 
   /**
-    * 输出排序
+    * 输出结果按照分组表达式输出排序，也就是说group by class_Id，那么结果将按照class_id进行排序
     * @return
     */
   override def outputOrdering: Seq[SortOrder] = {
@@ -128,8 +131,8 @@ case class SortBasedAggregate(
          */
         val outputIter = new SortBasedAggregationIterator(
           groupingExpressions,
-          child.output,
-          iter,
+          child.output, /**孩子物理计划的输出属性(Seq[Attribute])**/
+          iter, /**依赖的RDD的分区数据**/
           aggregateExpressions,
           aggregateAttributes,
           initialInputBufferOffset,
@@ -138,6 +141,10 @@ case class SortBasedAggregate(
             newMutableProjection(expressions, inputSchema, subexpressionEliminationEnabled),
           numInputRows,
           numOutputRows)
+
+        /**
+          * 如果没有输入数据并且分组表达式为空
+          */
         if (!hasInput && groupingExpressions.isEmpty) {
           // There is no input and there is no grouping expressions.
           // We need to output a single row as the output.

@@ -154,6 +154,10 @@ case class Alias(child: Expression, name: String)(
   def newInstance(): NamedExpression =
     Alias(child, name)(qualifiers = qualifiers, explicitMetadata = explicitMetadata)
 
+  /**
+    * Alias的toAttribute方法，分为已经解析和未解析两种情况
+    * @return
+    */
   override def toAttribute: Attribute = {
     if (resolved) {
       AttributeReference(name, child.dataType, child.nullable, metadata)(exprId, qualifiers)

@@ -28,6 +28,13 @@ import org.apache.spark.sql.execution.metric.LongSQLMetric
   *
   * 是一个Iterator，需要实现hasNext和next方法
   *
+  *
+  * SortBasedAggregation分为两个阶段，Partial和Final，它们都需要SortBasedAggregation，那么也就需要创建两个SortBasedAggregationIterator
+  *
+  * 那么两个阶段都会调用SortBasedAggregationIterator的hasNext和next方法
+  *
+  *
+  *
   * @param groupingExpressions
   * @param valueAttributes
   * @param inputIterator  /**分区内的数据**/
@@ -161,7 +168,8 @@ class SortBasedAggregationIterator(
     /**所谓的一个Group，就是grouping key是一样的那些记录**/
     var findNextPartition = false
     // firstRowInNextGroup is the first row of this group. We first process it.
-    processRow(sortBasedAggregationBuffer, safeProj(firstRowInNextGroup))
+    val proj = safeProj(firstRowInNextGroup)
+    processRow(sortBasedAggregationBuffer, proj)
 
     // The search will stop when we see the next group or there is no
     // input row left in the iter.

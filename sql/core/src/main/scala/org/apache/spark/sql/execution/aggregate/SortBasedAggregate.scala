@@ -48,6 +48,7 @@ case class SortBasedAggregate(
 
   /**
     * 将每个AggregateFunction的aggBufferAttributes展开
+    * 因为aggregateBufferAttributes是SortBasedAggregate的成员变量，因此在实例化SortBasedAggregate时，对aggregateBufferAttributes进行初始化
     */
   private[this] val aggregateBufferAttributes = {
     aggregateExpressions.flatMap(_.aggregateFunction.aggBufferAttributes)
@@ -74,6 +75,10 @@ case class SortBasedAggregate(
     resultExpressions.map(_.toAttribute)
   }
 
+  /**
+    * 在Exchange的apply方法使用(apply方法调用Exchange的ensureDistributionAndOrdering)
+    * @return
+    */
   override def requiredChildDistribution: List[Distribution] = {
     requiredChildDistributionExpressions match {
       case Some(exprs) if exprs.length == 0 => AllTuples :: Nil
@@ -83,7 +88,7 @@ case class SortBasedAggregate(
   }
 
   /**
-    *
+    * 在Exchange的apply方法使用(apply方法调用Exchange的ensureDistributionAndOrdering)
     * @return
     */
   override def requiredChildOrdering: Seq[Seq[SortOrder]] = {

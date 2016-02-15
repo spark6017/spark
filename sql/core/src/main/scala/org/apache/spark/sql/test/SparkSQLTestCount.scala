@@ -21,6 +21,7 @@ object SparkSQLTestCount {
     val df = ssc.sql("select count(favorite_color)  from TBL_USER");
     println(df.printSchema())
     df.show(20)
+    scala.io.StdIn.readLine()
     sc.stop
   }
 

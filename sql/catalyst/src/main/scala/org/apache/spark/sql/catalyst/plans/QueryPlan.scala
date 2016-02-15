@@ -24,10 +24,15 @@ import org.apache.spark.sql.types.{DataType, StructType}
 abstract class QueryPlan[PlanType <: TreeNode[PlanType]] extends TreeNode[PlanType] {
   self: PlanType =>
 
+  /**
+    * 该查询计划（逻辑计划或者物理计划）的输出属性
+    * @return
+    */
   def output: Seq[Attribute]
 
   /**
    * Returns the set of attributes that are output by this node.
+    * 对output进行包装，这个方法没有被进行重写
    */
   def outputSet: AttributeSet = AttributeSet(output)
 

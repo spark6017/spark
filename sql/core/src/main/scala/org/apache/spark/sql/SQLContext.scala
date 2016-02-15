@@ -878,6 +878,10 @@ class SQLContext private[sql](
   /**
    * Prepares a planned SparkPlan for execution by inserting shuffle operations and internal
    * row format conversions as needed.
+    * 插入两个物理计划：
+    *   Exchange
+    *   WholeStageCodegen
+    *
    */
   @transient
   protected[sql] val prepareForExecution = new RuleExecutor[SparkPlan] {

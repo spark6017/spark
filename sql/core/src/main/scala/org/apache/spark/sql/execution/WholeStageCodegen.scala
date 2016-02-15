@@ -368,6 +368,11 @@ private[sql] case class CollapseCodegenStages(sqlContext: SQLContext) extends Ru
     case _ => false
   }
 
+  /**
+    * 插入一个物理计划，WholeStageCodegen
+    * @param plan
+    * @return
+    */
   def apply(plan: SparkPlan): SparkPlan = {
     if (sqlContext.conf.wholeStageEnabled) {
       plan.transform {

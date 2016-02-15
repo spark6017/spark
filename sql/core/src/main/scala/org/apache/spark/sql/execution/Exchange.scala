@@ -383,12 +383,13 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
     assert(requiredChildOrderings.length == children.length)
 
     // Ensure that the operator's children satisfy their output distribution requirements:
-    children = children.zip(requiredChildDistributions).map { case (child, distribution) =>
-      if (child.outputPartitioning.satisfies(distribution)) {
-        child
-      } else {
-        Exchange(createPartitioning(distribution, defaultNumPreShufflePartitions), child)
-      }
+    children = children.zip(requiredChildDistributions).map {
+      case (child, distribution) =>
+        if (child.outputPartitioning.satisfies(distribution)) {
+          child
+        } else {
+          Exchange(createPartitioning(distribution, defaultNumPreShufflePartitions), child)
+        }
     }
 
     // If the operator has multiple children and specifies child output distributions (e.g. join),

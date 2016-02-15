@@ -156,10 +156,10 @@ abstract class AggregationIterator(
 
   /**
    * 调用AggregateFunction的updateExpression、mergeExpression方法
-   * @param expressions
-   * @param functions
+   * @param expressions 类型为AggregateExpression的集合
+   * @param functions 类型为AggregateFunction的集合
    * @param inputAttributes
-   * @return
+   * @return 一个函数，函数类型是(MutableRow, InternalRow) => Unit
    */
   protected def generateProcessRow(
       expressions: Seq[AggregateExpression],
@@ -167,34 +167,64 @@ abstract class AggregationIterator(
       inputAttributes: Seq[Attribute]): (MutableRow, InternalRow) => Unit = {
     val joinedRow = new JoinedRow
     if (expressions.nonEmpty) {
+      /**
+        * 1. 获得mergeExpressions，
+        */
       val mergeExpressions = functions.zipWithIndex.flatMap {
+
+        /**
+          * 如果是DeclarativeAggregate(AggregateFunction是DeclarativeAggregate的子类)
+          */
         case (ae: DeclarativeAggregate, i) =>
           expressions(i).mode match {
+            /**
+              * 如果是Partial和Complete状态，那么使用的是updateExpressions
+              */
             case Partial | Complete => {
               val mode = expressions(i).mode
               val e =  ae.updateExpressions
               e
             }
+
+            /**
+              * 如果是PartialMerge或者Final，那么调用mergeExpression
+              */
             case PartialMerge | Final => {
               val mode = expressions(i).mode
               val e = ae.mergeExpressions
               e
             }
           }
+
+        /**
+          * 如果是AggregateFunction，全部填充NoOP？
+          */
         case (agg: AggregateFunction, _) => Seq.fill(agg.aggBufferAttributes.length)(NoOp)
       }
 
 
-
+      /**
+        * 2. 获得updateFunction,只对ImperativeAggregate类型的AggregateFunction起作用
+        */
       val updateFunctions = functions.zipWithIndex.collect {
         case (ae: ImperativeAggregate, i) =>
           expressions(i).mode match {
+
+            /**
+              * 如果是Partial或者Complete Mode，那么调用ImperativeAggregate的update方法
+              */
             case Partial | Complete =>
               (buffer: MutableRow, row: InternalRow) => ae.update(buffer, row)
+
+            /**
+              * 如果是PartialMerge或者Final Mode，那么调用ImperativeAggregate的merge方法
+              */
             case PartialMerge | Final =>
               (buffer: MutableRow, row: InternalRow) => ae.merge(buffer, row)
           }
       }
+
+
       // This projection is used to merge buffer values for all expression-based aggregates.
       val aggregationBufferSchema = functions.flatMap(_.aggBufferAttributes)
       val updateProjection =
@@ -202,7 +232,10 @@ abstract class AggregationIterator(
 
       (currentBuffer: MutableRow, row: InternalRow) => {
         // Process all expression-based aggregate functions.
-        updateProjection.target(currentBuffer)(joinedRow(currentBuffer, row))
+
+
+        val target = updateProjection.target(currentBuffer)
+        target(joinedRow(currentBuffer, row))
         // Process all imperative aggregate functions.
         var i = 0
         while (i < updateFunctions.length) {
@@ -217,13 +250,21 @@ abstract class AggregationIterator(
   }
 
   /**
-   * 返回值是一个函数
+   * 这是一个成员变量，返回值是一个函数
    */
   protected val processRow: (MutableRow, InternalRow) => Unit =
     generateProcessRow(aggregateExpressions, aggregateFunctions, inputAttributes)
 
-  protected val groupingProjection: UnsafeProjection =
+  /**
+    * 分组投影
+    */
+  protected val groupingProjection: UnsafeProjection = {
     UnsafeProjection.create(groupingExpressions, inputAttributes)
+  }
+
+  /**
+    * 将分组表达式转换为Attributes
+    */
   protected val groupingAttributes = groupingExpressions.map(_.toAttribute)
 
     /**

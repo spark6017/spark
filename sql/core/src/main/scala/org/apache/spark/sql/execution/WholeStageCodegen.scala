@@ -376,6 +376,9 @@ private[sql] case class CollapseCodegenStages(sqlContext: SQLContext) extends Ru
   def apply(plan: SparkPlan): SparkPlan = {
     if (sqlContext.conf.wholeStageEnabled) {
       plan.transform {
+        /**
+          * 类型为CodegenSupport的plan并且支持Codegen，同时存在支持Codegen的children
+          */
         case plan: CodegenSupport if supportCodegen(plan) &&
           // Whole stage codegen is only useful when there are at least two levels of operators that
           // support it (save at least one projection/iterator).

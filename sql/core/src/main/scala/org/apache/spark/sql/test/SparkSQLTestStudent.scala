@@ -22,6 +22,8 @@ object SparkSQLTestStudent {
     df.registerTempTable("TBL_STUDENT")
 
     val df2 = ssc.sql("select classId, count(id) from TBL_STUDENT group by classId");
+//val df2 = ssc.sql("select classId, avg(age) from TBL_STUDENT group by classId");
+//val df2 = ssc.sql("select classId, avg(age) as avg from TBL_STUDENT group by classId order by avg");
     println(df2.queryExecution)
     df2.show(20)
     readLine()

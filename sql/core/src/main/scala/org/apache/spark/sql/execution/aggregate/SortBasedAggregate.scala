@@ -29,11 +29,11 @@ import org.apache.spark.sql.execution.metric.SQLMetrics
 /**
  *
  * @param requiredChildDistributionExpressions
- * @param groupingExpressions
- * @param aggregateExpressions
- * @param aggregateAttributes
+ * @param groupingExpressions 分组表达式，比如group by class_id
+ * @param aggregateExpressions 聚合表达式，比如select count(id) from tbl_student group by class_id ---统计每个班的人数
+ * @param aggregateAttributes  聚合属性
  * @param initialInputBufferOffset
- * @param resultExpressions
+ * @param resultExpressions 结果表达式，
  * @param child
  */
 case class SortBasedAggregate(
@@ -46,10 +46,17 @@ case class SortBasedAggregate(
     child: SparkPlan)
   extends UnaryNode {
 
+  /**
+    * 将每个AggregateFunction的aggBufferAttributes展开
+    */
   private[this] val aggregateBufferAttributes = {
     aggregateExpressions.flatMap(_.aggregateFunction.aggBufferAttributes)
   }
 
+  /**
+    * 类型是AttributeSet，AttributeSet的构造参数是AggregateAttributes（集合）
+    * @return
+    */
   override def producedAttributes: AttributeSet =
     AttributeSet(aggregateAttributes) ++
       AttributeSet(resultExpressions.diff(groupingExpressions).map(_.toAttribute)) ++
@@ -59,7 +66,13 @@ case class SortBasedAggregate(
     "numInputRows" -> SQLMetrics.createLongMetric(sparkContext, "number of input rows"),
     "numOutputRows" -> SQLMetrics.createLongMetric(sparkContext, "number of output rows"))
 
-  override def output: Seq[Attribute] = resultExpressions.map(_.toAttribute)
+  /**
+    * 该物理计划的输出是一个Attribute集合，它是从resultExpressions转换得来
+    * @return
+    */
+  override def output: Seq[Attribute] = {
+    resultExpressions.map(_.toAttribute)
+  }
 
   override def requiredChildDistribution: List[Distribution] = {
     requiredChildDistributionExpressions match {
@@ -69,17 +82,25 @@ case class SortBasedAggregate(
     }
   }
 
+  /**
+    *
+    * @return
+    */
   override def requiredChildOrdering: Seq[Seq[SortOrder]] = {
     groupingExpressions.map(SortOrder(_, Ascending)) :: Nil
   }
 
+  /**
+    * 输出排序
+    * @return
+    */
   override def outputOrdering: Seq[SortOrder] = {
     groupingExpressions.map(SortOrder(_, Ascending))
   }
 
   /**
    * 返回的是一个RDD[InternalRow]，为什么返回的是一个Iterator？不是Iterator，而是RDD[InternalRow]
-   * 原因是mapPartitionsInternal接受一个将Iterator转换为另一个Iterator的方法
+   * 原因是mapPartitionsInternal接受一个将Iterator转换为另一个Iterator的方法（这是mapPartition的操作，分区内转换）
    * @return
    */
   protected override def doExecute(): RDD[InternalRow] = attachTree(this, "execute") {

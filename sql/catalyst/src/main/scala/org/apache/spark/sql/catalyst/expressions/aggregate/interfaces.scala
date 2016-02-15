@@ -130,7 +130,14 @@ sealed abstract class AggregateFunction extends Expression with ImplicitCastInpu
   /** The schema of the aggregation buffer. */
   def aggBufferSchema: StructType
 
-  /** Attributes of fields in aggBufferSchema. */
+  /**
+    *
+    * Attributes of fields in aggBufferSchema.
+    *
+    * 所谓的aggBuffer其实是一个MutableRow，而MutableRow是需要有Schema信息的，这个函数就是定义
+    * 这个MutableRow的Schema信息，可以查看Count
+    *
+    */
   def aggBufferAttributes: Seq[AttributeReference]
 
   /**
@@ -354,6 +361,9 @@ abstract class DeclarativeAggregate
   /** An expression-based aggregate's bufferSchema is derived from bufferAttributes. */
   final override def aggBufferSchema: StructType = StructType.fromAttributes(aggBufferAttributes)
 
+  /**
+    * Clone aggBufferAttributes
+    */
   final lazy val inputAggBufferAttributes: Seq[AttributeReference] =
     aggBufferAttributes.map(_.newInstance())
 

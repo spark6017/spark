@@ -108,8 +108,14 @@ object Utils {
      * partialAggregateExpressions只是把aggregateExpressions每个元素的mode改为Partial就是Partial的？
      */
     val partialAggregateExpressions = aggregateExpressions.map(_.copy(mode = Partial))
+
+    /**类型是AttributeReference**/
     val partialAggregateAttributes =
       partialAggregateExpressions.flatMap(_.aggregateFunction.aggBufferAttributes)
+
+    /**
+      * partial result expression是grouping attributes 加上Aggregate Function的inputAggBufferAttributes
+      */
     val partialResultExpressions =
       groupingAttributes ++
         partialAggregateExpressions.flatMap(_.aggregateFunction.inputAggBufferAttributes)

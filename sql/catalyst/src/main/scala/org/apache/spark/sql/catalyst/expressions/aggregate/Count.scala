@@ -47,7 +47,8 @@ case class Count(children: Seq[Expression]) extends DeclarativeAggregate {
   private lazy val count = AttributeReference("count", LongType, nullable = false)()
 
   /**
-   * Count聚合函数对应的属性(可以认为是Output Attribute)
+   * Count聚合函数对应的属性(可以认为是Output Attribute)*
+   * count是一个AttributeReference类型的变量
    */
   override lazy val aggBufferAttributes = count :: Nil
 

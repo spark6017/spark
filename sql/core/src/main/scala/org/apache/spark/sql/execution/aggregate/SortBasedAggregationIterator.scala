@@ -183,7 +183,8 @@ class SortBasedAggregationIterator(
 
       // Check if the current row belongs the current input row.
       if (currentGroupingKey == groupingKey) {
-        processRow(sortBasedAggregationBuffer, safeProj(currentRow))
+        val proj = safeProj(currentRow)
+        processRow(sortBasedAggregationBuffer, proj)
       } else {
         // We find a new group.
         findNextPartition = true

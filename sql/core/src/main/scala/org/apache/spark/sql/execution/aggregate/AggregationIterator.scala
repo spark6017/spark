@@ -237,9 +237,16 @@ abstract class AggregationIterator(
 
       // This projection is used to merge buffer values for all expression-based aggregates.
       val aggregationBufferSchema = functions.flatMap(_.aggBufferAttributes)
+
+      /***
+        *
+        */
       val updateProjection =
         newMutableProjection(mergeExpressions, aggregationBufferSchema ++ inputAttributes)()
 
+      /***
+        * 返回值，updateProjection需要使用mergeExpressions，因此方法体中的updateProjection.target也会用到mergeExpression
+        */
       (currentBuffer: MutableRow, row: InternalRow) => {
         // Process all expression-based aggregate functions.
 
@@ -261,6 +268,8 @@ abstract class AggregationIterator(
 
   /**
    * 这是一个成员变量，返回值是一个函数
+    *
+    * MutableRow是要update的，而InternalRow是原始数据？
    */
   protected val processRow: (MutableRow, InternalRow) => Unit =
   {

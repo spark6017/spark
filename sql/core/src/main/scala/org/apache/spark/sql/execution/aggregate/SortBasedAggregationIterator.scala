@@ -23,9 +23,22 @@ import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression,
 import org.apache.spark.sql.execution.metric.LongSQLMetric
 
 /**
- * An iterator used to evaluate [[AggregateFunction]]. It assumes the input rows have been
- * sorted by values of [[groupingExpressions]].
- */
+  * An iterator used to evaluate [[AggregateFunction]]. It assumes the input rows have been
+  * sorted by values of [[groupingExpressions]].
+  *
+  * 是一个Iterator，需要实现hasNext和next方法
+  *
+  * @param groupingExpressions
+  * @param valueAttributes
+  * @param inputIterator  /**分区内的数据**/
+  * @param aggregateExpressions
+  * @param aggregateAttributes
+  * @param initialInputBufferOffset
+  * @param resultExpressions
+  * @param newMutableProjection
+  * @param numInputRows
+  * @param numOutputRows
+  */
 class SortBasedAggregationIterator(
     groupingExpressions: Seq[NamedExpression],
     valueAttributes: Seq[Attribute],
@@ -34,6 +47,10 @@ class SortBasedAggregationIterator(
     aggregateAttributes: Seq[Attribute],
     initialInputBufferOffset: Int,
     resultExpressions: Seq[NamedExpression],
+
+    /***
+      * newMutableProjection是一个函数，入参是 (Seq[Expression], Seq[Attribute])，结果是一个函数，函数的入参是()，返回值是MutableProjection
+      */
     newMutableProjection: (Seq[Expression], Seq[Attribute]) => (() => MutableProjection),
     numInputRows: LongSQLMetric,
     numOutputRows: LongSQLMetric)
@@ -104,10 +121,18 @@ class SortBasedAggregationIterator(
   // compared to MutableRow (aggregation buffer) directly.
   private[this] val safeProj: Projection = FromUnsafeProjection(valueAttributes.map(_.dataType))
 
+  /***
+    * 初始化sortedInputHasNewGroup
+
+    */
   protected def initialize(): Unit = {
     if (inputIterator.hasNext) {
       initializeBuffer(sortBasedAggregationBuffer)
       val inputRow = inputIterator.next()
+
+      /***
+        * 创建grouping key
+        */
       nextGroupingKey = groupingProjection(inputRow).copy()
       firstRowInNextGroup = inputRow.copy()
       numInputRows += 1
@@ -118,13 +143,22 @@ class SortBasedAggregationIterator(
     }
   }
 
+  /***
+    * 构造SortBasedAggregationIterator调用initialize方法
+    */
   initialize()
 
-  /** Processes rows in the current group. It will stop when it find a new group. */
+  /**
+    * Processes rows in the current group. It will stop when it find a new group.
+    *
+    * 更新sortedInputHasNewGroup
+    *
+    */
   protected def processCurrentSortedGroup(): Unit = {
     currentGroupingKey = nextGroupingKey
     // Now, we will start to find all rows belonging to this group.
     // We create a variable to track if we see the next group.
+    /**所谓的一个Group，就是grouping key是一样的那些记录**/
     var findNextPartition = false
     // firstRowInNextGroup is the first row of this group. We first process it.
     processRow(sortBasedAggregationBuffer, safeProj(firstRowInNextGroup))
@@ -132,8 +166,10 @@ class SortBasedAggregationIterator(
     // The search will stop when we see the next group or there is no
     // input row left in the iter.
     while (!findNextPartition && inputIterator.hasNext) {
-      // Get the grouping key.
+
+      /**获得要处理的Row**/
       val currentRow = inputIterator.next()
+      // Get the grouping key.
       val groupingKey = groupingProjection(currentRow)
       numInputRows += 1
 
@@ -158,8 +194,16 @@ class SortBasedAggregationIterator(
   // Iterator's public methods
   ///////////////////////////////////////////////////////////////////////////
 
-  override final def hasNext: Boolean = sortedInputHasNewGroup
+  override final def hasNext: Boolean = {
+    val hasNext = sortedInputHasNewGroup
+    hasNext
+  }
 
+  /***
+    * 读取下一个元素，返回UnsafeRow，这里是处理所有相同的grouping key，返回一个UnsafeRow
+    * 也就是说，next方法中有处理current sorted group
+    * @return
+    */
   override final def next(): UnsafeRow = {
 
     /**

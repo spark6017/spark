@@ -118,7 +118,9 @@ abstract class AggregationIterator(
   }
 
   protected val aggregateFunctions: Array[AggregateFunction] =
+  {
     initializeAggregateFunctions(aggregateExpressions, initialInputBufferOffset)
+  }
 
   // Positions of those imperative aggregate functions in allAggregateFunctions.
   // For example, we have func1, func2, func3, func4 in aggregateFunctions, and
@@ -140,19 +142,27 @@ abstract class AggregationIterator(
   // The projection used to initialize buffer values for all expression-based aggregates.
   protected[this] val expressionAggInitialProjection = {
     val initExpressions = aggregateFunctions.flatMap {
-      case ae: DeclarativeAggregate => ae.initialValues
+      case ae: DeclarativeAggregate => ae.initialValues /**获取初值**/
       // For the positions corresponding to imperative aggregate functions, we'll use special
       // no-op expressions which are ignored during projection code-generation.
       case i: ImperativeAggregate => Seq.fill(i.aggBufferAttributes.length)(NoOp)
     }
+
+    /**
+      * 调用传入的newMutableProjection方法
+      * newMutableProjection函数的真实定义是在SortBasedAggregate的doExecute方法中
+      *
+      */
     newMutableProjection(initExpressions, Nil)()
   }
 
   // All imperative AggregateFunctions.
   protected[this] val allImperativeAggregateFunctions: Array[ImperativeAggregate] =
+  {
     allImperativeAggregateFunctionPositions
       .map(aggregateFunctions)
       .map(_.asInstanceOf[ImperativeAggregate])
+  }
 
   /**
    * 调用AggregateFunction的updateExpression、mergeExpression方法
@@ -253,7 +263,9 @@ abstract class AggregationIterator(
    * 这是一个成员变量，返回值是一个函数
    */
   protected val processRow: (MutableRow, InternalRow) => Unit =
+  {
     generateProcessRow(aggregateExpressions, aggregateFunctions, inputAttributes)
+  }
 
   /**
     * 分组投影
@@ -265,7 +277,9 @@ abstract class AggregationIterator(
   /**
     * 将分组表达式转换为Attributes
     */
-  protected val groupingAttributes = groupingExpressions.map(_.toAttribute)
+  protected val groupingAttributes = {
+    groupingExpressions.map(_.toAttribute)
+  }
 
     /**
      *  Initializing the function used to generate the output row.
@@ -320,7 +334,9 @@ abstract class AggregationIterator(
    * 返回值是一个函数
    */
   protected val generateOutput: (UnsafeRow, MutableRow) => UnsafeRow =
+  {
     generateResultProjection()
+  }
 
   /** Initializes buffer values for all aggregate functions. */
   protected def initializeBuffer(buffer: MutableRow): Unit = {

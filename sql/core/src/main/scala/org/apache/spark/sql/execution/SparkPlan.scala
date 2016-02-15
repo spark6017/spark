@@ -197,11 +197,18 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ
 
   private[this] def isTesting: Boolean = sys.props.contains("spark.testing")
 
+  /***
+    *
+    * @param expressions
+    * @param inputSchema
+    * @param useSubexprElimination
+    * @return 类型为()=>MutableProjection的函数
+    */
   protected def newMutableProjection(
       expressions: Seq[Expression],
       inputSchema: Seq[Attribute],
       useSubexprElimination: Boolean = false): () => MutableProjection = {
-    log.debug(s"Creating MutableProj: $expressions, inputSchema: $inputSchema")
+    log.info(s"Creating MutableProj: $expressions, inputSchema: $inputSchema")
     try {
       GenerateMutableProjection.generate(expressions, inputSchema, useSubexprElimination)
     } catch {

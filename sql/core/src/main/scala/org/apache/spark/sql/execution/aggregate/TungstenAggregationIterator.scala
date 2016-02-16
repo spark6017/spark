@@ -29,6 +29,9 @@ import org.apache.spark.unsafe.KVIterator
 
 /**
  * An iterator used to evaluate aggregate functions. It operates on [[UnsafeRow]]s.
+  *
+  *
+  * 对UnsafeRow进行聚合函数值的计算
  *
  * This iterator first uses hash-based aggregation to process input rows. It uses
  * a hash map to store groups and their corresponding aggregation buffers. If we

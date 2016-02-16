@@ -64,6 +64,13 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
   // Static methods
   //////////////////////////////////////////////////////////////////////////////
 
+
+  /***
+   * 1-64列是8个字节
+   * 65-127列是16个字节
+   * @param numFields
+   * @return
+     */
   public static int calculateBitSetWidthInBytes(int numFields) {
     return ((numFields + 63)/ 64) * 8;
   }
@@ -120,9 +127,21 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
   /** The size of this row's backing data, in bytes) */
   private int sizeInBytes;
 
-  /** The width of the null tracking bit set, in bytes */
+  /**
+   * The width of the null tracking bit set, in bytes
+   *
+   * 用于记录每列是否为空(bit set)的字节数(单位是字节),与列数有关
+   *
+   */
   private int bitSetWidthInBytes;
 
+  /***
+   * 取出第ordinal列的offset，baseOffset(raw数据的offset) + bitSetWidthInBytes(Null比特位的offset) + ordinal * 8
+   *
+   * 也就是说每列的Offset差8
+   * @param ordinal
+   * @return
+     */
   private long getFieldOffset(int ordinal) {
     return baseOffset + bitSetWidthInBytes + ordinal * 8L;
   }
@@ -190,6 +209,11 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
     BitSetMethods.unset(baseObject, baseOffset, i);
   }
 
+  /**
+   * 设置第i列为空：
+   *    BitSet需要设置，同时数据本身需要设置为null(其实是设置为0，是否为空，由bit set控制)
+   * @param i
+     */
   @Override
   public void setNullAt(int i) {
     assertIndexIsValid(i);
@@ -212,6 +236,11 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
     Platform.putInt(baseObject, getFieldOffset(ordinal), value);
   }
 
+  /***
+   * 为第ordinal列设置value值
+   * @param ordinal
+   * @param value
+     */
   @Override
   public void setLong(int ordinal, long value) {
     assertIndexIsValid(ordinal);
@@ -346,6 +375,11 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
     }
   }
 
+  /**
+   * 判断第ordinal列是否为空
+   * @param ordinal
+   * @return
+     */
   @Override
   public boolean isNullAt(int ordinal) {
     assertIndexIsValid(ordinal);

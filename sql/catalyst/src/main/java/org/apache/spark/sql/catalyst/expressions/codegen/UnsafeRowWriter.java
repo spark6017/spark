@@ -50,6 +50,10 @@ public class UnsafeRowWriter {
     this.holder = holder;
     this.nullBitsSize = UnsafeRow.calculateBitSetWidthInBytes(numFields);
     this.fixedSize = nullBitsSize + 8 * numFields;
+
+    /****
+     * holder.cursor表示Platform.BYTE_ARRAY_OFFSET
+     */
     this.startingOffset = holder.cursor;
   }
 
@@ -69,6 +73,8 @@ public class UnsafeRowWriter {
 
   /**
    * Clears out null bits.  This should be called before we write a new row to row buffer.
+   *
+   * 这是在干啥？？？
    */
   public void zeroOutNullBytes() {
     for (int i = 0; i < nullBitsSize; i += 8) {
@@ -143,6 +149,7 @@ public class UnsafeRowWriter {
     Platform.putShort(holder.buffer, offset, value);
   }
 
+  /***/
   public void write(int ordinal, int value) {
     final long offset = getFieldOffset(ordinal);
     Platform.putLong(holder.buffer, offset, 0L);

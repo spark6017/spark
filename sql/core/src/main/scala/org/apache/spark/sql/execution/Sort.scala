@@ -25,7 +25,9 @@ import org.apache.spark.sql.catalyst.plans.physical.{Distribution, OrderedDistri
 import org.apache.spark.sql.execution.metric.SQLMetrics
 
 /**
- * Performs (external) sorting.
+ * Performs (external) sorting. 排序物理计划(可能是外排序)
+  * 如果global为true，表示全局排序；如果为false，表示分区内排序
+  *
  *
  * @param global when true performs a global sort of all partitions by shuffling the data first
  *               if necessary.
@@ -52,7 +54,7 @@ case class Sort(
   override def outputOrdering: Seq[SortOrder] = sortOrder
 
   /**
-   *  Child Distribution,如果是全量排序，那么要求孩子节点的Distribution是OrderedDistribution
+   *  Child Distribution,如果是全量排序，那么要求孩子节点的Distribution是OrderedDistribution[SortOrders]
    * @return
    */
   override def requiredChildDistribution: Seq[Distribution] =
@@ -63,9 +65,6 @@ case class Sort(
     "spillSize" -> SQLMetrics.createSizeMetric(sparkContext, "spill size"))
 
   protected override def doExecute(): RDD[InternalRow] = {
-//    for ( i  <- 1 to 10) {
-//      println("================================================================")
-//    }
     val schema = child.schema
     val childOutput = child.output
 
@@ -88,6 +87,10 @@ case class Sort(
       }
 
       val pageSize = SparkEnv.get.memoryManager.pageSizeBytes
+
+      /***
+        * 使用UnsafeExternalRowSorter进行排序
+        */
       val sorter = new UnsafeExternalRowSorter(
         schema, ordering, prefixComparator, prefixComputer, pageSize)
       if (testSpillFrequency > 0) {
@@ -99,6 +102,10 @@ case class Sort(
       // figure out how many bytes we spilled for this operator.
       val spillSizeBefore = metrics.memoryBytesSpilled
 
+
+      /**
+        * sort方法是对UnsafeRow集合进行排序
+        */
       val sortedIterator = sorter.sort(iter.asInstanceOf[Iterator[UnsafeRow]])
 
       dataSize += sorter.getPeakMemoryUsage

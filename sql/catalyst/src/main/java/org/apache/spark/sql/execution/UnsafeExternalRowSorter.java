@@ -36,6 +36,11 @@ import org.apache.spark.util.collection.unsafe.sort.RecordComparator;
 import org.apache.spark.util.collection.unsafe.sort.UnsafeExternalSorter;
 import org.apache.spark.util.collection.unsafe.sort.UnsafeSorterIterator;
 
+/**
+ * final class,既没有继承其它类，也没有被其它类继承
+ *
+ * 内部使用UnsafeExternalSorter进行排序
+ */
 final class UnsafeExternalRowSorter {
 
   /**
@@ -90,6 +95,11 @@ final class UnsafeExternalRowSorter {
     testSpillFrequency = frequency;
   }
 
+  /**
+   * 插入记录，如果空间不够则进行Spill
+   * @param row
+   * @throws IOException
+     */
   @VisibleForTesting
   void insertRow(UnsafeRow row) throws IOException {
     final long prefix = prefixComputer.computePrefix(row);
@@ -116,6 +126,11 @@ final class UnsafeExternalRowSorter {
     sorter.cleanupResources();
   }
 
+  /**
+   * 是否会做内存数据和磁盘数据做merge
+   * @return
+   * @throws IOException
+     */
   @VisibleForTesting
   Iterator<UnsafeRow> sort() throws IOException {
     try {
@@ -167,6 +182,12 @@ final class UnsafeExternalRowSorter {
   }
 
 
+  /**
+   * 对UnsafeRow进行排序
+   * @param inputIterator
+   * @return
+   * @throws IOException
+     */
   public Iterator<UnsafeRow> sort(Iterator<UnsafeRow> inputIterator) throws IOException {
     while (inputIterator.hasNext()) {
       insertRow(inputIterator.next());

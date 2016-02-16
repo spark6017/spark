@@ -39,6 +39,9 @@ case object Descending extends SortDirection {
 /**
  * An expression that can be used to sort a tuple.  This class extends expression primarily so that
  * transformations over expression will descend into its child.
+  * SortOrder记录了排序的列以及是升序，还是降序
+  *
+  * 如： order by abc ASC, def DESC定义了两个SortOrder
  */
 case class SortOrder(child: Expression, direction: SortDirection)
   extends UnaryExpression with Unevaluable {

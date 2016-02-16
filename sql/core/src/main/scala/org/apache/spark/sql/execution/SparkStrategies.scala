@@ -387,12 +387,22 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
         } else {
           execution.Coalesce(numPartitions, planLater(child)) :: Nil
         }
+
+      /**
+        * 分区内排序，所以global显式设置为false
+        */
       case logical.SortPartitions(sortExprs, child) =>
         // This sort only sorts tuples within a partition. Its requiredDistribution will be
         // an UnspecifiedDistribution.
         execution.Sort(sortExprs, global = false, child = planLater(child)) :: Nil
+
+      /**
+        * global并没有显式的设置值，因此可能是全局排序，也可能是分区内排序
+        */
       case logical.Sort(sortExprs, global, child) =>
         execution.Sort(sortExprs, global, planLater(child)) :: Nil
+
+
       case logical.Project(projectList, child) =>
         execution.Project(projectList, planLater(child)) :: Nil
       case logical.Filter(condition, child) =>

@@ -398,6 +398,8 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
   /**
    * Returns a sorted iterator. It is the caller's responsibility to call `cleanupResources()`
    * after consuming this iterator.
+   *
+   * 如果没有spill，则返回SpillableIterator； 否则返回UnsafeSorterSpillMerger的getSortedIterator方法
    */
   public UnsafeSorterIterator getSortedIterator() throws IOException {
     assert(recordComparator != null);

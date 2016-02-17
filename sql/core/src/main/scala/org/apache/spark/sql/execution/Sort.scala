@@ -89,7 +89,7 @@ case class Sort(
       val pageSize = SparkEnv.get.memoryManager.pageSizeBytes
 
       /***
-        * 使用UnsafeExternalRowSorter进行排序
+        * 创建UnsafeExternalRowSorter
         */
       val sorter = new UnsafeExternalRowSorter(
         schema, ordering, prefixComparator, prefixComputer, pageSize)
@@ -104,7 +104,7 @@ case class Sort(
 
 
       /**
-        * sort方法是对UnsafeRow集合进行排序
+        * 调用UnsafeExternalRowSorter的sort方法
         */
       val sortedIterator = sorter.sort(iter.asInstanceOf[Iterator[UnsafeRow]])
 

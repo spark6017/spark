@@ -64,6 +64,11 @@ final class UnsafeSorterSpillMerger {
     }
   }
 
+  /***
+   * 返回UnsafeSorterIterator的内部类实例
+   * @return
+   * @throws IOException
+     */
   public UnsafeSorterIterator getSortedIterator() throws IOException {
     return new UnsafeSorterIterator() {
 

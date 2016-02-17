@@ -57,6 +57,9 @@ import org.apache.spark.util.collection.ExternalAppendOnlyMap.HashComparator
  * combineByKey的参数非常类似。
  *
  * 从ExternalAppendOnlyMap的构造参数可以大概看得出来，ExternalAppendOnlyMap主要用于聚合操作(比如map side combine)
+  *
+  *
+  * ExternalAppendOnlyMap继承自Iterable,它的底层数据结构是SizeTrackingAppendOnlyMap，而SizeTrackingAppendOnlyMap集成自AppendOnlyMap
  *
  */
 @DeveloperApi
@@ -95,7 +98,7 @@ class ExternalAppendOnlyMap[K, V, C](
   private var currentMap = new SizeTrackingAppendOnlyMap[K, C]
 
   /**
-   * DiskMapIterator是干啥用的？每次 spill 完在磁盘上生成一个 spilledMap 文件，然后重新 new 出来一个 AppendOnlyMap
+   * DiskMapIterator是干啥用的？每次 spill 完在磁盘上生成一个 spilledMap 文件(通过DiskMapIterator)，然后重新 new 出来一个 AppendOnlyMap
    */
   private val spilledMaps = new ArrayBuffer[DiskMapIterator]
   private val sparkConf = SparkEnv.get.conf
@@ -165,9 +168,13 @@ class ExternalAppendOnlyMap[K, V, C](
    * The shuffle memory usage of the first trackMemoryThreshold entries is not tracked.
    *
    *
-   * 将类型为Iterator的集合插入到当前Map中(以combine的方式)
+   * 将类型为Iterator的集合插入到当前Map中(以combine的方式),集合的每个元素是Product2,表示每个元素是一个(K，V)二元组
    */
   def insertAll(entries: Iterator[Product2[K, V]]): Unit = {
+
+    /***
+      * currentMap何时置为空？
+      */
     if (currentMap == null) {
       throw new IllegalStateException(
         "Cannot insert new elements into a map after calling iterator")
@@ -175,11 +182,24 @@ class ExternalAppendOnlyMap[K, V, C](
     // An update function for the map that we reuse across entries to avoid allocating
     // a new closure each time
     var curEntry: Product2[K, V] = null
+
+    /***
+      * update函数，类型是(Boolean,C)=>C
+      * 如果有旧值，那么调用mergeValue；如果没有旧值，那么调用createCombiner
+      */
     val update: (Boolean, C) => C = (hadVal, oldVal) => {
       if (hadVal) mergeValue(oldVal, curEntry._2) else createCombiner(curEntry._2)
     }
 
+
+    /***
+      * 遍历所有的元素，实现插入
+      */
     while (entries.hasNext) {
+
+      /**
+        * 遍历的当前元素
+        */
       curEntry = entries.next()
       val estimatedSize = currentMap.estimateSize()
       if (estimatedSize > _peakMemoryUsedBytes) {
@@ -187,11 +207,18 @@ class ExternalAppendOnlyMap[K, V, C](
       }
 
       /**
-       * 如果spill到磁盘，那么currentMap可以重建
+       * 如果spill到磁盘，那么currentMap需要重建
        */
       if (maybeSpill(currentMap, estimatedSize)) {
         currentMap = new SizeTrackingAppendOnlyMap[K, C]
       }
+
+      /***
+        * 调用SizeTrackingAppendOnlyMap的changeValue方法，参数是Key和update方法
+        *
+        * curEntry作为闭包值传入到update方法中
+        *
+        */
       currentMap.changeValue(curEntry._1, update)
       addElementsRead()
     }
@@ -206,7 +233,7 @@ class ExternalAppendOnlyMap[K, V, C](
    *
    * The shuffle memory usage of the first trackMemoryThreshold entries is not tracked.
    *
-   * 将类型为Iteratable的集合插入到该Map中
+   * 将类型为Iteratable的entries集合插入到该Map中
    */
   def insertAll(entries: Iterable[Product2[K, V]]): Unit = {
     insertAll(entries.iterator)
@@ -518,11 +545,15 @@ class ExternalAppendOnlyMap[K, V, C](
     }
   }
 
-  /**
-   * An iterator that returns (K, C) pairs in sorted order from an on-disk map
-   *
-   * 从磁盘map中获得一个排序的Iterator
-   */
+  /***
+    * An iterator that returns (K, C) pairs in sorted order from an on-disk map
+    *
+    * DiskMapIterator的Map是什么概念？Iterator是什么概念？
+    *
+    * @param file 磁盘文件
+    * @param blockId
+    * @param batchSizes
+    */
   private class DiskMapIterator(file: File, blockId: BlockId, batchSizes: ArrayBuffer[Long])
     extends Iterator[(K, C)]
   {
@@ -535,6 +566,10 @@ class ExternalAppendOnlyMap[K, V, C](
     )
 
     private var batchIndex = 0  // Which batch we're in
+
+    /***
+      * 文件流
+      */
     private var fileStream: FileInputStream = null
 
     // An intermediate stream that reads from exactly one batch
@@ -656,6 +691,8 @@ private[spark] object ExternalAppendOnlyMap {
 
   /**
    * Return the hash code of the given object. If the object is null, return a special hash code.
+    *
+    * 求hash值
    */
   private def hash[T](obj: T): Int = {
     if (obj == null) 0 else obj.hashCode()
@@ -664,7 +701,7 @@ private[spark] object ExternalAppendOnlyMap {
   /**
    * A comparator which sorts arbitrary keys based on their hash codes.
    *
-   * 基于Hash Code进行排序，它实现了Java的Comparator接口，需要实现compare方法
+   * 基于Hash Code进行排序，它实现了Java的Comparator接口，需要实现compare方法，基于Hash值进行排序
    */
   private class HashComparator[K] extends Comparator[K] {
     def compare(key1: K, key2: K): Int = {

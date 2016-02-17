@@ -44,6 +44,10 @@ private[spark] trait Spillable[C] extends Logging {
 
   // Initial threshold for the size of a collection before we start tracking its memory usage
   // For testing only
+
+  /***
+    * Shuffle Spill的阀值初始值为5M
+    */
   private[this] val initialMemoryThreshold: Long =
     SparkEnv.get.conf.getLong("spark.shuffle.spill.initialMemoryThreshold", 5 * 1024 * 1024)
 
@@ -68,6 +72,10 @@ private[spark] trait Spillable[C] extends Logging {
   /**
    * Spills the current in-memory collection to disk if needed. Attempts to acquire more
    * memory before spilling.
+    *
+    * Spill到磁盘，
+    * 1. Spill到磁盘的数据的文件位置放在哪里
+    * 2. 写到磁盘上的文件的格式是什么样的
    *
    * @param collection collection to spill to disk
    * @param currentMemory estimated size of the collection in bytes
@@ -75,16 +83,42 @@ private[spark] trait Spillable[C] extends Logging {
    */
   protected def maybeSpill(collection: C, currentMemory: Long): Boolean = {
     var shouldSpill = false
+
+    /**
+      * 判断是否需要Spill，读取的文件数是32的整数倍，并且当前使用的内存大于等于设置的内存法制
+      */
     if (elementsRead % 32 == 0 && currentMemory >= myMemoryThreshold) {
       // Claim up to double our current memory from the shuffle memory pool
+
+      /***
+        * 申请内存，
+        */
       val amountToRequest = 2 * currentMemory - myMemoryThreshold
+
+      /***
+        * 申请内存
+        */
       val granted =
         taskMemoryManager.acquireExecutionMemory(amountToRequest, MemoryMode.ON_HEAP, null)
+
+      /**
+        * 分配给我的可用的内存容量是myMemoryThreshold + granted
+        */
       myMemoryThreshold += granted
       // If we were granted too little memory to grow further (either tryToAcquire returned 0,
       // or we already had more memory than myMemoryThreshold), spill the current collection
+
+      /**
+        * 如果申请完内存后，当前使用的内存量依然比我可用的内存量大，那么需要Spill
+        */
       shouldSpill = currentMemory >= myMemoryThreshold
     }
+
+    /**
+      * ShouldSpill依赖于两方面的因素
+      * 1. 当前需要的内存大于我可用的内存
+      * 2. 已读取的元素个数大于设置的读取元素个数就Spill的阀值(可用于测试)
+      */
     shouldSpill = shouldSpill || _elementsRead > numElementsForceSpillThreshold
     // Actually spill
 
@@ -93,9 +127,25 @@ private[spark] trait Spillable[C] extends Logging {
       shouldSpill = true
       _spillCount += 1
       logSpillage(currentMemory)
+
+      /***
+        * 将集合spill到磁盘
+        */
       spill(collection)
+
+      /**
+        * 本此spill前读取到的elements个数还原为0
+        */
       _elementsRead = 0
+
+      /**
+        * Spill到磁盘的字节数
+        */
       _memoryBytesSpilled += currentMemory
+
+      /***
+        * 释放已经申请的资源，恢复到初始值
+        */
       releaseMemory()
     }
     shouldSpill
@@ -111,8 +161,13 @@ private[spark] trait Spillable[C] extends Logging {
    */
   def releaseMemory(): Unit = {
     // The amount we requested does not include the initial memory tracking threshold
+    //释放myMemoryThreshold - initialMemoryThreshold字节的内存
     taskMemoryManager.releaseExecutionMemory(
       myMemoryThreshold - initialMemoryThreshold, MemoryMode.ON_HEAP, null)
+
+    /***
+      * 将myMemoryThreshold还原为initialMemoryThreshold，也就是说myMemoryThreshold的初始值就是initialMemoryThreshold
+      */
     myMemoryThreshold = initialMemoryThreshold
   }
 

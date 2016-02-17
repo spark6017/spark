@@ -40,6 +40,8 @@ import org.apache.spark.util.Utils;
 
 /**
  * External sorter based on {@link UnsafeInMemorySorter}.
+ *
+ * 构造方法为私有，必须通过静态工厂方法create进行创建
  */
 public final class UnsafeExternalSorter extends MemoryConsumer {
 
@@ -92,6 +94,17 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
     return sorter;
   }
 
+  /**
+   * 创建UnsafeExternalSorter实例
+   * @param taskMemoryManager
+   * @param blockManager
+   * @param taskContext
+   * @param recordComparator
+   * @param prefixComparator
+   * @param initialSize
+   * @param pageSizeBytes
+     * @return
+     */
   public static UnsafeExternalSorter create(
       TaskMemoryManager taskMemoryManager,
       BlockManager blockManager,
@@ -124,6 +137,9 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
     this.fileBufferSizeBytes = 32 * 1024;
     this.writeMetrics = taskContext.taskMetrics().registerShuffleWriteMetrics();
 
+    /**
+     * UnsafeInMemorySorter
+     */
     if (existingInMemorySorter == null) {
       this.inMemSorter = new UnsafeInMemorySorter(
         this, taskMemoryManager, recordComparator, prefixComparator, initialSize);

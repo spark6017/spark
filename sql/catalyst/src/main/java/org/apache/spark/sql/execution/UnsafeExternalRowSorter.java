@@ -208,6 +208,17 @@ final class UnsafeExternalRowSorter {
       this.ordering = ordering;
     }
 
+    /***
+     * 基于Ordering[InternalRow]进行排序，注意排序的元素类型是InternalRow，
+     * 也就是说，需要把UnsafeRow转换为InternalRow? 不需要，因为UnsafeRow是InternalRow的子类
+     *
+     *
+     * @param baseObj1
+     * @param baseOff1
+     * @param baseObj2
+     * @param baseOff2
+       * @return
+       */
     @Override
     public int compare(Object baseObj1, long baseOff1, Object baseObj2, long baseOff2) {
       // TODO: Why are the sizes -1?

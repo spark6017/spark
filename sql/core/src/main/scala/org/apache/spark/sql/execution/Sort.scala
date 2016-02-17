@@ -72,7 +72,11 @@ case class Sort(
     val spillSize = longMetric("spillSize")
 
     child.execute().mapPartitionsInternal { iter =>
-      val ordering = newOrdering(sortOrder, childOutput)
+
+      /**
+        * 创建对UnsafeRow进行排序的Ordering对象
+        */
+    val ordering = newOrdering(sortOrder, childOutput)
 
       // The comparator for comparing prefix
       val boundSortExpression = BindReferences.bindReference(sortOrder.head, childOutput)

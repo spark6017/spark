@@ -133,6 +133,10 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR
         }
       }"""
 
+    println("=================================================================")
+    println(code)
+    println("=================================================================")
+
     logDebug(s"Generated Ordering: ${CodeFormatter.format(code)}")
 
     CodeGenerator.compile(code).generate(ctx.references.toArray).asInstanceOf[BaseOrdering]

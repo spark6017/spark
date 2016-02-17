@@ -20,6 +20,8 @@ package org.apache.spark.util.collection.unsafe.sort;
 /**
  * Compares records for ordering. In cases where the entire sorting key can fit in the 8-byte
  * prefix, this may simply return 0.
+ *
+ * UnSafeRow比较，比较的时候，需要提供左右两侧的baseObject和baseOffset
  */
 public abstract class RecordComparator {
 

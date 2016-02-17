@@ -26,14 +26,29 @@ final class UnsafeSorterSpillMerger {
   private int numRecords = 0;
   private final PriorityQueue<UnsafeSorterIterator> priorityQueue;
 
+  /***
+   * PrefixComparator是UnsafeSorterIterator第一级比较
+   * RecordComparator是UnsafeSorterIterator第二级比较
+   * @param recordComparator
+   * @param prefixComparator
+   * @param numSpills
+     */
   public UnsafeSorterSpillMerger(
       final RecordComparator recordComparator,
       final PrefixComparator prefixComparator,
       final int numSpills) {
+
+      /***
+       * 对UnsafeSorterIterator进行排序，排序算法如何定义的？
+       */
     final Comparator<UnsafeSorterIterator> comparator = new Comparator<UnsafeSorterIterator>() {
 
       @Override
       public int compare(UnsafeSorterIterator left, UnsafeSorterIterator right) {
+
+          /***
+           * 首先比较KeyPrefix，如果KeyPrefix不同，那么KeyPrefix的比较结果就是UnsafeSorterIterator的比较结果
+           */
         final int prefixComparisonResult =
           prefixComparator.compare(left.getKeyPrefix(), right.getKeyPrefix());
         if (prefixComparisonResult == 0) {

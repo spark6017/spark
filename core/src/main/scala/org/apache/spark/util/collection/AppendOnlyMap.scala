@@ -47,6 +47,10 @@ import org.apache.spark.annotation.DeveloperApi
  * 就是一个AppendOnlyMap
  *
  * ExternalAppendOnlyMap应用的更为广泛，Shuffle Read基本上都改为使用ExternalAppendOnlyMap了，比如[[org.apache.spark.Aggregator]]
+  *
+  *
+  * AppendOnlyMap是一个继承自Iteratable的集合
+  *
  *
  */
 @DeveloperApi
@@ -63,15 +67,15 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   require(initialCapacity >= 1, "Invalid initial capacity")
 
   /**
-   * 平衡因子0.7
+   * 负载因子0.7，元素个数到达容量的70%时，开始扩容
    */
   private val LOAD_FACTOR = 0.7
 
 
   /** *
-    * 对初始容量进行标准化，将initialCapacity转化为比它大的最小的2次幂数值
+    * 对初始容量进行标准化，将capacity设置为比initialCapacity大的最小的2次幂数值
     *
-    * capacity实际上记录的是元素个数容量
+    * capacity记录的是元素个数容量
     */
   private var capacity = nextPowerOf2(initialCapacity)
 
@@ -82,7 +86,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   private var mask = capacity - 1
 
   /** *
-    * 当前AppendOnlyMap中的数据容量
+    * 当前AppendOnlyMap中的元素个数
     */
   private var curSize = 0
 
@@ -97,12 +101,18 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   /**
    * Key和Value并排放，有利于内存本地性，这里数组大小为什么是2 * capacity？
    *
-   * 也就是说capacity是元素个数，每个元素有K和V，因此data这个数组的大小是2*capacity
+   * 也就是说capacity是元素个数，每个元素有K和V，因此data这个数组的大小是2*capacity。
+    *
+    * 也就是说，AppendOnlyMap的长度实际上是capacity*2
+    *
+    * data需要存放Key和Value，所以它是AnyRef类型
    */
   private var data = new Array[AnyRef](2 * capacity)
 
   // Treat the null key differently so we can use nulls in "data" to represent empty items.
-  /**表示AppendOnlyMap包含有值为Null的Key**/
+
+
+  /**表示AppendOnlyMap是否包含有值为Null的Key**/
   private var haveNullValue = false
 
   /**
@@ -118,30 +128,33 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
    * Get the value for a given key
    *
    *  根据指定的Key,获得指定的值，从这里Get的过程可以看到Put的过程
+    *
+    *  appy是一个Get操作，应该跟Put操作是匹配的
    * */
   def apply(key: K): V = {
     assert(!destroyed, destructionMessage)
     val k = key.asInstanceOf[AnyRef]
 
     /**
-     * 如果Key是null，则返回null key对应的值，nullValue
+     * 如果Key是null，则返回null key对应的值nullValue
      */
     if (k.eq(null)) {
       return nullValue
     }
 
     //获得元素的位置，为什么要rehash加mask，mask是保证pos在0-capacity之间，否则pos就越界了
+    //取Key的hash值
     var pos = rehash(k.hashCode) & mask
     var i = 1
     while (true) { /**while循环，何时结束？**/
-      val curKey = data(2 * pos)
+      val curKey = data(2 * pos) //数据Key位于2*pos处
       if (k.eq(curKey) || k.equals(curKey)) {
-        return data(2 * pos + 1).asInstanceOf[V]
-      } else if (curKey.eq(null)) {
+        return data(2 * pos + 1).asInstanceOf[V] //数据Value位于2*pos + 1处
+      } else if (curKey.eq(null)) { //data(2*pos)出的值为null，表示AppendOnlyMap中包含指定的Key，因此返回的value为null
         return null.asInstanceOf[V]
       } else { /**解决碰撞，怎么解决的？*/
         val delta = i  /**解决碰撞过程：pos是累加delta**/
-        pos = (pos + delta) & mask
+        pos = (pos + delta) & mask //pos移动delta
         i += 1
       }
     }
@@ -176,39 +189,46 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     null.asInstanceOf[V]
   }
 
-  /** Set the value for a key */
+  /**
+    * Set the value for a key
+    * update if exists, put if not exists
+    */
   def update(key: K, value: V): Unit = {
     assert(!destroyed, destructionMessage)
     val k = key.asInstanceOf[AnyRef]
     if (k.eq(null)) {
-      if (!haveNullValue) {
+      if (!haveNullValue) { //如果AppendOnlyMap中还没有Key为null的键值对，为什么要调用incrementSize？首先元素个数需要增1
         incrementSize()
       }
-      nullValue = value
+      nullValue = value //设置nullValue是value，并且将hasNullValue设置为true
       haveNullValue = true
       return
     }
+
+    /***
+      * 计算key对应的存放位置
+      */
     var pos = rehash(key.hashCode) & mask
     var i = 1
     while (true) {
       val curKey = data(2 * pos)
 
       /** *
-        * 如果pos*2这个位置没有放置KV，那么就是一个新增元素，添加到当前位置，并且size增1
+        * 如果pos*2这个位置为空，表示这是一个put操作，那么将KV添加到当前位置，并且size增1
         *
-        * Key存放的位置永远是偶数位置？
+        * Key存放的位置永远是偶数位置？是的
         */
       if (curKey.eq(null)) {
         data(2 * pos) = k
         data(2 * pos + 1) = value.asInstanceOf[AnyRef]
         incrementSize()  // Since we added a new key
         return
-      } else if (k.eq(curKey) || k.equals(curKey)) { /**如果该位置已经有了元素，首先判断该元素是否就是要放入的元素，如果是，则表示update操作，修改data(2*pos+1)**/
+      } else if (k.eq(curKey) || k.equals(curKey)) { /**如果该位置已经有了元素， 那么判断该位置的元素值是否跟Key相等，如果是则表示update操作，修改data(2*pos+1)**/
         data(2 * pos + 1) = value.asInstanceOf[AnyRef]
         return
-      } else {
+      } else {  /**该位置有数据，但是它的值跟key不同，因此发生了碰撞了，需要查找新的位置**/
         val delta = i  /**delta赋值为1，获取新的position**/
-        pos = (pos + delta) & mask
+        pos = (pos + delta) & mask  //pos + 1, pos + 3, pos + 6
         i += 1
       }
     }
@@ -217,6 +237,9 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   /**
    * Set the value for key to updateFunc(hadValue, oldValue), where oldValue will be the old value
    * for key, if any, or null otherwise. Returns the newly updated value.
+    *
+    * 对key进行更新操作，更新逻辑由updateFunc指定
+    * updateFunc的类型是(Boolean, V) => V): V
    */
   def changeValue(key: K, updateFunc: (Boolean, V) => V): V = {
     assert(!destroyed, destructionMessage)
@@ -225,10 +248,14 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
       if (!haveNullValue) {
         incrementSize()
       }
-      nullValue = updateFunc(haveNullValue, nullValue)
+      nullValue = updateFunc(haveNullValue, nullValue) /**计算nullValue**/
       haveNullValue = true
       return nullValue
     }
+
+    /***
+      * 求Hash值
+      */
     var pos = rehash(k.hashCode) & mask
     var i = 1
     while (true) {
@@ -256,13 +283,13 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     *
     * Iterator method from Iterable
    *
-   * AppendOnlyMap返回一个Iterator
+   *  AppendOnlyMap返回一个Iterator， 遍历数据
     */
   override def iterator: Iterator[(K, V)] = {
     assert(!destroyed, destructionMessage)
     new Iterator[(K, V)] {
 
-      //pos是Iterator内部类的成员变量
+      //pos是Iterator内部类的成员变量，-1表示null key的位置
       var pos = -1
 
       /**
@@ -283,6 +310,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
         }
 
         /** *
+          * 遍历到capacity，这是数组遍历，取第一个不为null的数据，同时记录已经遍历到的位置
           * 读取pos*2位置的元素K和V
           */
         while (pos < capacity) {
@@ -295,13 +323,13 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
       }
 
       /**
-       * 是否还有元素
+       * 是否还有元素，调用nextValue的结果是pos位置指向了下一个要遍历的数据
        * @return
        */
       override def hasNext: Boolean = nextValue() != null
 
       /**
-       * 获取下一个元素
+       * 获取下一个元素，pos向前移动，此后调用hasNext时，会计算pos位置以及之后的位置，直到找到一个不为空的元素位置
        * @return
        */
       override def next(): (K, V) = {
@@ -334,26 +362,50 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   /**
    *
    * Double the table's size and re-hash everything
-   *  Hash扩容，容量增加1倍
+   *  Hash扩容，容量增加1倍，原来的数据需要重新放置，原来的数据需要遍历出来的，此处不是调用hasNext和next方法，而是直接操作数组data
+    *  不需要关心null key，因为null key不属于data管理
+    *
    *
    * */
   protected def growTable() {
     // capacity < MAXIMUM_CAPACITY (2 ^ 29) so capacity * 2 won't overflow
+
+    //newCapacity的上线是2 ^ 29 * 2 = 2^ 30,而整数的最大值是2 ^ 31 - 1?
     val newCapacity = capacity * 2
     require(newCapacity <= MAXIMUM_CAPACITY, s"Can't contain more than ${growThreshold} elements")
+
+    /**
+      又创建了一个长度为2 * newCapacity的数组
+      */
+
     val newData = new Array[AnyRef](2 * newCapacity)
     val newMask = newCapacity - 1
     // Insert all our old values into the new array. Note that because our old keys are
     // unique, there's no need to check for equality here when we insert.
     var oldPos = 0
+
+    /***
+      * 线性遍历capacity次
+      */
     while (oldPos < capacity) {
       if (!data(2 * oldPos).eq(null)) {
         val key = data(2 * oldPos)
         val value = data(2 * oldPos + 1)
+
+        /***
+          * 计算Key的心为之
+          */
         var newPos = rehash(key.hashCode) & newMask
         var i = 1
         var keepGoing = true
+
+        /**
+          * 解决碰撞
+          */
         while (keepGoing) {
+          /**
+            * 找到 2*newPos位置
+            */
           val curKey = newData(2 * newPos)
           if (curKey.eq(null)) {
             newData(2 * newPos) = key
@@ -368,9 +420,10 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
       }
       oldPos += 1
     }
-    data = newData
+    data = newData /**原来的data会被GC销毁*/
     capacity = newCapacity
     mask = newMask
+    /**重新计算growThreshold*/
     growThreshold = (LOAD_FACTOR * newCapacity).toInt
   }
 
@@ -387,6 +440,8 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   /**
    * Return an iterator of the map in sorted order. This provides a way to sort the map without
    * using additional memory, at the expense of destroying the validity of the map.
+    *
+    * 在原来集合的基础上创建一个排序的集合
    *
    * 返回AppendOnlyMap中排序后的<K,V> pairs
    */
@@ -394,6 +449,10 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     destroyed = true
     // Pack KV pairs into the front of the underlying array
     var keyIndex, newIndex = 0
+
+    /***
+      * 将data中的数据向前移动，也就是说，将1_35_7改为1357
+      */
     while (keyIndex < capacity) {
       if (data(2 * keyIndex) != null) {
         data(2 * newIndex) = data(2 * keyIndex)
@@ -402,11 +461,15 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
       }
       keyIndex += 1
     }
+
+    /**newIndex跟curSize最多只差1*/
     assert(curSize == newIndex + (if (haveNullValue) 1 else 0))
 
 
     /**
-     * 在data数组上执行排序操作(基于TimSort进行排序)
+     * 在data数组上执行排序操作(基于TimSort进行排序)，排序的
+      * KVArraySortDataFormat的Buffer是Array[AnyRef]
+      *
      */
     new Sorter(new KVArraySortDataFormat[K, AnyRef]).sort(data, 0, newIndex, keyComparator)
 
@@ -422,7 +485,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
           nullValueReady = false
           (null.asInstanceOf[K], nullValue)
         } else {
-          val item = (data(2 * i).asInstanceOf[K], data(2 * i + 1).asInstanceOf[V])
+          val item = (data(2 * i).asInstanceOf[K], data(2 * i + 1).asInstanceOf[V]) /**data的偶数位置是类型K，需要强制转换；data的奇数位置是类型V，需要强制转换**/
           i += 1
           item
         }

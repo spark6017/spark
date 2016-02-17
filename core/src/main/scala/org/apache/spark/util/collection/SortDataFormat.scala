@@ -81,10 +81,21 @@ abstract class SortDataFormat[K, Buffer] {
  * @tparam K Type of the sort key of each element
  * @tparam T Type of the Array we're sorting. Typically this must extend AnyRef, to support cases
  *           when the keys and values are not the same type.
+  *
+  *
+  * K是什么？
+  * T是什么？ T是待排序的数组的元素类型
+  *
  */
 private[spark]
 class KVArraySortDataFormat[K, T <: AnyRef : ClassTag] extends SortDataFormat[K, Array[T]] {
 
+  /***
+    * Array中的偶数位置是Key，奇数位置是Value，Key和Value都是T，那么K是T的子类,也就是说T是个范围更大的类型，比如AnyRef，所以需要做asInstanceOf[K]操作
+    * @param data
+    * @param pos
+    * @return
+    */
   override def getKey(data: Array[T], pos: Int): K = data(2 * pos).asInstanceOf[K]
 
   override def swap(data: Array[T], pos0: Int, pos1: Int) {

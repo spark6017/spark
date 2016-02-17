@@ -24,6 +24,9 @@ import java.util.Comparator
  *
  * The Java implementation is package private, and hence it cannot be called outside package
  * org.apache.spark.util.collection. This is a simple wrapper of it that is available to spark.
+  *
+  * K: 排序的字段类型
+  * Buffer： 数据集合
  */
 private[spark]
 class Sorter[K, Buffer](private val s: SortDataFormat[K, Buffer]) {

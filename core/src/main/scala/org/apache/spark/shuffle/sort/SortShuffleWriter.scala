@@ -59,6 +59,10 @@ private[spark] class SortShuffleWriter[K, V, C](
    *
    * */
   override def write(records: Iterator[Product2[K, V]]): Unit = {
+
+    /***
+      * 创建ExternalSorter，如果没有map端的combine，那么spill时无需排序，如果有map端的combine则需要排序
+      */
     sorter = if (dep.mapSideCombine) {
       require(dep.aggregator.isDefined, "Map-side combine without Aggregator specified!")
       new ExternalSorter[K, V, C](
@@ -70,6 +74,10 @@ private[spark] class SortShuffleWriter[K, V, C](
       new ExternalSorter[K, V, V](
         context, aggregator = None, Some(dep.partitioner), ordering = None, dep.serializer)
     }
+
+    /**
+      * 插入数据
+      */
     sorter.insertAll(records)
 
     // Don't bother including the time to open the merged output file in the shuffle write time,
@@ -80,9 +88,14 @@ private[spark] class SortShuffleWriter[K, V, C](
     val blockId = ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID)
 
     /**
-     * 将通过ExternalSorter.insertAll方法写入的数据全部写入到文件中，如果insertAll过程中有spill，那么需要考虑归并排序
+     * 将通过ExternalSorter.insertAll方法写入的数据全部写入到分区文件中，如果insertAll过程中有spill，那么需要考虑归并排序
+      *返回每个分区的长度的集合
      */
     val partitionLengths = sorter.writePartitionedFile(blockId, tmp)
+
+    /***
+      * 写Index文件
+      */
     shuffleBlockResolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)
 
     /**

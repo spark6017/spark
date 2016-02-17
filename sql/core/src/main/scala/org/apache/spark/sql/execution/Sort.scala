@@ -65,6 +65,10 @@ case class Sort(
     "spillSize" -> SQLMetrics.createSizeMetric(sparkContext, "spill size"))
 
   protected override def doExecute(): RDD[InternalRow] = {
+
+    for (i <-1 to 10) {
+      println("------------------------------------------------------------")
+    }
     val schema = child.schema
     val childOutput = child.output
 

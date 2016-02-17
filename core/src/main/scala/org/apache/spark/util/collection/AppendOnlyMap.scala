@@ -406,10 +406,13 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
 
 
     /**
-     * 在data数组上执行排序操作
+     * 在data数组上执行排序操作(基于TimSort进行排序)
      */
     new Sorter(new KVArraySortDataFormat[K, AnyRef]).sort(data, 0, newIndex, keyComparator)
 
+    /***
+      * 返回Iterator的内部类对象
+      */
     new Iterator[(K, V)] {
       var i = 0
       var nullValueReady = haveNullValue

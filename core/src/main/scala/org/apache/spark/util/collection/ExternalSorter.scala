@@ -681,9 +681,22 @@ private[spark] class ExternalSorter[K, V, C](
     // Track location of each range in the output file
     val lengths = new Array[Long](numPartitions)
 
+
+    /***
+      * spills是类型为SpilledFile的ArrayBuffer， ArrayBuffer[SpilledFile]
+      */
     if (spills.isEmpty) {
       // Case where we only have in-memory data
+      /**
+        * 如果定义了aggregator，那么使用map（PartitionedAppendOnlyMap），否则使用buffer（PartitionedAppendOnlyBuffer）
+        *
+        */
       val collection = if (aggregator.isDefined) map else buffer
+
+
+      /***
+        * 对集合进行排序
+        */
       val it = collection.destructiveSortedWritablePartitionedIterator(comparator)
       while (it.hasNext) {
         /**

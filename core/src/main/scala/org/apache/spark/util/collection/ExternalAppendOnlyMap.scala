@@ -278,7 +278,8 @@ class ExternalAppendOnlyMap[K, V, C](
         objectsWritten += 1
 
         /**
-         * 如果写的个数是serializerBatchSize，那么就写提交一次
+         * 如果写的个数是serializerBatchSize，那么就调用flush写提交一次
+          *
          */
         if (objectsWritten == serializerBatchSize) {
           flush()
@@ -313,6 +314,9 @@ class ExternalAppendOnlyMap[K, V, C](
       }
     }
 
+    /***
+      * spilledMaps记录一个，包含了文件信息
+      */
     spilledMaps.append(new DiskMapIterator(file, blockId, batchSizes))
   }
 
@@ -329,7 +333,8 @@ class ExternalAppendOnlyMap[K, V, C](
     }
 
     /**
-     * 没有外排序，那么就返回CompletionIterator
+     * 没有外排序，那么就返回CompletionIterator，
+      * 问题：currentMap中是数据是否已经排序？
      */
     if (spilledMaps.isEmpty) {
       CompletionIterator[(K, C), Iterator[(K, C)]](currentMap.iterator, freeCurrentMap())
@@ -358,7 +363,9 @@ class ExternalAppendOnlyMap[K, V, C](
     // This queue maintains the invariant that it only contains non-empty buffers
 
     /**
-     * 元素是StreamBuffer的优先级队列
+     * 元素是StreamBuffer的优先级队列,对StreamBuffer进行排序
+      * mergeHeap何时添加数据？因为hasNext是否true是基于mergeHeap的size进行判断的
+      *
      */
     private val mergeHeap = new mutable.PriorityQueue[StreamBuffer]
 
@@ -371,11 +378,15 @@ class ExternalAppendOnlyMap[K, V, C](
       /** sortedMap和spilledMaped集合分别对应着内存和磁盘的集合
         *
         * buffered是Iterator的方法，何解？
+        *
+        * inputStreams是个集合，它的元素类型是scala.collection.BufferedIterator(Iterator.buffered)
         */
     private val inputStreams = (Seq(sortedMap) ++ spilledMaps).map(it => it.buffered)
 
     /**
-     * 针对inputStream中的每个iterator.buffered(可重复读？)
+     * 这个操作是在类的所有方法之外运行，因此它位于主构造方法中，此时会对mergeHeap进行添加数据
+      *
+      * 每个inputStreams的元素构造出一个StreamBuffer
      */
     inputStreams.foreach { it =>
       val kcPairs = new ArrayBuffer[(K, C)]
@@ -446,12 +457,16 @@ class ExternalAppendOnlyMap[K, V, C](
 
     /**
      * Return true if there exists an input stream that still has unvisited pairs.
+      *
+      * ExternalAppendOnlyMap的hasNext方法
      */
     override def hasNext: Boolean = mergeHeap.length > 0
 
     /**
      * Select a key with the minimum hash, then combine all values with the same key from all
      * input streams.
+      *
+      * 返回ExternalAppendOnlyMap的当前元素
      *
      * 调用next方法，返回minKey和minCombiner
      */
@@ -489,6 +504,10 @@ class ExternalAppendOnlyMap[K, V, C](
         if (buffer.isEmpty) {
           readNextHashCode(buffer.iterator, buffer.pairs)
         }
+
+        /***
+          * 继续往mergeHeap中添加StreamBuffer
+          */
         if (!buffer.isEmpty) {
           mergeHeap.enqueue(buffer)
         }

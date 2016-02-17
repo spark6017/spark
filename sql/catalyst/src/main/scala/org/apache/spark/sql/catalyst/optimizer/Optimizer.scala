@@ -672,6 +672,9 @@ object CombineUnions extends Rule[LogicalPlan] {
 /**
  * Combines two adjacent [[Filter]] operators into one, merging the
  * conditions into one conjunctive predicate.
+  *
+  * 具有父子关系的Filter进行合并
+  *
  */
 object CombineFilters extends Rule[LogicalPlan] {
   def apply(plan: LogicalPlan): LogicalPlan = plan transform {

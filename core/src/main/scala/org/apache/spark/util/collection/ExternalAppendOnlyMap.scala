@@ -371,7 +371,7 @@ class ExternalAppendOnlyMap[K, V, C](
 
     // Input streams are derived both from the in-memory map and spilled maps on disk
     // The in-memory map is sorted in place, while the spilled maps are already in sorted order
-    /***当前内存Map进行排序后的集合***/
+    /***当前存在于内存的数据进行排序，得到sortedMap***/
     private val sortedMap = CompletionIterator[(K, C), Iterator[(K, C)]](
       currentMap.destructiveSortedIterator(keyComparator), freeCurrentMap())
 
@@ -386,7 +386,10 @@ class ExternalAppendOnlyMap[K, V, C](
     /**
      * 这个操作是在类的所有方法之外运行，因此它位于主构造方法中，此时会对mergeHeap进行添加数据
       *
-      * 每个inputStreams的元素构造出一个StreamBuffer
+      * 对个每个inputStreams的元素构造出一个StreamBuffer(元素是kcPairs)
+      * 注意： inputStreams中的每个Iterator未必都能消费完，但是记录了消费位置，
+      *
+      * mergeHeap的初值是inputStreams每个BufferedIterator的最小Hash Code构成的Stream Buffer
      */
     inputStreams.foreach { it =>
       val kcPairs = new ArrayBuffer[(K, C)]
@@ -407,6 +410,8 @@ class ExternalAppendOnlyMap[K, V, C](
      * Assumes the given iterator is in sorted order of hash code.
      *
      * 将Hash值相同的K,C写入到ArrayBuffer中
+      *
+      * 从BufferedIterator中取出第一个元素，求其hash值，然后将与这个hash值相同的其它元素加入到buf中
      *
      * @param it iterator to read from，这是一个排序的集合
      * @param buf buffer to write the results into
@@ -459,6 +464,9 @@ class ExternalAppendOnlyMap[K, V, C](
      * Return true if there exists an input stream that still has unvisited pairs.
       *
       * ExternalAppendOnlyMap的hasNext方法
+      *
+      * 如果mergeHeap这个优先级队列还有元素，则hasNext返回true
+      *
      */
     override def hasNext: Boolean = mergeHeap.length > 0
 
@@ -475,10 +483,27 @@ class ExternalAppendOnlyMap[K, V, C](
         throw new NoSuchElementException
       }
       // Select a key from the StreamBuffer that holds the lowest key hash
+
+
       //mergeHeap这个优先级队列的头元素是minBuffer
+
+      //从优先级队列中取出一个元素minBuffer， minBuffer是mergeHeap中的hash key值最小的StreamBuffer
+
       val minBuffer = mergeHeap.dequeue()
+
+      /**
+        * 取出StreamBuffer中的数据(StreamBuffer的数据存放在ArrayBuffer中)
+        */
       val minPairs = minBuffer.pairs
+
+      /***
+        * 取出StreamBuffer的hash值，所有的hash都是一样的
+        */
       val minHash = minBuffer.minKeyHash
+
+      /**
+        * 从StreamBuffer删除第一个元素
+        */
       val minPair = removeFromBuffer(minPairs, 0)
       val minKey = minPair._1
       var minCombiner = minPair._2

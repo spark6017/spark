@@ -19,6 +19,10 @@ package org.apache.spark.util.collection.unsafe.sort;
 
 import java.io.IOException;
 
+
+/***
+ * 这是个什么Iterator？没有实现任何接口
+ */
 public abstract class UnsafeSorterIterator {
 
   public abstract boolean hasNext();

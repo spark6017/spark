@@ -12,7 +12,7 @@ object SparkSQLTestStudentOrderBy {
 
     val path =
       if (!OS.linux) {
-        "D:/opensourceprojects/spark20160202/examples/src/main/resources/users.parquet"
+        "D:\\opensourceprojects\\spark20160202\\sql\\core\\src\\main\\scala\\org\\apache\\spark\\sql\\test\\students.txt"
       } else {
         "/home/yuzt/development/openprojects/spark-2.0.0-snapshot/sql/core/src/main/scala/org/apache/spark/sql/test/students.txt"
       }

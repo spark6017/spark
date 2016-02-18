@@ -77,6 +77,9 @@ case class Sort(
 
     child.execute().mapPartitionsInternal { iter =>
 
+     /**生成排序*/
+      val ordering = newOrdering(sortOrder, childOutput)
+
       /**
         * 创建对UnsafeRow进行排序的Ordering对象
         */

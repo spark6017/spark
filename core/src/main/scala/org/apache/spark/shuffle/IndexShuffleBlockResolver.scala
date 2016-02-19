@@ -136,6 +136,10 @@ private[spark] class IndexShuffleBlockResolver(
       mapId: Int,
       lengths: Array[Long],
       dataTmp: File): Unit = {
+
+    /***
+      * 创建indexFile
+      */
     val indexFile = getIndexFile(shuffleId, mapId)
     val indexTmp = Utils.tempFileWith(indexFile)
     val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))

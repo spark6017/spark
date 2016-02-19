@@ -52,6 +52,9 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   /**
    * Write a bunch of records to this task's output
+    *
+    * records是本ShuffleWriter对应的RDD的Partition的数据集合，在Shufflem
+    *
    * 调用ExternalSorter的insertAll方法写入数据注意点：
    *    1.  如果有map side combine，则如何将map端combine的数据写到磁盘
    *    2. 如果有排序，比如sortByKey，则如何将有序的数据写到磁盘 --- ExternalSorter.insertAll并没有进行排序处理？是的，排序的数据逻辑是在ShufflerReader中完成的
@@ -61,6 +64,8 @@ private[spark] class SortShuffleWriter[K, V, C](
   override def write(records: Iterator[Product2[K, V]]): Unit = {
 
     /***
+      * 使用ExternalSorter进行数据逻辑逻辑(sort、combine、spill)
+      *
       * 创建ExternalSorter，如果没有map端的combine，那么spill时无需排序，如果有map端的combine则需要排序
       */
     sorter = if (dep.mapSideCombine) {
@@ -80,26 +85,44 @@ private[spark] class SortShuffleWriter[K, V, C](
       */
     sorter.insertAll(records)
 
+
+    /**
+      * 数据写完后，整理文件以及MapStatus,MapStatus将在stop方法中返回
+      *
+      *
+      */
     // Don't bother including the time to open the merged output file in the shuffle write time,
     // because it just opens a single file, so is typically too fast to measure accurately
     // (see SPARK-3570).
+
+    //根据shuffleId和mapId获取一个数据文件(这个文件是一个新文件，没有写入数据)
     val output = shuffleBlockResolver.getDataFile(dep.shuffleId, mapId)
+
+    //根据output文件的绝对路径+UUID获取的一个临时文件
     val tmp = Utils.tempFileWith(output)
+
+    /***
+      * 构造ShuffleBlockId，目的是干啥？
+      */
     val blockId = ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID)
 
     /**
-     * 将通过ExternalSorter.insertAll方法写入的数据全部写入到分区文件中，如果insertAll过程中有spill，那么需要考虑归并排序
+     * 将通过ExternalSorter.insertAll方法写入的数据全部写入到分区文件中，如果insertAll过程中有spill，那么需要归并排序
       *返回每个分区的长度的集合
      */
     val partitionLengths = sorter.writePartitionedFile(blockId, tmp)
 
     /***
-      * 写Index文件
+      * 将每个分区的数据长度写到Index文件中
       */
     shuffleBlockResolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)
 
     /**
      * write方法的返回值是个Unit，这是只是给mapStatus赋值，并不返回；mapStatus返回是在stop方法中实现的，
+      *
+      * BlockManager的shuffleServerId是BlockManagerId
+      *
+      * 问题：ShuffleReader怎么根据MapStatus信息去Shuffle数据？
      */
     mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)
   }
@@ -136,12 +159,23 @@ private[spark] class SortShuffleWriter[K, V, C](
 }
 
 private[spark] object SortShuffleWriter {
+
+  /***
+    * 如果有map端combine的话，就不能ByPass Merge Sort
+    * @param conf
+    * @param dep
+    * @return
+    */
   def shouldBypassMergeSort(conf: SparkConf, dep: ShuffleDependency[_, _, _]): Boolean = {
     // We cannot bypass sorting if we need to do map-side aggregation.
     if (dep.mapSideCombine) {
       require(dep.aggregator.isDefined, "Map-side combine without Aggregator specified!")
       false
     } else {
+
+      /**
+        * 如果没有客户端combine，那么需要判断Shuffle的分区数是否小于spark.shuffle.sort.bypassMergeThreshold配置的分区数
+        */
       val bypassMergeThreshold: Int = conf.getInt("spark.shuffle.sort.bypassMergeThreshold", 200)
       dep.partitioner.numPartitions <= bypassMergeThreshold
     }

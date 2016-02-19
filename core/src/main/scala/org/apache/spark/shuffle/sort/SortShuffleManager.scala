@@ -131,14 +131,31 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
       handle.asInstanceOf[BaseShuffleHandle[K, _, C]], startPartition, endPartition, context)
   }
 
-  /** Get a writer for a given partition. Called on executors by map tasks. */
+  /***
+    * Get a writer for a given partition. Called on executors by map tasks.
+    *
+    * @param handle 记录了ShuffleDependency信息
+    * @param mapId ShuffleMapTask处理的Partition的ID
+    * @param context
+    * @tparam K
+    * @tparam V
+    * @return
+    */
   override def getWriter[K, V](
       handle: ShuffleHandle,
       mapId: Int,
       context: TaskContext): ShuffleWriter[K, V] = {
+
+    /**记录shuffleID有多少个mapper任务（ShuffleMapTask）*/
     numMapsForShuffle.putIfAbsent(
       handle.shuffleId, handle.asInstanceOf[BaseShuffleHandle[_, _, _]].numMaps)
+
+
     val env = SparkEnv.get
+
+    /***
+      * 根据ShuffleHandle的类型，选择哪种ShuffleWriter
+      */
     handle match {
       case unsafeShuffleHandle: SerializedShuffleHandle[K @unchecked, V @unchecked] =>
         new UnsafeShuffleWriter(
@@ -149,6 +166,7 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
           mapId,
           context,
           env.conf)
+
       case bypassMergeSortHandle: BypassMergeSortShuffleHandle[K @unchecked, V @unchecked] =>
         new BypassMergeSortShuffleWriter(
           env.blockManager,
@@ -219,6 +237,8 @@ private[spark] object SortShuffleManager extends Logging {
 /**
  * Subclass of [[BaseShuffleHandle]], used to identify when we've chosen to use the
  * serialized shuffle.
+  *
+  * 何为serialized shuffle？
  */
 private[spark] class SerializedShuffleHandle[K, V](
   shuffleId: Int,
@@ -230,6 +250,8 @@ private[spark] class SerializedShuffleHandle[K, V](
 /**
  * Subclass of [[BaseShuffleHandle]], used to identify when we've chosen to use the
  * bypass merge sort shuffle path.
+  *
+  * 何为bypass merge sort shuffle？
  */
 private[spark] class BypassMergeSortShuffleHandle[K, V](
   shuffleId: Int,

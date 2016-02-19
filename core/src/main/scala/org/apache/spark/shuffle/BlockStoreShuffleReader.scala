@@ -56,6 +56,7 @@ private[spark] class BlockStoreShuffleReader[K, C](
      *blocksByAddress的类型是 Seq[(BlockManagerId, Seq[(BlockId, Long)])],
      * 每个元素是一个二元组，每个元组的第一个元素是BlockManagerId，第二个元素是元组的集合，
      *
+     *  Shuffle Read 数据
      *
      */
     val blocksByAddress = mapOutputTracker.getMapSizesByExecutorId(handle.shuffleId, startPartition, endPartition)

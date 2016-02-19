@@ -1246,7 +1246,13 @@ class DAGScheduler(
               shuffleStage.addOutputLoc(smt.partitionId, status)
             }
 
-            /**ShuffleMapStage的所有任务都已经完成，那么需要登记该Shuffle的mapOutputs信息**/
+              /**
+               *
+               * ShuffleMapStage的所有任务都已经完成，那么需要登记该Shuffle的mapOutputs信息
+               *
+               * 本Stage的所有MapTask都执行完成，那么需要向Master汇报Shuffle数据信息
+               *
+               */
             if (runningStages.contains(shuffleStage) && shuffleStage.pendingPartitions.isEmpty) {
               markStageAsFinished(shuffleStage)
               logInfo("looking for newly runnable stages")
@@ -1267,6 +1273,8 @@ class DAGScheduler(
                 */
               mapOutputTracker.registerMapOutputs(
                 shuffleStage.shuffleDep.shuffleId,  ////ShuffleId
+
+              /**该方法是一个Array[MapStatus]数组*/
                 shuffleStage.outputLocInMapOutputTrackerFormat(), ////该ShuffleStage所有的MapStatus
                 changeEpoch = true)
 

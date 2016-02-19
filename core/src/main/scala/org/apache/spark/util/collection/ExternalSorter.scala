@@ -84,6 +84,16 @@ import org.apache.spark.storage.{BlockId, DiskBlockObjectWriter}
  *    from the ordering parameter, or read the keys with the same hash code and compare them with
  *    each other for equality to merge values.
  *
+ *
+ *    问题：ExternalSorter如果没有aggregator和ordering是什么行为？
+ *
+ *    aggregator   ordering
+ *    有                    有
+ *    有                    无
+ *    无                    有
+ *    无                    无
+ *
+ *
  *  - Users are expected to call stop() at the end to delete all the intermediate files.
  */
 private[spark] class ExternalSorter[K, V, C](
@@ -137,7 +147,17 @@ private[spark] class ExternalSorter[K, V, C](
   // Data structures to store in-memory objects before we spill. Depending on whether we have an
   // Aggregator set, we either put objects into an AppendOnlyMap where we combine them, or we
   // store them in an array buffer.
+
+  /** *
+    * PartitionedAppendOnlyMap<=SizeTrackingAppendOnlyMap<=AppendOnlyMap
+    *
+    * AppendOnlyMap的底层数据结构也是数组，但是AppendOnlyMap提供了change value的方法(用于聚合相同Key的元素)
+    */
   private var map = new PartitionedAppendOnlyMap[K, C]
+
+  /** *
+    * PartitionedPairBuffer的底层数据结构是一个Array, PartitionedPairBuffer没有定义
+    */
   private var buffer = new PartitionedPairBuffer[K, C]
 
   // Total spilling statistics
@@ -166,8 +186,12 @@ private[spark] class ExternalSorter[K, V, C](
   })
 
   /**
-   * 只要定义了ordering或者aggregator，那么就返回keyComparator
-   * 否则返回None
+   *
+   * 如果定义了ordering，不管是否定义ordering，都使用ordering进行排序
+   * 如果没有定义ordering而定义了aggregator，那么使用自定义的排序器（基于Hash值排序）
+   *
+   * 如果既没有定义ordering，也没有定义aggregator，那么返回None
+   *
    * @return
    */
   private def comparator: Option[Comparator[K]] = {
@@ -205,7 +229,7 @@ private[spark] class ExternalSorter[K, V, C](
     val shouldCombine = aggregator.isDefined
 
     /**
-     * 首先进行Map端combine的处理逻辑
+     * 如果定义了aggregator，那么基于PartitionedAppendOnlyMap进行combine
      */
     if (shouldCombine) {
       // Combine values in-memory first using our AppendOnlyMap
@@ -218,14 +242,22 @@ private[spark] class ExternalSorter[K, V, C](
       while (records.hasNext) {
         addElementsRead()
         kv = records.next()
+
+        /** *
+          * 调用changeValue进行combine
+          */
         map.changeValue((getPartition(kv._1), kv._1), update)
         maybeSpillCollection(usingMap = true)
       }
-    } else { /**如果不进行Map端Combine，则使用PartitionedPairBuffer记录数据**/
+    } else { /**如果没有定义aggregator，则使用PartitionedPairBuffer记录数据**/
       // Stick values into our buffer
       while (records.hasNext) {
         addElementsRead()
         val kv = records.next()
+
+        /**
+         * 直接插入
+         */
         buffer.insert(getPartition(kv._1), kv._1, kv._2.asInstanceOf[C])
         maybeSpillCollection(usingMap = false)
       }

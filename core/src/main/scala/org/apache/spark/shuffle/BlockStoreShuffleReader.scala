@@ -119,6 +119,15 @@ private[spark] class BlockStoreShuffleReader[K, C](
 
     /** *
       * 获取aggregatedIterator
+      *
+      * 如果定义了aggregator
+      *           ---如果定义了mapSideCombine，那么调用aggregator.combineCombinersByKey返回Iterator
+      *           ---如果没有定义mapSideCombine，那么调用aggregator.combineValuesByKey返回Iterator
+      *  如果没有定义aggregator
+      *           ---直接原样返回Iterator
+      *
+      *  如果 定义了keyOrdering，比如sortByKey
+      *          ---调用ExternalSorter插入数据
       */
     val aggregatedIter: Iterator[Product2[K, C]] = if (dep.aggregator.isDefined) {
       if (dep.mapSideCombine) {

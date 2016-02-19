@@ -284,6 +284,9 @@ private[spark] class BlockManager(
   /**
    * Interface to get local block data. Throws an exception if the block cannot be found or
    * cannot be read successfully.
+   *
+   *
+   * 根据BlockId获取Block Data
    */
   override def getBlockData(blockId: BlockId): ManagedBuffer = {
     if (blockId.isShuffle) {

@@ -76,14 +76,20 @@ private[spark] class BlockStoreShuffleReader[K, C](
       SparkEnv.get.conf.getSizeAsMb("spark.reducer.maxSizeInFlight", "48m") * 1024 * 1024)
 
     // Wrap the streams for compression based on configuration
+
+    // blockManager.wrapForCompression方法返回一个InputStream，因此wrappedStreams是InputStream的集合
     val wrappedStreams = blockFetcherItr.map { case (blockId, inputStream) =>
       blockManager.wrapForCompression(blockId, inputStream)
     }
 
+    /**
+     * 获得序列化和反序列化实例
+     */
     val ser = Serializer.getSerializer(dep.serializer)
     val serializerInstance = ser.newInstance()
 
     // Create a key/value iterator for each stream
+    //反序列化stream，返回DeserializationStream
     val recordIter = wrappedStreams.flatMap { wrappedStream =>
       // Note: the asKeyValueIterator below wraps a key/value iterator inside of a
       // NextIterator. The NextIterator makes sure that close() is called on the
@@ -93,16 +99,27 @@ private[spark] class BlockStoreShuffleReader[K, C](
 
     // Update the context task metrics for each record read.
     val readMetrics = context.taskMetrics.registerTempShuffleReadMetrics()
+
+
     val metricIter = CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
+
+
       recordIter.map(record => {
         readMetrics.incRecordsRead(1)
         record
       }),
+
+
+
       context.taskMetrics().mergeShuffleReadMetrics())
 
     // An interruptible iterator must be used here in order to support task cancellation
     val interruptibleIter = new InterruptibleIterator[(Any, Any)](context, metricIter)
 
+
+    /** *
+      * 获取aggregatedIterator
+      */
     val aggregatedIter: Iterator[Product2[K, C]] = if (dep.aggregator.isDefined) {
       if (dep.mapSideCombine) {
         // We are reading values that are already combined

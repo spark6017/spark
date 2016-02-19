@@ -102,7 +102,7 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
         val context = TaskContext.get()
         new InterruptibleIterator(context, aggregator.combineValuesByKey(iter, context))
       }, preservesPartitioning = true)
-    } else {
+    } else {  /***ShuffleRDD的Aggregator不为None，而mapSideCombine可以为None*/
       new ShuffledRDD[K, V, C](self, partitioner)
         .setSerializer(serializer)
         .setAggregator(aggregator)

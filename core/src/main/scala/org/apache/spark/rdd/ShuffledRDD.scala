@@ -77,7 +77,8 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
   }
 
   /**
-   * 获得该ShuffleRDD的依赖，它只有一个依赖，类型是ShuffleDependency
+   * 获得该ShuffleRDD的依赖，它只有一个依赖，类型是ShuffleDependency， 因为ShuffleRDD构造时aggregator不为None，而mapSideCombine可能为None
+   * （参见PairRDDFunctions的combineXXX方法）
    *
    * getDependencies这个方法是说该RDD如何依赖它的父RDD，是窄依赖还是宽依赖。
    * ShuffleDependency看它的构造函数属性，有六个参数

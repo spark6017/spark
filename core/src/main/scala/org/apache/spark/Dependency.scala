@@ -27,6 +27,8 @@ import org.apache.spark.shuffle.ShuffleHandle
 /**
  * :: DeveloperApi ::
  * Base class for dependencies.
+ *
+ * Dependency接口只有一个RDD方法，表示依赖的RDD
  */
 @DeveloperApi
 abstract class Dependency[T] extends Serializable {
@@ -38,11 +40,19 @@ abstract class Dependency[T] extends Serializable {
  * :: DeveloperApi ::
  * Base class for dependencies where each partition of the child RDD depends on a small number
  * of partitions of the parent RDD. Narrow dependencies allow for pipelined execution.
+ *
+ * 窄依赖，窄依赖是指父RDD的每个Partition只被Child RDD的一个Partition依赖
+ *
  */
 @DeveloperApi
 abstract class NarrowDependency[T](_rdd: RDD[T]) extends Dependency[T] {
+
   /**
    * Get the parent partitions for a child partition.
+   *
+   * getParents方法表明窄依赖情况下，子RDD的每个Partition可能依赖于父RDD的多个Partition
+   *
+   *
    * @param partitionId a partition of the child RDD
    * @return the partitions of the parent RDD that the child partition depends upon
    */
@@ -67,6 +77,11 @@ abstract class NarrowDependency[T](_rdd: RDD[T]) extends Dependency[T] {
  * @param aggregator map/reduce-side aggregator for RDD's shuffle
  * @param mapSideCombine whether to perform partial aggregation (also known as map-side combine) reduceByKey设置了这个属性，而groupByKey则没有设置
  *  只有<K,V>类型的RDD才可能有Shuffle操作
+ *
+ *  问题：aggregator和mapSideCombine什么关系？
+ *   1. 如果指定了mapSideCombine，那么使用Aggregator的算法进行combine；
+ *   2. 如果指定了mapSideCombine，那么必须指定Aggregator
+ *   3. 如果指定了Aggregator而没有指定mapSideCombine，是一种什么样的情况？表示只做Reduce Side的Combine？
  */
 @DeveloperApi
 class ShuffleDependency[K: ClassTag, V: ClassTag, C: ClassTag](
@@ -108,6 +123,8 @@ class ShuffleDependency[K: ClassTag, V: ClassTag, C: ClassTag](
 /**
  * :: DeveloperApi ::
  * Represents a one-to-one dependency between partitions of the parent and child RDDs.
+ *
+ * 父RDD和子RDD的Partition之间是一一对应的
  */
 @DeveloperApi
 class OneToOneDependency[T](rdd: RDD[T]) extends NarrowDependency[T](rdd) {
@@ -118,6 +135,8 @@ class OneToOneDependency[T](rdd: RDD[T]) extends NarrowDependency[T](rdd) {
 /**
  * :: DeveloperApi ::
  * Represents a one-to-one dependency between ranges of partitions in the parent and child RDDs.
+ *
+ * RangeDependency也是窄依赖，
  * @param rdd the parent RDD
  * @param inStart the start of the range in the parent RDD
  * @param outStart the start of the range in the child RDD

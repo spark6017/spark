@@ -38,6 +38,9 @@ import org.apache.spark.util.Utils
  *
  * 集合的元素类型是(BlockID,InputStream)，这在ShuffleBlockFetcherIterator继承的Iterator[(BlockId, InputStream)] 中可以看出来
  *
+ * ShuffleBlockFetcherIterator是一个迭代器
+ *
+ *
  * The implementation throttles the remote fetches so they don't exceed maxBytesInFlight to avoid
  * using too much memory.
  *
@@ -156,9 +159,18 @@ final class ShuffleBlockFetcherIterator(
 
     // so we can look up the size of each blockID
     val sizeMap = req.blocks.map { case (blockId, size) => (blockId.toString, size) }.toMap
+
+    /** *
+      * blockIds
+      */
     val blockIds = req.blocks.map(_._1.toString)
 
+    /** *
+      * req的address是BlockManagerId
+      */
     val address = req.address
+
+
     shuffleClient.fetchBlocks(address.host, address.port, address.executorId, blockIds.toArray,
       new BlockFetchingListener {
         override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer): Unit = {
@@ -264,6 +276,9 @@ final class ShuffleBlockFetcherIterator(
     }
   }
 
+  /** *
+    * 初始化是发起请求
+    */
   private[this] def initialize(): Unit = {
     // Add a task completion callback (called in both success case and failure case) to cleanup.
     context.addTaskCompletionListener(_ => cleanup())
@@ -316,7 +331,12 @@ final class ShuffleBlockFetcherIterator(
       case SuccessFetchResult(_, _, size, _) => bytesInFlight -= size
       case _ =>
     }
-    /*** Send fetch requests up to maxBytesInFlight**/
+
+    /** *
+      * Send fetch requests up to maxBytesInFlight
+      *
+      * 请求得到结果后，继续发起请求
+      */
     fetchUpToMaxBytes()
 
     result match {

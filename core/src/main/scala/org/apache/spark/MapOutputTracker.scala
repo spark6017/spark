@@ -145,6 +145,9 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
    * needs to be read from a given range of map output partitions (startPartition is included but
    * endPartition is excluded from the range).
    *
+   * 返回值是一个二元组的集合，
+   * 元组的第一个元素是BlockManagerId,元组的第二个元素是一个二元组集合
+   *
    * @return A sequence of 2-item tuples, where the first item in the tuple is a BlockManagerId,
    *         and the second item is a sequence of (shuffle block id, shuffle block size) tuples
    *         describing the shuffle blocks that are stored at that block manager.
@@ -152,6 +155,10 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
   def getMapSizesByExecutorId(shuffleId: Int, startPartition: Int, endPartition: Int)
       : Seq[(BlockManagerId, Seq[(BlockId, Long)])] = {
     logInfo(s"Fetching outputs for shuffle $shuffleId, partitions $startPartition-$endPartition")
+
+    /**
+     * 根据ShuffleID获得MapStatus信息，是一个数组
+     */
     val statuses = getStatuses(shuffleId)
     // Synchronize on the returned array because, on the driver, it gets mutated in place
     statuses.synchronized {
@@ -538,6 +545,9 @@ private[spark] object MapOutputTracker extends Logging {
    * If any of the statuses is null (indicating a missing location due to a failed mapper),
    * throws a FetchFailedException.
    *
+   *
+   * 注意：这个方法并没有涉及拉取数据的IO操作
+   *
    * @param shuffleId Identifier for the shuffle
    * @param startPartition Start of map output partition ID range (included in range)
    * @param endPartition End of map output partition ID range (excluded from range)
@@ -552,6 +562,12 @@ private[spark] object MapOutputTracker extends Logging {
       endPartition: Int,
       statuses: Array[MapStatus]): Seq[(BlockManagerId, Seq[(BlockId, Long)])] = {
     assert (statuses != null)
+
+    /** *
+      * 将HashMap转换为Seq返回，Map的元素是K,V
+      *
+      * BlockManagerId与位于该BlockManager上的Block集合之间的映射
+      */
     val splitsByAddress = new HashMap[BlockManagerId, ArrayBuffer[(BlockId, Long)]]
     for ((status, mapId) <- statuses.zipWithIndex) {
       if (status == null) {
@@ -560,6 +576,15 @@ private[spark] object MapOutputTracker extends Logging {
         throw new MetadataFetchFailedException(shuffleId, startPartition, errorMessage)
       } else {
         for (part <- startPartition until endPartition) {
+
+          /** *
+            * getOrElseUpdate包含两个参数
+            * 以status.location(BlockManagerId)作为Key，从splitByAddress中获取一个Value，如果获取不到，那么就定义成ArrayBuffer
+            *
+            * +=是StringBuffer的方法，将+=后面的元素加入到splitsByAddress(status.location)对应的Value(ArrayBuffer)中
+            *
+            * ArrayBuffer的元素是一个二元组，元组的第一个元素是ShuffleBlockId，第二个元素是Block的size
+            */
           splitsByAddress.getOrElseUpdate(status.location, ArrayBuffer()) +=
             ((ShuffleBlockId(shuffleId, mapId, part), status.getSizeForBlock(part)))
         }

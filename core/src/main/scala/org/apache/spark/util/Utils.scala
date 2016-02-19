@@ -2241,7 +2241,11 @@ private[spark] object Utils extends Logging {
   }
 
   /**
-   * Returns a path of temporary file which is in the same directory with `path`.
+   * Returns a path of temporary file which is in the same directory with `path`
+   *
+   * 获得一个临时文件，跟path文件同目录
+   *
+   * 问题：临时文件的内容什么时候同步到path指向的文件.
    */
   def tempFileWith(path: File): File = {
     new File(path.getAbsolutePath + "." + UUID.randomUUID())

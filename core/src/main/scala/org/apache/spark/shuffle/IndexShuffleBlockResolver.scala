@@ -49,6 +49,12 @@ private[spark] class IndexShuffleBlockResolver(
 
   private val transportConf = SparkTransportConf.fromSparkConf(conf, "shuffle")
 
+  /** *
+    * 调用BlockManager的DiskBlockManager来获取一个文件，获取文件的参数是ShuffleDataBlockId
+    * @param shuffleId
+    * @param mapId
+    * @return
+    */
   def getDataFile(shuffleId: Int, mapId: Int): File = {
     blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
   }

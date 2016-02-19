@@ -87,7 +87,9 @@ private[spark] class SortShuffleWriter[K, V, C](
 
 
     /**
-      * 数据写完后，整理文件以及MapStatus,MapStatus将在stop方法中返回
+      * 数据写完后，整理文件以及MapStatus, 文件包括数据文件(data file)和索引文件(index file)
+     *
+     * MapStatus将在stop方法中返回
       *
       *
       */
@@ -96,19 +98,24 @@ private[spark] class SortShuffleWriter[K, V, C](
     // (see SPARK-3570).
 
     //根据shuffleId和mapId获取一个数据文件(这个文件是一个新文件，没有写入数据)
+    //为什么使用IndexShuffleBlockResolver类去获取data file
     val output = shuffleBlockResolver.getDataFile(dep.shuffleId, mapId)
 
     //根据output文件的绝对路径+UUID获取的一个临时文件
     val tmp = Utils.tempFileWith(output)
 
     /***
-      * 构造ShuffleBlockId，目的是干啥？
+      * 构造ShuffleBlockId，output文件名和路径是与blockId相关的
       */
     val blockId = ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID)
 
     /**
      * 将通过ExternalSorter.insertAll方法写入的数据全部写入到分区文件中，如果insertAll过程中有spill，那么需要归并排序
       *返回每个分区的长度的集合
+     *
+     * PartitionedFile指的是一个Mapper output文件中记录了所有Reducer需要的数据，这个数据需要记录分段信息
+     *
+     * 注意：写入的是临时文件
      */
     val partitionLengths = sorter.writePartitionedFile(blockId, tmp)
 

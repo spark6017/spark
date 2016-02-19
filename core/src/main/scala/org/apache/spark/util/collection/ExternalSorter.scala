@@ -120,6 +120,9 @@ private[spark] class ExternalSorter[K, V, C](
   private val serInstance = ser.newInstance()
 
   // Use getSizeAsKb (not bytes) to maintain backwards compatibility if no units are provided
+  /** *
+    * 写磁盘的缓存，每次向磁盘写32K
+    */
   private val fileBufferSize = conf.getSizeAsKb("spark.shuffle.file.buffer", "32k").toInt * 1024
 
   // Size of object batches when reading/writing from serializers.
@@ -700,16 +703,24 @@ private[spark] class ExternalSorter[K, V, C](
       val it = collection.destructiveSortedWritablePartitionedIterator(comparator)
       while (it.hasNext) {
         /**
-         * 每次都获取一次Writer
+         * 每次都获取一次Writer？ 不是的，根据下面的循环逻辑，是每个Partition获取一次Writer
+         *
+         * 这个Writer是啥？DiskBlockObjectWriter
          */
         val writer = blockManager.getDiskWriter(
           blockId, outputFile, serInstance, fileBufferSize, writeMetrics)
+
+        //循环写入本Partition的数据
         val partitionId = it.nextPartition()
         while (it.hasNext && it.nextPartition() == partitionId) {
           it.writeNext(writer)
         }
         writer.commitAndClose()
         val segment = writer.fileSegment()
+
+        /** *
+          * lengths数据是partition id与该partition数据长度的映射
+          */
         lengths(partitionId) = segment.length
       }
     } else {

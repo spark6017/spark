@@ -44,6 +44,11 @@ public class PrefixComparators {
       return UnsignedLongs.compare(aPrefix, bPrefix);
     }
 
+    /**
+     * UTF8String的getPrefix方法
+     * @param value
+     * @return
+       */
     public static long computePrefix(UTF8String value) {
       return value == null ? 0L : value.getPrefix();
     }

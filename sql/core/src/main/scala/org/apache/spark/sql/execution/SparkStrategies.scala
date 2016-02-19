@@ -230,6 +230,8 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
             case AggregateExpression(aggregateFunction, _, isDistinct) =>
               // The final aggregation buffer's attributes will be `finalAggregationAttributes`,
               // so replace each aggregate expression by its corresponding attribute in the set:
+
+              //aggregateFunctionToAttribute是一个Map，它的Key是二元组，能直接使用
               aggregateFunctionToAttribute(aggregateFunction, isDistinct)
             case expression =>
               // Since we're using `namedGroupingAttributes` to extract the grouping key

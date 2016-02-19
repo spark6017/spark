@@ -75,24 +75,44 @@ private[spark] class ShuffleMapTask(
     val ser = SparkEnv.get.closureSerializer.newInstance()
 
     /**
-     * 对taskBinary进行反序列化
+     * 对taskBinary进行反序列化，反序列化的得到RDD和ShuffleDependency
+      * rdd是RDD类型，dep是ShuffleDependency类型
      */
     val (rdd, dep) = ser.deserialize[(RDD[_], ShuffleDependency[_, _, _])](
       ByteBuffer.wrap(taskBinary.value), Thread.currentThread.getContextClassLoader)
+
+
     _executorDeserializeTime = System.currentTimeMillis() - deserializeStartTime
 
     metrics = Some(context.taskMetrics)
     var writer: ShuffleWriter[Any, Any] = null
     try {
+
+      /***
+        * 将RDD中的数据Shuffle到磁盘
+        */
+
+      //1. 获取ShuffleManager，默认是SortShuffleManager
       val manager = SparkEnv.get.shuffleManager
+
+      //2. 获取ShuffleWriter，ShuffleWriter是跟Partition相关的(由partitionId确定）,而partitionId是跟ShuffleMapTask相关的，即ShuffleMapTask处理的partition的ID
+
       writer = manager.getWriter[Any, Any](dep.shuffleHandle, partitionId, context)
+
+      //3. 执行写操作，因为只有(K,V)类型的数据才能够Shuffle，因此此处的rdd.iterator(partition)是Product2[Any,Any]类型的二元组
+      //writer参数中的迭代器对象是去RDD的第partition个分区的数据
+
       writer.write(rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
+
+      //4. 数据写完后调用stop方法，并且传入succes=true
       val result = writer.stop(success = true)
       result.get
     } catch {
       case e: Exception =>
         try {
           if (writer != null) {
+
+            //捕获所有异常，调用stop方法，并且传入success=false, 问题：已经写入的数据如何回滚？
             writer.stop(success = false)
           }
         } catch {

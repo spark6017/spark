@@ -95,6 +95,8 @@ class ShuffleDependency[K: ClassTag, V: ClassTag, C: ClassTag](
 
   /**
    * Dependency有一个shuffleHandle对象
+    *
+    * 参数有ShuffleId, Mapper Task的数目（即本shuffle需要有多少个Task写数据）
    */
   val shuffleHandle: ShuffleHandle = _rdd.context.env.shuffleManager.registerShuffle(
     shuffleId, _rdd.partitions.size, this)

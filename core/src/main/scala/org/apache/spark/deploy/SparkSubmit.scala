@@ -836,6 +836,9 @@ object SparkSubmit {
       addJarToClasspath(jar, loader)
     }
 
+    /**
+     *  将sysProps写到System Properties中，
+     */
     for ((key, value) <- sysProps) {
       System.setProperty(key, value)
     }
@@ -884,6 +887,9 @@ object SparkSubmit {
         e
     }
 
+    /**
+     * 在SparkSubmit中调用main，因为这个main运行在SparkSubmit进程中，也就是说，前面这是的System Properties在main函数都能读取到
+     */
     try {
       mainMethod.invoke(null, childArgs.toArray)
     } catch {
@@ -898,6 +904,12 @@ object SparkSubmit {
     }
   }
 
+  /**
+   *  将jar加载到classpath中，如何做的？
+   *  调用loader的addURL就可以实现
+   * @param localJar
+   * @param loader
+   */
   private def addJarToClasspath(localJar: String, loader: MutableURLClassLoader) {
     val uri = Utils.resolveURI(localJar)
     uri.getScheme match {

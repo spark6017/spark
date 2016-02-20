@@ -91,6 +91,10 @@ private[spark] class PartitionedPairBuffer[K, V](initialCapacity: Int = 64)
      *  keyComparator如果没有定义，则取partitionComparator；
      *  如果keyComparator定义了，那么将keyComparator这个Option包着的comparator传给partitionKeyComparator，得到另一个Comparator
      *  也就是说，partitionKeyComparator是一个接受一个元素的偏函数
+     *
+     *  如果定义了keyComparator，那么就联合partition和key进行双重排序
+     *  如果没有定义keyComparator，那么只进行分区间排序（分区号小的元素小于分区号大的元素）
+     *
      */
     val comparator = keyComparator.map(partitionKeyComparator).getOrElse(partitionComparator)
     new Sorter(new KVArraySortDataFormat[(Int, K), AnyRef]).sort(data, 0, curSize, comparator)

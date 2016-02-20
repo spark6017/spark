@@ -63,7 +63,9 @@ class OrderedRDDFunctions[K : Ordering : ClassTag,
    *
    * sortByKey是全局排序还是局部排序？  sortByKey是全局排序，为什么说是全局排序，因为
    *      1. 因为sortByKey使用RangePartitioner进行划分分区，也就是说，A分区的数据肯定比B分区的数据要么全部大，要么全部小(数据大小是按照Key的维度来进行比较的)
-   *      2. 又因为是sortByKey，那么分区内继续排序？
+   *      2. 又因为是sortByKey，那么分区内继续排序？会继续根据Key排序，这也正是sortByKey的含义： 首先在Shuffle Write阶段实现分区间有序(分区内不保证有序)，在Shuffle Read
+   *      阶段再实现分区内有序
+   *
    *
    */
   // TODO: this currently doesn't work on P other than Tuple2!
@@ -73,7 +75,13 @@ class OrderedRDDFunctions[K : Ordering : ClassTag,
     val part = new RangePartitioner(numPartitions, self, ascending)
 
     /**
-     *  ShuffledRDD，分区算法是RangePartitioner，排序算法是ordering
+     *  sortByKey得到的RDD是一个ShuffledRDD
+     *  1. 分区算法是RangePartitioner
+     *  2. KeyOrdering是排序算法是ordering
+     *  3. ShuffledRDD并没有指定mapSideCombine
+     *  4. ShuffledRDD也没有指定aggregator
+     *
+     *  因为是RangePartitioner，那么数据经过分区后，A，B两个分区，A分区的数据要么全部大于B分区的数据；A分区的数据要么全部小于B分区的数据
      */
     new ShuffledRDD[K, V, V](self, part)
       .setKeyOrdering(if (ascending) ordering else ordering.reverse)

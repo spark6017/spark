@@ -257,7 +257,7 @@ private[spark] class ExternalSorter[K, V, C](
         val kv = records.next()
 
         /**
-         * 直接插入
+         * 直接插入，元素是partitionId、key、value
          */
         buffer.insert(getPartition(kv._1), kv._1, kv._2.asInstanceOf[C])
         maybeSpillCollection(usingMap = false)

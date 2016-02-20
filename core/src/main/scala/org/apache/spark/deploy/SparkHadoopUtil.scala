@@ -97,11 +97,18 @@ class SparkHadoopUtil extends Logging {
         hadoopConf.set("fs.s3a.secret.key", accessKey)
       }
       // Copy any "spark.hadoop.foo=bar" system properties into conf as "foo=bar"
+      /**
+       * 将SparkConf中以spark.hadoop.开头的HADOOP配置项写入到HADOOP Configuration中
+       */
       conf.getAll.foreach { case (key, value) =>
         if (key.startsWith("spark.hadoop.")) {
           hadoopConf.set(key.substring("spark.hadoop.".length), value)
         }
       }
+
+      /**
+       * spark.buffer.size对应的是HADOOP的io.file.buffer.size，默认64k，HADOOP默认是4k
+       */
       val bufferSize = conf.get("spark.buffer.size", "65536")
       hadoopConf.set("io.file.buffer.size", bufferSize)
     }

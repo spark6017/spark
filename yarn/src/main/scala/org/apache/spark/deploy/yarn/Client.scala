@@ -58,23 +58,36 @@ import org.apache.spark.launcher.{LauncherBackend, SparkAppHandle, YarnCommandBu
 import org.apache.spark.util.Utils
 
 /**
- * ClientArguments
+ *  SPARK YARN CLUSTER模式下运行在提交作业进程(SparkSubmit)中用于向YARN集群提交作业
  * @param args
  * @param hadoopConf
  * @param sparkConf
  */
 private[spark] class Client(
     val args: ClientArguments,
-    val hadoopConf: Configuration,
+    val hadoopConf: Configuration, /**Hadoop Configuration是从配置文件中读取的？*/
     val sparkConf: SparkConf)
   extends Logging {
 
   import Client._
 
+  /**
+   * 通过SparkHadoopUtil.get.newConfiguration(spConf)获取Hadoop Configuration
+   * @param clientArgs
+   * @param spConf
+   * @return
+   */
   def this(clientArgs: ClientArguments, spConf: SparkConf) =
     this(clientArgs, SparkHadoopUtil.get.newConfiguration(spConf), spConf)
 
+  /**
+   * 访问RM的Client
+   */
   private val yarnClient = YarnClient.createYarnClient
+
+  /**
+   * YarnConfiguration
+   */
   private val yarnConf = new YarnConfiguration(hadoopConf)
   private var credentials: Credentials = null
   private val amMemoryOverhead = args.amMemoryOverhead // MB
@@ -126,6 +139,10 @@ private[spark] class Client(
       // Setup the credentials before doing anything else,
       // so we have don't have issues at any point.
       setupCredentials()
+
+      /**
+       * 调用init和start方法初始化YarnClient，使YarnClient可用
+       */
       yarnClient.init(yarnConf)
       yarnClient.start()
 
@@ -133,21 +150,37 @@ private[spark] class Client(
         .format(yarnClient.getYarnClusterMetrics.getNumNodeManagers))
 
       // Get a new application from our RM
+      /**
+       * 1. YarnClient.createApplication返回YarnClientApplication，YarnClientApplication封装了两方面的信息GetNewApplicationResponse和ApplicationSubmissionContext
+       * 2.
+       */
       val newApp = yarnClient.createApplication()
+
+      /**
+       * 获得GetNewApplicationResponse
+       */
       val newAppResponse = newApp.getNewApplicationResponse()
       appId = newAppResponse.getApplicationId()
       reportLauncherState(SparkAppHandle.State.SUBMITTED)
       launcherBackend.setAppId(appId.toString())
 
       // Verify whether the cluster has enough resources for our AM
+      /**
+       * Executor以及AM都会申请额外的内存空间，需要判断YARN是否能够满足
+       * 假如我的Executor申请的是2G，而YARN的Container是1G，那么此时会出现什么情况？
+       */
       verifyClusterResources(newAppResponse)
 
       // Set up the appropriate contexts to launch our AM
+      /**创建启动AM的Container Launch Context*/
       val containerContext = createContainerLaunchContext(newAppResponse)
+
+      /**创建提交AM的Context，提交AM需要使用Container Launch Context，因此这里将containerContext传递给ApplicationSubmissionContext*/
       val appContext = createApplicationSubmissionContext(newApp, containerContext)
 
       // Finally, submit and monitor the application
       logInfo(s"Submitting application ${appId.getId} to ResourceManager")
+      //提交作业，申请AM需要的Container然后启动AM进程？
       yarnClient.submitApplication(appContext)
       appId
     } catch {
@@ -279,6 +312,10 @@ private[spark] class Client(
    * Fail fast if we have requested more resources per container than is available in the cluster.
    */
   private def verifyClusterResources(newAppResponse: GetNewApplicationResponse): Unit = {
+
+    /**
+     * maxMem指的就是YARN Container的内存最大值，yarn.scheduler.maximum-allocation-mb的默认值是8G
+     */
     val maxMem = newAppResponse.getMaximumResourceCapability().getMemory()
     logInfo("Verifying our application has not requested more than the maximum " +
       s"memory capability of the cluster ($maxMem MB per container)")
@@ -1048,7 +1085,17 @@ private[spark] class Client(
    * throw an appropriate SparkException.
    */
   def run(): Unit = {
+
+    /**
+     * submitApplication，在submitApplication这个代码逻辑中将创建ApplicationMaster进程并提交给YARN执行，
+     * submitApplication与YARN提供的submitApplication API的含义不同，YARN提供的submitApplication的含义是提交RM一个Application返回一个APPID，
+     * 基于这个APPID，用户还需要继续使用YARN API提交AM
+     */
     this.appId = submitApplication()
+
+    /**
+     * Client是否立即退出
+      */
     if (!launcherBackend.isConnected() && fireAndForget) {
       val report = getApplicationReport(appId)
       val state = report.getYarnApplicationState
@@ -1057,7 +1104,11 @@ private[spark] class Client(
       if (state == YarnApplicationState.FAILED || state == YarnApplicationState.KILLED) {
         throw new SparkException(s"Application $appId finished with status: $state")
       }
-    } else {
+    } else { //如果不是提交作立即结束Client
+
+      /**
+       * monitorApplication将循环等待应用程序结束，如果ApplicationState为FAILED或者KILLED或者UNDEFINED，则抛出SparkException
+       */
       val (yarnApplicationState, finalApplicationStatus) = monitorApplication(appId)
       if (yarnApplicationState == YarnApplicationState.FAILED ||
         finalApplicationStatus == FinalApplicationStatus.FAILED) {
@@ -1090,9 +1141,17 @@ private[spark] class Client(
 
 }
 
+/**
+ * YARN CLUSTER模式下，SparkSubmit运行的main方法，注意，该main方法是在SparkSubmit进程中通过反射的方式启动的，
+ * 也就是说，运行Client的代码与运行SparkSubmit的代码运行在同一个JVM中，因此它们共享system properties
+ *
+ */
 object Client extends Logging {
 
   def main(argStrings: Array[String]) {
+    /**
+     * SparkSubmit中专门为YARN_CLUSTER模式设置了这个系统变量
+     */
     if (!sys.props.contains("SPARK_SUBMIT")) {
       logWarning("WARNING: This client is deprecated and will be removed in a " +
         "future version of Spark. Use ./bin/spark-submit with \"--master yarn\"")
@@ -1100,9 +1159,15 @@ object Client extends Logging {
 
     // Set an env variable indicating we are running in YARN mode.
     // Note that any env variable with the SPARK_ prefix gets propagated to all (remote) processes
+    /**
+     * 以SPARK开头的环境变量会分发到各个节点进程(Executor,具体点说是YARN Container？)
+     */
     System.setProperty("SPARK_YARN_MODE", "true")
     val sparkConf = new SparkConf
 
+    /**
+     * 将命令行参数解析为ClientArguments对象
+     */
     val args = new ClientArguments(argStrings, sparkConf)
     // to maintain backwards-compatibility
     if (!Utils.isDynamicAllocationEnabled(sparkConf)) {

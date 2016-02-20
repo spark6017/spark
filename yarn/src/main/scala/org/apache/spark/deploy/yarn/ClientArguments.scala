@@ -38,10 +38,18 @@ private[spark] class ClientArguments(args: Array[String], sparkConf: SparkConf) 
     * userArgs是一个ArrayBuffer，也就是说，命令行上可以出现多个--arg参数
     */
   var userArgs: ArrayBuffer[String] = new ArrayBuffer[String]()
+
+  /**
+   * 默认的executor memory是1024M
+   */
   var executorMemory = 1024 // MB
   var executorCores = 1
   var numExecutors = DEFAULT_NUMBER_EXECUTORS
   var amQueue = sparkConf.get("spark.yarn.queue", "default")
+
+  /**
+   * 默认的AM内存是512M
+   */
   var amMemory: Int = 512 // MB
   var amCores: Int = 1
   var appName: String = "Spark"
@@ -64,10 +72,14 @@ private[spark] class ClientArguments(args: Array[String], sparkConf: SparkConf) 
   validateArgs()
 
   // Additional memory to allocate to containers
+  //给am分配的memory overhead最小MEMORY_OVERHEAD_MIN，为384M
   val amMemoryOverheadConf = if (isClusterMode) driverMemOverheadKey else amMemOverheadKey
   val amMemoryOverhead = sparkConf.getInt(amMemoryOverheadConf,
     math.max((MEMORY_OVERHEAD_FACTOR * amMemory).toInt, MEMORY_OVERHEAD_MIN))
 
+  /**
+   * 为Executor分配的最小MEMORY_OVERHEAD_MIN也是384M
+   */
   val executorMemoryOverhead = sparkConf.getInt("spark.yarn.executor.memoryOverhead",
     math.max((MEMORY_OVERHEAD_FACTOR * executorMemory).toInt, MEMORY_OVERHEAD_MIN))
 

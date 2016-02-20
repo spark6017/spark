@@ -515,11 +515,17 @@ object SparkSubmit {
       args.files = mergeFileLists(args.files, args.primaryResource)
     }
 
+
+
     // Special flag to avoid deprecation warnings at the client
     sysProps("SPARK_SUBMIT") = "true"
 
     // A list of rules to map each argument to system properties or command-line options in
     // each deploy mode; we iterate through these below
+    /**
+     *
+     * 获得一个OptionAssigner集合，每个OptionAssigner是一个有四个参数的case class
+     */
     val options = List[OptionAssigner](
 
       // All cluster managers
@@ -527,10 +533,20 @@ object SparkSubmit {
       OptionAssigner(args.deployMode, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES,
         sysProp = "spark.submit.deployMode"),
       OptionAssigner(args.name, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES, sysProp = "spark.app.name"),
+
+      /**
+      * 难道--jars只适用于CLIENT模式？
+      */
       OptionAssigner(args.jars, ALL_CLUSTER_MGRS, CLIENT, sysProp = "spark.jars"),
       OptionAssigner(args.ivyRepoPath, ALL_CLUSTER_MGRS, CLIENT, sysProp = "spark.jars.ivy"),
+
+      /**
+      * 为什么driver memory只适用于CLIENT模式？
+      */
       OptionAssigner(args.driverMemory, ALL_CLUSTER_MGRS, CLIENT,
         sysProp = "spark.driver.memory"),
+
+
       OptionAssigner(args.driverExtraClassPath, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES,
         sysProp = "spark.driver.extraClassPath"),
       OptionAssigner(args.driverExtraJavaOptions, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES,
@@ -581,21 +597,47 @@ object SparkSubmit {
 
     // In client mode, launch the application main class directly
     // In addition, add the main application jar and any added jars (if any) to the classpath
+
+    /**
+     * 如果deployMode是CLIENT，那么childMainClass就是用户指定的main class
+     */
     if (deployMode == CLIENT) {
       childMainClass = args.mainClass
+
+      /**
+       * 将用户提供的jar包作为classpath的一部分
+       */
       if (isUserJar(args.primaryResource)) {
         childClasspath += args.primaryResource
       }
+
+      /**
+       * 如果用户通过--jars指定了jar包，那么也将它们加到classpath上
+       *
+       */
       if (args.jars != null) { childClasspath ++= args.jars.split(",") }
       if (args.childArgs != null) { childArgs ++= args.childArgs }
     }
 
     // Map all arguments to command-line options or system properties for our chosen mode
+    /**处理options，每个元素是一个OptionAssigner**/
     for (opt <- options) {
+
+      /**
+       *根据spark-submit指定的clusterManager以及deployMode过滤出需要的option
+       */
       if (opt.value != null &&
           (deployMode & opt.deployMode) != 0 &&
           (clusterManager & opt.clusterManager) != 0) {
+
+        /**
+         *  clOption加到childArgs上，childArgs是一个二元组的集合，每个二元组的第一个元素是clOption，第二个元素是value
+         */
         if (opt.clOption != null) { childArgs += (opt.clOption, opt.value) }
+
+        /**
+         * sysProp加到sysPros上
+         */
         if (opt.sysProp != null) { sysProps.put(opt.sysProp, opt.value) }
       }
     }
@@ -603,7 +645,12 @@ object SparkSubmit {
     // Add the application jar automatically so the user doesn't have to call sc.addJar
     // For YARN cluster mode, the jar is already distributed on each node as "app.jar"
     // For python and R files, the primary resource is already distributed as a regular file
+    //对于YARN-Client模式，这个判断生效，这个逻辑是在干啥？
     if (!isYarnCluster && !args.isPython && !args.isR) {
+
+      /** *
+        *  jars是spark.jars按逗号分后的集合，将用户代码的jar添加到jar上
+        */
       var jars = sysProps.get("spark.jars").map(x => x.split(",").toSeq).getOrElse(Seq.empty)
       if (isUserJar(args.primaryResource)) {
         jars = jars ++ Seq(args.primaryResource)
@@ -658,6 +705,10 @@ object SparkSubmit {
     }
 
     // In yarn-cluster mode, use yarn.Client as a wrapper around the user class
+    /**
+     * 在YARN Cluster模式下，child main class是org.apache.spark.deploy.yarn.Client
+     * 在YARN Client模式下，child main class是用户提交作业指定的jar
+     */
     if (isYarnCluster) {
       childMainClass = "org.apache.spark.deploy.yarn.Client"
       if (args.isPython) {
@@ -671,11 +722,19 @@ object SparkSubmit {
         childArgs += ("--primary-r-file", mainFile)
         childArgs += ("--class", "org.apache.spark.deploy.RRunner")
       } else {
+
+        /**
+         * childArgs添加--jar和--class
+         */
         if (args.primaryResource != SPARK_INTERNAL) {
           childArgs += ("--jar", args.primaryResource)
         }
         childArgs += ("--class", args.mainClass)
       }
+
+      /**
+       * childArgs添加多个二元组，元组的每个元素是--arg
+       */
       if (args.childArgs != null) {
         args.childArgs.foreach { arg => childArgs += ("--arg", arg) }
       }
@@ -699,11 +758,18 @@ object SparkSubmit {
     }
 
     // Load any properties specified through --conf and the default properties file
+
+    /**
+     *  如果k不存在，那么将(k,v)加入到sysProps中
+     */
     for ((k, v) <- args.sparkProperties) {
       sysProps.getOrElseUpdate(k, v)
     }
 
     // Ignore invalid spark.driver.host in cluster modes.
+    /**
+     *  在CLUSTER模式下，将spark.driver.host干掉
+     */
     if (deployMode == CLUSTER) {
       sysProps -= "spark.driver.host"
     }
@@ -1198,6 +1264,16 @@ private[spark] object SparkSubmitUtils {
 /**
  * Provides an indirection layer for passing arguments as system properties or flags to
  * the user's driver program or to downstream launcher tools.
+ *
+ * 把参数作为system properties？
+ *
+ * clusterManager和deployMode为什么不定义成枚举类型。把它们定义成int值，比如1,2,4,8方便做或运算，比如ALL_CLUSTER_MANAGER=YARN|MESOS|STANDALONE|LOCAL
+ *
+ * @param value 选项值
+ * @param clusterManager YARN、MESOS、STANDALONE、LOCAL
+ * @param deployMode CLIENT、CLUSTER
+ * @param clOption 命令行选项
+ * @param sysProp 系统环境变量(system property)的key？
  */
 private case class OptionAssigner(
     value: String,

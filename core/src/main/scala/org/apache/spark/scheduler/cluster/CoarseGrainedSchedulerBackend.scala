@@ -117,6 +117,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     override def receive: PartialFunction[Any, Unit] = {
 
       /***
+        * Driver进程收到StatusUpdate消息
         * Driver接收ExecutorBackend发送过来的任务状态更新消息，如果任务执行完则归还executor使用的core，为什么不归还内存
         */
       case StatusUpdate(executorId, taskId, state, data) =>
@@ -131,7 +132,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           * 任务执行完，释放资源
           */
         if (TaskState.isFinished(state)) {
-          executorDataMap.get(executorId) match {
+          executorDataMap.get(executorId) match { /**此处需要将executorId从executorDataMap中删除么？**/
             case Some(executorInfo) =>
               executorInfo.freeCores += scheduler.CPUS_PER_TASK
 

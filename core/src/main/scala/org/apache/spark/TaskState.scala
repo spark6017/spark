@@ -23,7 +23,7 @@ private[spark] object TaskState extends Enumeration {
 
 
   /**
-    * 任务状态：启动、运行、结束、失败、杀死、丢失
+    * 任务状态：启动、运行、结束、失败、杀死、Executor丢失
     */
   val LAUNCHING, RUNNING, FINISHED, FAILED, KILLED, LOST = Value
 

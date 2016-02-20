@@ -123,7 +123,7 @@ private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedul
   }
 
   /**
-    * 失败任务入队列
+    * 失败任务入队列，enqueueFailedTask是如何触发调用的？
     * @param taskSetManager
     * @param tid
     * @param taskState
@@ -131,6 +131,8 @@ private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedul
     */
   def enqueueFailedTask(taskSetManager: TaskSetManager, tid: Long, taskState: TaskState,
     serializedData: ByteBuffer) {
+
+    //从serializedData中反序列化出任务失败的原因
     var reason : TaskEndReason = UnknownReason
     try {
 

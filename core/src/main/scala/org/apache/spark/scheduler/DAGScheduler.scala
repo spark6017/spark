@@ -253,6 +253,9 @@ class DAGScheduler(
   /**
    * Called by the TaskSetManager to cancel an entire TaskSet due to either repeated failures or
    * cancellation of the job itself.
+   *
+   *
+   * 何为repeated failures？
    */
   def taskSetFailed(taskSet: TaskSet, reason: String, exception: Option[Throwable]): Unit = {
     eventProcessLoop.post(TaskSetFailed(taskSet, reason, exception))
@@ -813,6 +816,14 @@ class DAGScheduler(
     submitWaitingStages()
   }
 
+  /** *
+    * 首先取出TaskSet关联的stageId对应的Stage，然后调用DAGScheduler的abortStage
+    *
+    * 为什么还能继续调用waiting stage？
+    * @param taskSet
+    * @param reason
+    * @param exception
+    */
   private[scheduler] def handleTaskSetFailed(
       taskSet: TaskSet,
       reason: String,
@@ -1479,6 +1490,8 @@ class DAGScheduler(
   /**
    * Aborts all jobs depending on a particular Stage. This is called in response to a task set
    * being canceled by the TaskScheduler. Use taskSetFailed() to inject this event from outside.
+   *
+   * abortStage的处理逻辑
    */
   private[scheduler] def abortStage(
       failedStage: Stage,
@@ -1488,12 +1501,24 @@ class DAGScheduler(
       // Skip all the actions if the stage has been removed.
       return
     }
+
+    /**
+     * 依赖于这个failedStage的Jobs，可能有多个？怎么理解？
+     *
+     * stageDependsOn(stageA，stageB)表示stageA依赖于stageB
+     */
     val dependentJobs: Seq[ActiveJob] =
       activeJobs.filter(job => stageDependsOn(job.finalStage, failedStage)).toSeq
+
+
     failedStage.latestInfo.completionTime = Some(clock.getTimeMillis())
+
+
     for (job <- dependentJobs) {
       failJobAndIndependentStages(job, s"Job aborted due to stage failure: $reason", exception)
     }
+
+
     if (dependentJobs.isEmpty) {
       logInfo("Ignoring failure of " + failedStage + " because all jobs depending on it are done")
     }
@@ -1569,6 +1594,10 @@ class DAGScheduler(
           dep match {
             case shufDep: ShuffleDependency[_, _, _] =>
               val mapStage = getShuffleMapStage(shufDep, stage.firstJobId)
+
+              /** *
+                * mapStage.isAvailable表示该Stage已经结束
+                */
               if (!mapStage.isAvailable) {
                 waitingForVisit.push(mapStage.rdd)
               }  // Otherwise there's no need to follow the dependency back
@@ -1582,6 +1611,9 @@ class DAGScheduler(
     while (waitingForVisit.nonEmpty) {
       visit(waitingForVisit.pop())
     }
+
+
+    //判定条件
     visitedRdds.contains(target.rdd)
   }
 
@@ -1716,6 +1748,9 @@ private[scheduler] class DAGSchedulerEventProcessLoop(dagScheduler: DAGScheduler
     case completion: CompletionEvent =>
       dagScheduler.handleTaskCompletion(completion)
 
+    /**
+     * 处理TaskSet失败的消息
+     */
     case TaskSetFailed(taskSet, reason, exception) =>
       dagScheduler.handleTaskSetFailed(taskSet, reason, exception)
 

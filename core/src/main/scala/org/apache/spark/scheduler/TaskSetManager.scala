@@ -689,6 +689,8 @@ private[spark] class TaskSetManager(
   /**
    * Marks the task as failed, re-adds it to the list of pending tasks, and notifies the
    * DAG Scheduler.
+   *
+   * 通知DAG Scheduler干啥？
     *
     * handleFailedTask处理失败重试的问题，依然将结果通过DAGScheduler
     * 问题：handleFailedTask如何触发调用的？
@@ -783,7 +785,7 @@ private[spark] class TaskSetManager(
       assert (null != failureReason)
 
       /**
-        * 失败失败次数加1
+        * 失败次数加1
         */
       numFailures(index) += 1
       if (numFailures(index) >= maxTaskFailures) {
@@ -798,7 +800,7 @@ private[spark] class TaskSetManager(
   }
 
   /**
-    *
+    *  丢弃一个TaskSet的执行？
     * @param message
     * @param exception
     */

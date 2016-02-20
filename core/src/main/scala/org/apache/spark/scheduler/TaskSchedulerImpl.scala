@@ -405,15 +405,27 @@ private[spark] class TaskSchedulerImpl(
   }
 
   /**
-    * 根据tid获得关联的TaskSetManager
+    * TaskScheduler有statusUpdate方法，statusUpdate方法是如何触发调用的？
+   *
+   * 应该是Executor通知Driver，然后Driver调用TaskScheduler的statusUpdate方法？在SchedulerBackend(LocalBackend, CoarseGrainedSchedulerBackend)中调用的
+   *
+   * 根据tid获得关联的TaskSetManager
     * @param tid
     * @param state
     * @param serializedData
     */
   def statusUpdate(tid: Long, state: TaskState, serializedData: ByteBuffer) {
+
+    /**
+     * failedExecutor表示Executor Lost？
+     */
     var failedExecutor: Option[String] = None
     synchronized {
       try {
+
+        /** *
+          * 如果是Executor Lost
+          */
         if (state == TaskState.LOST && taskIdToExecutorId.contains(tid)) {
           // We lost this entire executor, so remember that it's gone
           val execId = taskIdToExecutorId(tid)
@@ -428,6 +440,7 @@ private[spark] class TaskSchedulerImpl(
           case Some(taskSet) =>
 
             /**
+             *
               * 如果运行完成，那么就将<tid,TaskSetManager>从taskIdToTaskSetManager中移除，
               * 原因是，taskIdToTaskSetManager这个Map的Key是taskId，不同的任务的taskId是不同的
               */
@@ -513,6 +526,9 @@ private[spark] class TaskSchedulerImpl(
 
   /**
     * TaskScheduler的handleFailedTask方法
+   *
+   *  TaskScheduler的handleFailedTask方法是如何触发调用的？
+   *
     *  - 首先调用TaskSetManager的handleFailedTask方法
     *  - 然后调用SchedulerBackend的reviveOffers方法
     *
@@ -635,6 +651,8 @@ private[spark] class TaskSchedulerImpl(
    * Remove an executor from all our data structures and mark it as lost. If the executor's loss
    * reason is not yet known, do not yet remove its association with its host nor update the status
    * of any running tasks, since the loss reason defines whether we'll fail those tasks.
+   *
+   * 在TaskScheduler中处理Executor丢失的逻辑？
    */
   private def removeExecutor(executorId: String, reason: ExecutorLossReason) {
     executorIdToTaskCount -= executorId

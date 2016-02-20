@@ -133,10 +133,14 @@ private[deploy] class Master(
   }
 
   // Alternative application submission gateway that is stable across Spark versions
+  //通过REST接口提交任务？
   private val restServerEnabled = conf.getBoolean("spark.master.rest.enabled", true)
   private var restServer: Option[StandaloneRestServer] = None
   private var restServerBoundPort: Option[Int] = None
 
+  /**
+   * Master End Point
+   */
   override def onStart(): Unit = {
     logInfo("Starting Spark master at " + masterUrl)
     logInfo(s"Running Spark version ${org.apache.spark.SPARK_VERSION}")
@@ -312,6 +316,9 @@ private[deploy] class Master(
       }
     }
 
+    /**
+     * Worker发送给Driver的心跳信息
+     */
     case Heartbeat(workerId, worker) => {
       idToWorker.get(workerId) match {
         case Some(workerInfo) =>
@@ -1111,6 +1118,11 @@ private[deploy] object Master extends Logging {
   val SYSTEM_NAME = "sparkMaster"
   val ENDPOINT_NAME = "Master"
 
+  /**
+   * 启动Master进程
+   * 问题： 启动Master进程的参数有哪些？查看MasterArguments即可知道端倪
+   * @param argStrings
+   */
   def main(argStrings: Array[String]) {
     Utils.initDaemon(log)
     val conf = new SparkConf
@@ -1132,8 +1144,12 @@ private[deploy] object Master extends Logging {
       conf: SparkConf): (RpcEnv, Int, Option[Int]) = {
     val securityMgr = new SecurityManager(conf)
     val rpcEnv = RpcEnv.create(SYSTEM_NAME, host, port, conf, securityMgr)
+
+    //Master实例，
     val masterEndpoint = rpcEnv.setupEndpoint(ENDPOINT_NAME,
       new Master(rpcEnv, rpcEnv.address, webUiPort, securityMgr, conf))
+
+    //向谁发送BoundPortsRequest？
     val portsResponse = masterEndpoint.askWithRetry[BoundPortsResponse](BoundPortsRequest)
     (rpcEnv, portsResponse.webUIPort, portsResponse.restPort)
   }

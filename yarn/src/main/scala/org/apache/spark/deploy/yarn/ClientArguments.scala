@@ -33,6 +33,10 @@ private[spark] class ClientArguments(args: Array[String], sparkConf: SparkConf) 
   var pyFiles: Seq[String] = Nil
   var primaryPyFile: String = null
   var primaryRFile: String = null
+
+  /** *
+    * userArgs是一个ArrayBuffer，也就是说，命令行上可以出现多个--arg参数
+    */
   var userArgs: ArrayBuffer[String] = new ArrayBuffer[String]()
   var executorMemory = 1024 // MB
   var executorCores = 1

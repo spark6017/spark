@@ -58,9 +58,25 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   var files: String = null
   var archives: String = null
   var mainClass: String = null
+
+  /**
+   * 对于Java作业而言，primaryResource指的是包含用户代码的jar包
+   */
   var primaryResource: String = null
+
+  /**
+   * 用户提交的applicaiton的名称
+   */
   var name: String = null
+
+  /**
+   * 运行child的main class的main方法时，提供给main方法的参数
+   */
   var childArgs: ArrayBuffer[String] = new ArrayBuffer[String]()
+
+  /**
+   * 通过--jars参数指定的用户作业依赖的jar包
+   */
   var jars: String = null
   var packages: String = null
   var repositories: String = null
@@ -71,7 +87,12 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   var pyFiles: String = null
   var isR: Boolean = false
   var action: SparkSubmitAction = null
+
+  /**
+   *  合并了spark-submit命令行参数--conf以及配置文件(--properties-file或者默认配置文件)的配置
+   */
   val sparkProperties: HashMap[String, String] = new HashMap[String, String]()
+
   var proxyUser: String = null
   var principal: String = null
   var keytab: String = null
@@ -79,6 +100,10 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   // Standalone cluster mode only
   var supervise: Boolean = false
   var driverCores: String = null
+
+  /**
+   * --kill SUBMISSION_ID
+   */
   var submissionToKill: String = null
   var submissionToRequestStatusFor: String = null
   var useRest: Boolean = true // used internally
@@ -218,6 +243,9 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
       val uri = new URI(primaryResource)
       val uriScheme = uri.getScheme()
 
+      /**
+       * 从jar包的Manifest文件中取出Main-Class
+       */
       uriScheme match {
         case "file" =>
           try {

@@ -120,6 +120,12 @@ object SparkSubmit {
    * @param args
    */
   def main(args: Array[String]): Unit = {
+
+    /**
+     * args是用户通过spark-submit命令提交作业时指定的参数，比如：
+     * bin/spark-submit --verbose --master yarn-cluster --name ABC   --num-executors 10    xyz.jar
+     *
+     */
     val appArgs = new SparkSubmitArguments(args)
 
 
@@ -169,9 +175,10 @@ object SparkSubmit {
 
     /**
      * 根据SparkSubmitArguments解析出四大变量(这里的child表示什么含义? 因为SparkSubmit这个main要运行用户提交的main-class，因此称为子进程)
-     * childArgs  --- 运行子进程需要的参数
+     * childArgs  --- 运行子进程需要的参数，指的就是main函数的args参数列表
      * childClasspath --- 运行子进程需要的classpath
      * sysProps  --- 运行子进程需要的system properties？（A进程启动B进程，那么A的system properties和B的system properties是独立的，也就是说B虽然由A启动，但是B并不复用A的环境变量？）
+     * 但是child main class貌似是在SparkSubmit进程中直接调用执行的，也就是说没并没有开启新的进程
      * childMainClass -- 启动子进程的main class
      */
     val (childArgs, childClasspath, sysProps, childMainClass) = prepareSubmitEnvironment(args)
@@ -233,7 +240,7 @@ object SparkSubmit {
   /**
    * Prepare the environment for submitting an application.
    * This returns a 4-tuple:
-   *   (1) the arguments for the child process,
+   *   (1) the arguments for the child process,(这里为什么称为child process？其实并没有创建子进程)
    *   (2) a list of classpath entries for the child process,
    *   (3) a map of system properties for the child process，
    *   (4) the main class for the child
@@ -277,8 +284,9 @@ object SparkSubmit {
 
     // Set the deploy mode; default is client mode
     /** *
-      * 如果没有定义，比如yarn-cluster，那么deployMode是null，此时会报错？不会，但是会被认为是CLIENT模式
-      * 问题：deployMode是什么时候设置到SparkSubmitArguments中的？在SparkSubmitArgument并没有解析yarn-cluster得到cluster
+      * 如果没有定义，比如yarn-cluster，那么deployMode是null，此时会报错？不会，但是会被认为是CLIENT模式(这个问题会在下面的代码逻辑中进行纠正)
+      * 问题：deployMode是什么时候设置到SparkSubmitArguments中的？在SparkSubmitArgument并没有解析yarn-cluster得到cluster，也就是说，
+      * 在SparkSubmitArguments中，如果没有设置--deploy-mode，那么SparkSubmitArguments中的deployMode是null
       */
     var deployMode: Int = args.deployMode match {
       case "client" | null => CLIENT
@@ -311,7 +319,7 @@ object SparkSubmit {
           printErrorAndExit("Client deploy mode is not compatible with master \"yarn-cluster\"")
         case ("yarn-client", "cluster") =>
           printErrorAndExit("Cluster deploy mode is not compatible with master \"yarn-client\"")
-        case (_, mode) => /**只给args.master赋值，mode也有可能是None，如果为None，那么取client，此处为什么没有对deployMode赋值？原因是args.deployMode为null时，deployMode已经被赋值为CLIENT*/
+        case (_, mode) => /**以yarn开头的master，除了yarn-cluster之外的其它所有都认为是yarn-client。只给args.master赋值，mode也有可能是None，如果为None，那么取client，此处为什么没有对deployMode赋值？原因是args.deployMode为null时，deployMode已经被赋值为CLIENT*/
           args.master = "yarn-" + Option(mode).getOrElse("client")
       }
 
@@ -327,7 +335,7 @@ object SparkSubmit {
 
     // Update args.deployMode if it is null. It will be passed down as a Spark property later.
     /**
-     * 在前面已经初始化了deployMode，但是args.deployMode有可能为null(比如master为yarn-client或者yarn-cluster时)
+     * 在前面已经初始化了deployMode，但是args.deployMode有可能为null(比如master为yarn-client或者yarn-cluster时，只要没有指定--deploy-mode，那么args.deployMode就是null)
      */
     (args.deployMode, deployMode) match {
       case (null, CLIENT) => args.deployMode = "client"
@@ -359,6 +367,8 @@ object SparkSubmit {
 
     /**
      * Maven坐标，args.packages指定的是Maven Module的坐标
+     *
+     * resolvedMavenCoordinates是逗号分隔的jar包，可以跟--jars参数进行merge
      */
     val resolvedMavenCoordinates = SparkSubmitUtils.resolveMavenCoordinates(args.packages,
       Option(args.repositories), Option(args.ivyRepoPath), exclusions = exclusions)
@@ -370,7 +380,7 @@ object SparkSubmit {
     if (!StringUtils.isBlank(resolvedMavenCoordinates)) {
 
       /**
-       * resolvedMavenCoordinates是逗号分隔的jar？
+       * resolvedMavenCoordinates是逗号分隔的jar？是的
        */
       args.jars = mergeFileLists(args.jars, resolvedMavenCoordinates)
 
@@ -406,6 +416,9 @@ object SparkSubmit {
     }
 
     // The following modes are not supported or applicable
+    /**
+     * 对clusterManager和deployMode的兼容性进行判断
+     */
     (clusterManager, deployMode) match {
       case (MESOS, CLUSTER) if args.isR =>
         printErrorAndExit("Cluster deploy mode is currently not supported for R " +
@@ -535,13 +548,13 @@ object SparkSubmit {
       OptionAssigner(args.name, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES, sysProp = "spark.app.name"),
 
       /**
-      * 难道--jars只适用于CLIENT模式？
+      * 难道--jars只适用于CLIENT模式？不是的，后面的代码会继续对这个参数进行修饰
       */
       OptionAssigner(args.jars, ALL_CLUSTER_MGRS, CLIENT, sysProp = "spark.jars"),
       OptionAssigner(args.ivyRepoPath, ALL_CLUSTER_MGRS, CLIENT, sysProp = "spark.jars.ivy"),
 
       /**
-      * 为什么driver memory只适用于CLIENT模式？
+      * 为什么driver memory只适用于CLIENT模式？不是的，后面的代码会继续对这个参数进行修饰
       */
       OptionAssigner(args.driverMemory, ALL_CLUSTER_MGRS, CLIENT,
         sysProp = "spark.driver.memory"),
@@ -554,7 +567,7 @@ object SparkSubmit {
       OptionAssigner(args.driverExtraLibraryPath, ALL_CLUSTER_MGRS, ALL_DEPLOY_MODES,
         sysProp = "spark.driver.extraLibraryPath"),
 
-      // Yarn client only
+      // Yarn client only，在YARN CLIENT模式下，使用system properties传递属性
       OptionAssigner(args.queue, YARN, CLIENT, sysProp = "spark.yarn.queue"),
       OptionAssigner(args.numExecutors, YARN, ALL_DEPLOY_MODES,
         sysProp = "spark.executor.instances"),
@@ -564,6 +577,13 @@ object SparkSubmit {
       OptionAssigner(args.keytab, YARN, CLIENT, sysProp = "spark.yarn.keytab"),
 
       // Yarn cluster only
+
+      /**
+      *  YARN CLUSTER模式是指定命令行选项--driver-memory？这是什么意思？将clOption指定的选项名称作为命令行参数传递给child进程
+      *  所以，此处定义了YARN ClUSTER模式下，child进程的命令行选项，可以在deploy.yarn.ClientArguments中看出端倪
+      * 问题： deploy.yarn.ClientArguments定义的命令行参数比下面这10个要多，其它的参数是如何传递的？比如--class
+      *
+      */
       OptionAssigner(args.name, YARN, CLUSTER, clOption = "--name"),
       OptionAssigner(args.driverMemory, YARN, CLUSTER, clOption = "--driver-memory"),
       OptionAssigner(args.driverCores, YARN, CLUSTER, clOption = "--driver-cores"),
@@ -586,6 +606,10 @@ object SparkSubmit {
       OptionAssigner(args.files, LOCAL | STANDALONE | MESOS, ALL_DEPLOY_MODES,
         sysProp = "spark.files"),
       OptionAssigner(args.jars, STANDALONE | MESOS, CLUSTER, sysProp = "spark.jars"),
+
+      /**
+      * 对STANDLONE和MESOS集群模式设置driver memory，但是YARN CLUSTER并没有设置
+*/
       OptionAssigner(args.driverMemory, STANDALONE | MESOS, CLUSTER,
         sysProp = "spark.driver.memory"),
       OptionAssigner(args.driverCores, STANDALONE | MESOS, CLUSTER,
@@ -707,7 +731,8 @@ object SparkSubmit {
     // In yarn-cluster mode, use yarn.Client as a wrapper around the user class
     /**
      * 在YARN Cluster模式下，child main class是org.apache.spark.deploy.yarn.Client
-     * 在YARN Client模式下，child main class是用户提交作业指定的jar
+     * 会在childArgs上添加一个--class命令行参数，所以在deploy.yarn.ClientArguments中有--class参数
+     *
      */
     if (isYarnCluster) {
       childMainClass = "org.apache.spark.deploy.yarn.Client"
@@ -733,7 +758,7 @@ object SparkSubmit {
       }
 
       /**
-       * childArgs添加多个二元组，元组的每个元素是--arg
+       * childArgs添加多个二元组，元组的每个元素是--arg，所以在yarn.deploy.ClientArguments中有--arg参数
        */
       if (args.childArgs != null) {
         args.childArgs.foreach { arg => childArgs += ("--arg", arg) }

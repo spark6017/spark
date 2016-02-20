@@ -163,6 +163,8 @@ private[spark] object Utils extends Logging {
 
   /**
    * Get the ClassLoader which loaded Spark.
+   *
+   * 当前类(Utils类)的ClassLoader？是的！
    */
   def getSparkClassLoader: ClassLoader = getClass.getClassLoader
 
@@ -172,6 +174,8 @@ private[spark] object Utils extends Logging {
    *
    * This should be used whenever passing a ClassLoader to Class.ForName or finding the currently
    * active loader when setting up ClassLoader delegation chains.
+   *
+   * 获得当前线程的ClassLoader，如果获取不到则获取Spark的ClassLoader
    */
   def getContextOrSparkClassLoader: ClassLoader =
     Option(Thread.currentThread().getContextClassLoader).getOrElse(getSparkClassLoader)
@@ -179,6 +183,12 @@ private[spark] object Utils extends Logging {
   /** Determines whether the provided class is loadable in the current thread. */
   def classIsLoadable(clazz: String): Boolean = {
     // scalastyle:off classforname
+    /**
+     * Class.forName的三个参数
+     * 1. 第一个参数是类名clazz
+     * 2. 第二个参数是一个boolean值，此处赋值为false，从forName的方法文档说是是否initialize，不理解
+     * 3.getContextOrSparkClassLoader获得ClassLoader
+     */
     Try { Class.forName(clazz, false, getContextOrSparkClassLoader) }.isSuccess
     // scalastyle:on classforname
   }

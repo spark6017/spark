@@ -234,20 +234,39 @@ object SparkSubmit {
    * Prepare the environment for submitting an application.
    * This returns a 4-tuple:
    *   (1) the arguments for the child process,
-   *   (2) a list of classpath entries for the child,
-   *   (3) a map of system properties, and
+   *   (2) a list of classpath entries for the child process,
+   *   (3) a map of system properties for the child process，
    *   (4) the main class for the child
    * Exposed for testing.
    */
   private[deploy] def prepareSubmitEnvironment(args: SparkSubmitArguments)
       : (Seq[String], Seq[String], Map[String, String], String) = {
     // Return values
+
+    /**
+     * childArgs是一个ArrayBuffer数组
+     */
     val childArgs = new ArrayBuffer[String]()
+
+    /**
+     * childClasspath是一个ArrayBuffer数组，最后以逗号分隔？
+     */
     val childClasspath = new ArrayBuffer[String]()
+
+    /**
+     * 系统环境变量是一个HashMap，属性Key和属性Value
+     */
     val sysProps = new HashMap[String, String]()
+
+    /**
+     *  child进程的main class，Java在运行一个main方法时，会启动一个JVM进程
+     */
     var childMainClass = ""
 
     // Set the cluster manager
+    /**
+     *  Spark支持四种cluster manager， YARN、MESOS、STANDALONE、LOCAL
+     */
     val clusterManager: Int = args.master match {
       case m if m.startsWith("yarn") => YARN
       case m if m.startsWith("spark") => STANDALONE
@@ -257,6 +276,10 @@ object SparkSubmit {
     }
 
     // Set the deploy mode; default is client mode
+    /** *
+      * 如果没有定义，比如yarn-cluster，那么deployMode是null，此时会报错？不会，但是会被认为是CLIENT模式
+      * 问题：deployMode是什么时候设置到SparkSubmitArguments中的？在SparkSubmitArgument并没有解析yarn-cluster得到cluster
+      */
     var deployMode: Int = args.deployMode match {
       case "client" | null => CLIENT
       case "cluster" => CLUSTER
@@ -266,23 +289,35 @@ object SparkSubmit {
     // Because "yarn-cluster" and "yarn-client" encapsulate both the master
     // and deploy mode, we have some logic to infer the master and deploy mode
     // from each other if only one is specified, or exit early if they are at odds.
+
+    /**
+     * 如果clusterManager是YARN，那么master中可能携带着deployMode信息
+     *
+     * clusterManager==YARN，表示args.master以yarn开头
+     */
     if (clusterManager == YARN) {
-      if (args.master == "yarn-standalone") {
+      if (args.master == "yarn-standalone") {  /**yarn-standalone模式被yarn-cluster模式代替，*/
         printWarning("\"yarn-standalone\" is deprecated. Use \"yarn-cluster\" instead.")
         args.master = "yarn-cluster"
       }
+
+      /**
+       * 解析出deployMode
+       */
       (args.master, args.deployMode) match {
-        case ("yarn-cluster", null) =>
+        case ("yarn-cluster", null) => /**master是yarn-cluster，那么deployMode是cluster*/
           deployMode = CLUSTER
         case ("yarn-cluster", "client") =>
           printErrorAndExit("Client deploy mode is not compatible with master \"yarn-cluster\"")
         case ("yarn-client", "cluster") =>
           printErrorAndExit("Cluster deploy mode is not compatible with master \"yarn-client\"")
-        case (_, mode) =>
+        case (_, mode) => /**只给args.master赋值，mode也有可能是None，如果为None，那么取client，此处为什么没有对deployMode赋值？原因是args.deployMode为null时，deployMode已经被赋值为CLIENT*/
           args.master = "yarn-" + Option(mode).getOrElse("client")
       }
 
       // Make sure YARN is included in our build if we're trying to use it
+
+      //如何判断一个类是否可以被加载，即classIsLoadable的实现逻辑是什么？
       if (!Utils.classIsLoadable("org.apache.spark.deploy.yarn.Client") && !Utils.isTesting) {
         printErrorAndExit(
           "Could not load YARN classes. " +
@@ -291,26 +326,55 @@ object SparkSubmit {
     }
 
     // Update args.deployMode if it is null. It will be passed down as a Spark property later.
+    /**
+     * 在前面已经初始化了deployMode，但是args.deployMode有可能为null(比如master为yarn-client或者yarn-cluster时)
+     */
     (args.deployMode, deployMode) match {
       case (null, CLIENT) => args.deployMode = "client"
       case (null, CLUSTER) => args.deployMode = "cluster"
       case _ =>
     }
+
+    /**
+     * Scala的字符串==表示Java的字符串equals
+     *
+     * 是否是yarn cluster
+     */
     val isYarnCluster = clusterManager == YARN && deployMode == CLUSTER
     val isMesosCluster = clusterManager == MESOS && deployMode == CLUSTER
 
     // Resolve maven dependencies if there are any and add classpath to jars. Add them to py-files
     // too for packages that include Python code
+
+    /**
+     * 剔除依赖的maven包？如果用户不想classpath出现某个版本的maven module，则需要通过指定--exclude-packages将它剔除
+     * 多个exclusion使用逗号分隔
+     */
     val exclusions: Seq[String] =
       if (!StringUtils.isBlank(args.packagesExclusions)) {
         args.packagesExclusions.split(",")
       } else {
         Nil
       }
+
+    /**
+     * Maven坐标，args.packages指定的是Maven Module的坐标
+     */
     val resolvedMavenCoordinates = SparkSubmitUtils.resolveMavenCoordinates(args.packages,
       Option(args.repositories), Option(args.ivyRepoPath), exclusions = exclusions)
+
+
+    /**
+     * 如果用户指定了--jars以及maven module，则需要进行合并
+     */
     if (!StringUtils.isBlank(resolvedMavenCoordinates)) {
+
+      /**
+       * resolvedMavenCoordinates是逗号分隔的jar？
+       */
       args.jars = mergeFileLists(args.jars, resolvedMavenCoordinates)
+
+
       if (args.isPython) {
         args.pyFiles = mergeFileLists(args.pyFiles, resolvedMavenCoordinates)
       }
@@ -354,6 +418,10 @@ object SparkSubmit {
           "applications on standalone clusters.")
       case (LOCAL, CLUSTER) =>
         printErrorAndExit("Cluster deploy mode is not compatible with master \"local\"")
+
+      /**
+       * 这里的shell指的是spark-shell命令行吗？看spark-shell的脚本，没有看到指定primaryResource为spark-shell
+       */
       case (_, CLUSTER) if isShell(args.primaryResource) =>
         printErrorAndExit("Cluster deploy mode is not applicable to Spark shells.")
       case (_, CLUSTER) if isSqlShell(args.mainClass) =>
@@ -795,6 +863,8 @@ object SparkSubmit {
 
   /**
    * Return whether the given main class represents a sql shell.
+   *
+   * spark-sql脚本启动的mainClass就是org.apache.spark.sql.hive.thriftserver.SparkSQLCLIDriver
    */
   private[deploy] def isSqlShell(mainClass: String): Boolean = {
     mainClass == "org.apache.spark.sql.hive.thriftserver.SparkSQLCLIDriver"
@@ -802,6 +872,8 @@ object SparkSubmit {
 
   /**
    * Return whether the given main class represents a thrift server.
+   *
+   * 启动ThrfitServer也会走spark-submit的逻辑？
    */
   private def isThriftServer(mainClass: String): Boolean = {
     mainClass == "org.apache.spark.sql.hive.thriftserver.HiveThriftServer2"
@@ -1003,6 +1075,8 @@ private[spark] object SparkSubmitUtils {
 
   /**
    * Resolves any dependencies that were supplied through maven coordinates
+   *
+   * 将maven模块依赖转换为逗号分隔的jar
    * @param coordinates Comma-delimited string of maven coordinates
    * @param remoteRepos Comma-delimited string of remote repositories other than maven central
    * @param ivyPath The path to the local ivy repository
@@ -1023,7 +1097,13 @@ private[spark] object SparkSubmitUtils {
       try {
         // To prevent ivy from logging to system out
         System.setOut(printStream)
+
+        /**
+         * artifacts是MavenCoordinate的集合
+         */
         val artifacts = extractMavenCoordinates(coordinates)
+
+
         // Default configuration name for ivy
         val ivyConfName = "default"
         // set ivy settings for location of cache

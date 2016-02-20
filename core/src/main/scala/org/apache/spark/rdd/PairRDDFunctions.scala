@@ -103,6 +103,10 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
         new InterruptibleIterator(context, aggregator.combineValuesByKey(iter, context))
       }, preservesPartitioning = true)
     } else {  /***ShuffleRDD的Aggregator不为None，而mapSideCombine可以为None*/
+
+      //对于PairRDDFunctions，一定使用Aggregator，如果定义了Aggregator而没有使用mapSideCombine，这是为了在Shuffle Read的时候使用Aggregator进行
+      //Aggregation?
+      //如果定义了mapSideCombine，那么就必须定义Aggregator
       new ShuffledRDD[K, V, C](self, partitioner)
         .setSerializer(serializer)
         .setAggregator(aggregator)
@@ -360,6 +364,8 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    * reduceByKey：
    *    1. 执行Map端的Combine
    *    2. 对每个Key执行一个幂等的reduce函数
+   *
+   *    调用combineByKeyWithClassTag方法时使用默认的mapSideCombine，是true
    */
   def reduceByKey(partitioner: Partitioner, func: (V, V) => V): RDD[(K, V)] = self.withScope {
     combineByKeyWithClassTag[V]((v: V) => v, func, func, partitioner)
@@ -553,6 +559,10 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
     val createCombiner = (v: V) => CompactBuffer(v)
     val mergeValue = (buf: CompactBuffer[V], v: V) => buf += v
     val mergeCombiners = (c1: CompactBuffer[V], c2: CompactBuffer[V]) => c1 ++= c2
+
+    /** *
+      * 显式指定map端不进行combine
+      */
     val bufs = combineByKeyWithClassTag[CompactBuffer[V]](
       createCombiner, mergeValue, mergeCombiners, partitioner, mapSideCombine = false)
     bufs.asInstanceOf[RDD[(K, Iterable[V])]]

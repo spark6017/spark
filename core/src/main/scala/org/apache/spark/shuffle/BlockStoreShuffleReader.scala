@@ -120,6 +120,8 @@ private[spark] class BlockStoreShuffleReader[K, C](
     /** *
       * 获取aggregatedIterator
       *
+      * 对于ShuffleDependency，如果定义了mapSideCombine，那么一定要定义Aggregator；反之，如果定义了Aggregator，则可以要求不定义mapSideCombine
+      *
       * 如果定义了aggregator
       *           ---如果定义了mapSideCombine，那么调用aggregator.combineCombinersByKey返回Iterator
       *           ---如果没有定义mapSideCombine，那么调用aggregator.combineValuesByKey返回Iterator
@@ -133,12 +135,20 @@ private[spark] class BlockStoreShuffleReader[K, C](
       if (dep.mapSideCombine) {
         // We are reading values that are already combined
         val combinedKeyValuesIterator = interruptibleIter.asInstanceOf[Iterator[(K, C)]]
+
+        /** *
+          * combineCombinersByKey使用ExternalAppendOnlyMap
+          */
         dep.aggregator.get.combineCombinersByKey(combinedKeyValuesIterator, context)
       } else {
         // We don't know the value type, but also don't care -- the dependency *should*
         // have made sure its compatible w/ this aggregator, which will convert the value
         // type to the combined type C
         val keyValuesIterator = interruptibleIter.asInstanceOf[Iterator[(K, Nothing)]]
+
+        /**
+         * combineValuesByKey也使用ExternalAppendOnlyMap
+         */
         dep.aggregator.get.combineValuesByKey(keyValuesIterator, context)
       }
     } else {
@@ -149,10 +159,15 @@ private[spark] class BlockStoreShuffleReader[K, C](
     // Sort the output if there is a sort ordering defined.
 
     //如果需要排序，则使用ExternalSorter，可能需要spill到磁盘，也就是说，写的过程可能需要spill，读的时候依然可能需要Spill
+    //如果无需排序，那么直接返回aggregatedIter
     dep.keyOrdering match {
       case Some(keyOrd: Ordering[K]) =>
         // Create an ExternalSorter to sort the data. Note that if spark.shuffle.spill is disabled,
         // the ExternalSorter won't spill to disk.
+
+        /** *
+          * 此处创建ExternalSorter时，并没有将Aggregator传入，也就是说，此时的ExternalSorter是基于Aggregator为None实现的，但是传入了ordering
+          */
         val sorter =
           new ExternalSorter[K, C, C](context, ordering = Some(keyOrd), serializer = Some(ser))
         sorter.insertAll(aggregatedIter)

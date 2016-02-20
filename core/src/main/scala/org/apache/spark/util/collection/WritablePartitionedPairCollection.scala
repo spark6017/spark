@@ -80,6 +80,12 @@ private[spark] object WritablePartitionedPairCollection {
 
   /**
    * A comparator for (Int, K) pairs that orders them both by their partition ID and a key ordering.
+   *
+   * 首先根据partitionId进行比较，如果partitionId相同，就根据key进行比较
+   *
+   * 通过这个comparator，得到的结果是，不同的partition之间，比如A和B，A分区中的数据要么全部大于B分区的数据，A分区中的数据要么全部小于A分区的数据
+   *
+   * 分区内的数据按照key进行排序
    */
   def partitionKeyComparator[K](keyComparator: Comparator[K]): Comparator[(Int, K)] = {
     new Comparator[(Int, K)] {

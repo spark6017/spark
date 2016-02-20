@@ -66,7 +66,13 @@ private[spark] class SortShuffleWriter[K, V, C](
     /***
       * 使用ExternalSorter进行数据逻辑逻辑(sort、combine、spill)
       *
-      * 创建ExternalSorter，如果没有map端的combine，那么spill时无需排序，如果有map端的combine则需要排序
+      * 创建ExternalSorter，
+      *     1. 如果定义了mapSideCombine(隐含着Aggregator必须定义)，那么将Aggregator传给ExternalSorter
+      *     2. 如果没有定义mapSideCombine，那么既不传Aggregator也不传keyOrdering给ExternalSorter，因为在reduce端会进行排序(如果RDD使用了sortByKey)
+      *
+      *   问题： 如果没有定义ShuffleDependency没有定义mapSideCombine，那么构造ExternalSorter时，既不传入Aggregator也不传入keyOrdering，
+      *   那么Sort Based Shuffle这个Sort如何体现
+      *
       */
     sorter = if (dep.mapSideCombine) {
       require(dep.aggregator.isDefined, "Map-side combine without Aggregator specified!")

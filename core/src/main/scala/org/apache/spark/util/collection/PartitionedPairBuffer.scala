@@ -81,10 +81,17 @@ private[spark] class PartitionedPairBuffer[K, V](initialCapacity: Int = 64)
    * Iterate through the data in a given order. For this class this is not really destructive.
    *
    *
-   * 默认使用partitionComparator
+   *  对于PartitionedPairBuffer而言， keyCompartor是None，此处使用partitionComparator，按照partition进行排序
+   *  partition排序的结果是什么？partition内部没有顺序
    */
   override def partitionedDestructiveSortedIterator(keyComparator: Option[Comparator[K]])
     : Iterator[((Int, K), V)] = {
+
+    /**
+     *  keyComparator如果没有定义，则取partitionComparator；
+     *  如果keyComparator定义了，那么将keyComparator这个Option包着的comparator传给partitionKeyComparator，得到另一个Comparator
+     *  也就是说，partitionKeyComparator是一个接受一个元素的偏函数
+     */
     val comparator = keyComparator.map(partitionKeyComparator).getOrElse(partitionComparator)
     new Sorter(new KVArraySortDataFormat[(Int, K), AnyRef]).sort(data, 0, curSize, comparator)
     iterator

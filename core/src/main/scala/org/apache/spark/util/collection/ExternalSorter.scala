@@ -176,6 +176,7 @@ private[spark] class ExternalSorter[K, V, C](
 
   /**
    *  keyComparator，默认是ordering，如果没有指定ordering，那么比较Key的hashCode值
+   *  也就是说keyComparator是一定有值的
    */
   private val keyComparator: Comparator[K] = ordering.getOrElse(new Comparator[K] {
     override def compare(a: K, b: K): Int = {
@@ -335,6 +336,12 @@ private[spark] class ExternalSorter[K, V, C](
 
     var success = false
     try {
+
+      /** *
+        *  collection有可能是PartitionedAppendOnlyMap，可有可能是PartitionedPairBuffer
+        *
+        *  对于PartitionedPairBuffer，如果comparator是None，那么此时PartitionedPairBuffer会使用partitionComparator进行排序
+        */
       val it = collection.destructiveSortedWritablePartitionedIterator(comparator)
       while (it.hasNext) {
         val partitionId = it.nextPartition()

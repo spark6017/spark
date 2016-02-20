@@ -494,6 +494,8 @@ private[spark] class TaskSetManager(
           }
           // Serialize and return the task
           val startTime = clock.getTimeMillis()
+
+          //如果任务不能序列化，那么无需重试，直接失败
           val serializedTask: ByteBuffer = try {
             Task.serializeWithDependencies(task, sched.sc.addedFiles, sched.sc.addedJars, ser)
           } catch {
@@ -507,7 +509,7 @@ private[spark] class TaskSetManager(
           }
           if (serializedTask.limit > TaskSetManager.TASK_SIZE_TO_WARN_KB * 1024 &&
               !emittedTaskSizeWarning) {
-            emittedTaskSizeWarning = true
+            emittedTaskSizeWarning = true  //提示一遍
             logWarning(s"Stage ${task.stageId} contains a task of very large size " +
               s"(${serializedTask.limit / 1024} KB). The maximum recommended task size is " +
               s"${TaskSetManager.TASK_SIZE_TO_WARN_KB} KB.")
@@ -636,6 +638,8 @@ private[spark] class TaskSetManager(
 
   /**
    * Check whether has enough quota to fetch the result with `size` bytes
+   *
+   * 这个应该是Result Stage的处理
    */
   def canFetchMoreResults(size: Long): Boolean = sched.synchronized {
     totalResultSize += size
@@ -668,6 +672,7 @@ private[spark] class TaskSetManager(
     // "result.value()" in "TaskResultGetter.enqueueSuccessfulTask" before reaching here.
     // Note: "result.value()" only deserializes the value when it's called at the first time, so
     // here "result.value()" just returns the value and won't block other threads.
+    /**调用DAGScheduler的taskEnd方法汇报任务成功执行的消息**/
     sched.dagScheduler.taskEnded(tasks(index), Success, result.value(), result.accumUpdates, info)
     if (!successful(index)) {
       tasksSuccessful += 1
@@ -726,7 +731,7 @@ private[spark] class TaskSetManager(
           logError("Task %s in stage %s (TID %d) had a not serializable result: %s; not retrying"
             .format(info.id, taskSet.id, tid, ef.description))
           abort("Task %s in stage %s (TID %d) had a not serializable result: %s".format(
-            info.id, taskSet.id, tid, ef.description))
+            info.id, taskSet.id, tid, ef.description))  /**Result Task的结果不可序列化和反序列化**/
           return
         }
         val key = ef.description
@@ -755,6 +760,10 @@ private[spark] class TaskSetManager(
         }
         ef.exception
 
+      /** *
+        * 任务运行过程中，Executor意外终止，如何恢复？
+        *  异常是ExecutorLostFailure并且异常不是由于App的Task本身导致的（e.exitCausedByApp的值是false，因此）
+        */
       case e: ExecutorLostFailure if !e.exitCausedByApp =>
         logInfo(s"Task $tid failed because while it was being computed, its executor " +
           "exited for a reason unrelated to the task. Not counting this failure towards the " +
@@ -772,6 +781,10 @@ private[spark] class TaskSetManager(
     // always add to failed executors
     failedExecutors.getOrElseUpdate(index, new HashMap[String, Long]()).
       put(info.executorId, clock.getTimeMillis())
+
+    /**
+     * 调用DAGScheduler的taskEnd方法，向DAGScheduler汇报任务失败消息
+     */
     sched.dagScheduler.taskEnded(tasks(index), reason, null, accumUpdates, info)
 
     /***
@@ -781,7 +794,8 @@ private[spark] class TaskSetManager(
     addPendingTask(index)
     if (!isZombie && state != TaskState.KILLED
         && reason.isInstanceOf[TaskFailedReason]
-        && reason.asInstanceOf[TaskFailedReason].countTowardsTaskFailures) {
+        && reason.asInstanceOf[TaskFailedReason].countTowardsTaskFailures) { /**对于ExecutorLostFailure，countTowardsTaskFailures的值与 exitCausedByApp相同
+      */
       assert (null != failureReason)
 
       /**
@@ -800,7 +814,7 @@ private[spark] class TaskSetManager(
   }
 
   /**
-    *  丢弃一个TaskSet的执行？
+    *  丢弃一个TaskSet的执行？TaskSetManager的abort方法调用逻辑如何？
     * @param message
     * @param exception
     */
@@ -858,6 +872,8 @@ private[spark] class TaskSetManager(
           addPendingTask(index)
           // Tell the DAGScheduler that this task was resubmitted so that it doesn't think our
           // stage finishes when a total of tasks.size tasks finish.
+
+          /**调用DAGScheduler的taskEnded方法，重新提交任务，因为DAGScheduler是以Stage为单位提交任务，那么对于单个的任务DAGScheduler如何重新提交*/
           sched.dagScheduler.taskEnded(
             tasks(index), Resubmitted, null, Seq.empty[AccumulableInfo], info)
         }
@@ -977,5 +993,6 @@ private[spark] class TaskSetManager(
 private[spark] object TaskSetManager {
   // The user will be warned if any stages contain a task that has a serialized size greater than
   // this.
+  //如果任务的序列化大小大于100KB，那么就提示警告信息
   val TASK_SIZE_TO_WARN_KB = 100
 }

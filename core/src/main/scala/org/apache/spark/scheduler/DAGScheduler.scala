@@ -819,7 +819,7 @@ class DAGScheduler(
   /** *
     * 首先取出TaskSet关联的stageId对应的Stage，然后调用DAGScheduler的abortStage
     *
-    * 为什么还能继续调用waiting stage？
+    * 为什么还能继续调用waiting stage？这些Stage不依赖于失败的这个TaskSet所对应的Stage
     * @param taskSet
     * @param reason
     * @param exception
@@ -1088,7 +1088,8 @@ class DAGScheduler(
       logDebug("New pending partitions: " + stage.pendingPartitions)
 
       /**
-       * SparkContext提交作业给DAGScheduler，DAGScheduler对划分Stage并分解任务，然后DAGScheduler向TaskScheduler提交任务
+       * SparkContext提交作业给DAGScheduler，DAGScheduler对划分Stage并分解任务，然后DAGScheduler向TaskScheduler提交任务(TaskSet)
+       * TaskScheduler将TaskSet封装为TaskSetManager，将TaskSetManager放入到Pool中作为调度的单位
        */
       taskScheduler.submitTasks(new TaskSet(
         tasks.toArray, stage.id, stage.latestInfo.attemptId, jobId, properties))
@@ -1312,6 +1313,10 @@ class DAGScheduler(
             }
         }
 
+      /** *
+        * DAGScheduler重新提交一个任务(给stage的pendingPartitions添加一个task.partitionId)
+        *
+        */
       case Resubmitted =>
         logInfo("Resubmitted " + task + ", so marking it as still running")
         stage.pendingPartitions += task.partitionId
@@ -1337,6 +1342,9 @@ class DAGScheduler(
               s"longer running")
           }
 
+          /** *
+            * 如果不允许Stage Retry，那么直接abort
+            */
           if (disallowStageRetryForTest) {
             abortStage(failedStage, "Fetch failure will not retry stage due to testing config",
               None)
@@ -1489,7 +1497,16 @@ class DAGScheduler(
 
   /**
    * Aborts all jobs depending on a particular Stage. This is called in response to a task set
-   * being canceled by the TaskScheduler. Use taskSetFailed() to inject this event from outside.
+   * being canceled by the TaskScheduler. Use taskSetFailed() to inject this event from outside
+   *
+   *  一个Stage中的多少比例的任务失败需要考虑cancel stage？
+   *  假如一个map stage有100个任务，是否一个任务失败就abort？还是说可能容忍一定程度的失败？.
+   *
+   *
+   *  abortStrage的调用时序图是什么样的？
+   *
+   *  1.提交Stage时，如果Stage所属的Job不是Active的，那么需要abort
+   *  2.
    *
    * abortStage的处理逻辑
    */
@@ -1749,7 +1766,7 @@ private[scheduler] class DAGSchedulerEventProcessLoop(dagScheduler: DAGScheduler
       dagScheduler.handleTaskCompletion(completion)
 
     /**
-     * 处理TaskSet失败的消息
+     * 处理TaskSet失败的消息，TaskSetFailed消息是从何而来
      */
     case TaskSetFailed(taskSet, reason, exception) =>
       dagScheduler.handleTaskSetFailed(taskSet, reason, exception)

@@ -765,6 +765,8 @@ class DAGScheduler(
   /**
    * Check for waiting stages which are now eligible for resubmission.
    * Ordinarily run on every iteration of the event loop.
+   *
+   * 提交等待的Stages，在提交waiting stage之前，需要提交waiting stage等待的parent stage
    */
   private def submitWaitingStages() {
     // TODO: We might want to run this less often, when we are sure that something has become
@@ -774,6 +776,10 @@ class DAGScheduler(
     logTrace("waiting: " + waitingStages)
     logTrace("failed: " + failedStages)
     val waitingStagesCopy = waitingStages.toArray
+
+    /**
+     * waitingStages清空，在调用submitStage方法时重新计算waitingStages
+     */
     waitingStages.clear()
     for (stage <- waitingStagesCopy.sortBy(_.firstJobId)) {
       submitStage(stage)
@@ -946,6 +952,8 @@ class DAGScheduler(
     if (jobId.isDefined) {
       logDebug("submitStage(" + stage + ")")
       if (!waitingStages(stage) && !runningStages(stage) && !failedStages(stage)) {
+
+
         val missing = getMissingParentStages(stage).sortBy(_.id)
         logDebug("missing: " + missing)
         if (missing.isEmpty) {
@@ -967,6 +975,7 @@ class DAGScheduler(
   private def submitMissingTasks(stage: Stage, jobId: Int) {
     logDebug("submitMissingTasks(" + stage + ")")
     // Get our pending tasks and remember them in our pendingTasks entry
+    //首先将pendingPartition清空？
     stage.pendingPartitions.clear()
 
     // First figure out the indexes of partition ids to compute.
@@ -1084,6 +1093,8 @@ class DAGScheduler(
 
     if (tasks.size > 0) {
       logInfo("Submitting " + tasks.size + " missing tasks from " + stage + " (" + stage.rdd + ")")
+
+      /**更新stage中的pendingPartitions信息*/
       stage.pendingPartitions ++= tasks.map(_.partitionId)
       logDebug("New pending partitions: " + stage.pendingPartitions)
 
@@ -1197,6 +1208,10 @@ class DAGScheduler(
       case Success =>
         listenerBus.post(SparkListenerTaskEnd(stageId, stage.latestInfo.attemptId, taskType,
           event.reason, event.taskInfo, taskMetrics))
+
+        /** *
+          * stage中的pendingPartitions减去task处理的partitionId,如果pendingPartitions的长度为0，表示该stage的所有任务都已经处理完
+          */
         stage.pendingPartitions -= task.partitionId
         task match {
           case rt: ResultTask[_, _] =>
@@ -1316,9 +1331,15 @@ class DAGScheduler(
       /** *
         * DAGScheduler重新提交一个任务(给stage的pendingPartitions添加一个task.partitionId)
         *
+        * stag中有了尚未运行的partition(即还没有任务对这个partition进行处理),DAGScheduler如何对这个partition进行处理？创建Task然后创建TaskSet交给TaskScheduler？
+        *
         */
       case Resubmitted =>
         logInfo("Resubmitted " + task + ", so marking it as still running")
+
+        /**
+         * pendingPartitons是一个HashSet，如果pendingPartitions中已经存在task.partitionId，那么不影响
+         */
         stage.pendingPartitions += task.partitionId
 
       case FetchFailed(bmAddress, shuffleId, mapId, reduceId, failureMessage) =>
@@ -1391,6 +1412,10 @@ class DAGScheduler(
         // Unrecognized failure - also do nothing. If the task fails repeatedly, the TaskScheduler
         // will abort the job.
     }
+
+    /** *
+      * 处理完Task Completion事件后，比如任务Resubmit事件后，调用submitWaitingStage方法
+      */
     submitWaitingStages()
   }
 

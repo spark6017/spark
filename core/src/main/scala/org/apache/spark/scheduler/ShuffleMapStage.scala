@@ -92,7 +92,9 @@ private[spark] class ShuffleMapStage(
    */
   def isAvailable: Boolean = _numAvailableOutputs == numPartitions
 
-  /** Returns the sequence of partition ids that are missing (i.e. needs to be computed). */
+  /** Returns the sequence of partition ids that are missing (i.e. needs to be computed).
+    *  如果一个任务正在运行，但是还没有更新outputLocs变量，是否会导致针对同一个partition启动两个任务？
+    */
   override def findMissingPartitions(): Seq[Int] = {
     val missing = (0 until numPartitions).filter(id => outputLocs(id).isEmpty)
     assert(missing.size == numPartitions - _numAvailableOutputs,

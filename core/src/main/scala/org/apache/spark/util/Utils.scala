@@ -1895,10 +1895,21 @@ private[spark] object Utils extends Logging {
     require(file.exists(), s"Properties file $file does not exist")
     require(file.isFile(), s"Properties file $file is not a normal file")
 
+    /**
+     * 将FileInputStream包装成Reader
+     */
     val inReader = new InputStreamReader(new FileInputStream(file), "UTF-8")
     try {
       val properties = new Properties()
       properties.load(inReader)
+
+      /** *
+        * Java的Properties转换成Scala的Map，
+        * 1. 将Key集合(Java Set)转换成Scala Set
+        * 2. 调用Scala Set的map方法将每个元素转换成(k,v)二元组
+        * 3.将元素类型是(k,v)的Scala Set通过调用toMap转换成Scala的Map
+        *
+        */
       properties.stringPropertyNames().asScala.map(
         k => (k, properties.getProperty(k).trim)).toMap
     } catch {
@@ -1909,7 +1920,14 @@ private[spark] object Utils extends Logging {
     }
   }
 
-  /** Return the path of the default Spark properties file. */
+  /**
+   * Return the path of the default Spark properties file.
+   *
+   * 获取$PARK_HOME/conf/spark-defaults.conf的绝对路径
+   *
+   * 注意：SPARK_CONF_DIR如果配置的话，需要配置成SPARK_HOME，而不是SPARK_HOME/conf
+   *
+   */
   def getDefaultPropertiesFile(env: Map[String, String] = sys.env): String = {
     env.get("SPARK_CONF_DIR")
       .orElse(env.get("SPARK_HOME").map { t => s"$t${File.separator}conf" })

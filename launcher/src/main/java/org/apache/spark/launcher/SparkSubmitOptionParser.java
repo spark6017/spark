@@ -27,6 +27,8 @@ import java.util.regex.Pattern;
  * This class encapsulates the parsing code for spark-submit command line options, so that there
  * is a single list of options that needs to be maintained (well, sort of, but it makes it harder
  * to break things).
+ *
+ * 命令行参数解析，SparkSubmit的Options是如何解析的
  */
 class SparkSubmitOptionParser {
 

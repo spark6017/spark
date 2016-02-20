@@ -48,6 +48,10 @@ import org.apache.spark.util.{ChildFirstURLClassLoader, MutableURLClassLoader, U
 /**
  * Whether to submit, kill, or request the status of an application.
  * The latter two operations are currently supported only for standalone cluster mode.
+ *
+ * KILL和REQUEST_STATUS只有standalone  cluster mode支持
+ *
+ * 这是定义枚举类型吗？这是什么语法？
  */
 private[deploy] object SparkSubmitAction extends Enumeration {
   type SparkSubmitAction = Value
@@ -110,13 +114,24 @@ object SparkSubmit {
   }
   // scalastyle:on println
 
+
+  /**
+   * SparkSubmit进程需要的参数封装在SparkSubmitArguments中，此处可以借鉴将命令行参数包装到一个类中，方便阅读和修改
+   * @param args
+   */
   def main(args: Array[String]): Unit = {
     val appArgs = new SparkSubmitArguments(args)
+
+
     if (appArgs.verbose) {
       // scalastyle:off println
       printStream.println(appArgs)
       // scalastyle:on println
     }
+
+    /** *
+      * spark-submit接受提交任务、杀死任务和查询任务状态的功能
+      */
     appArgs.action match {
       case SparkSubmitAction.SUBMIT => submit(appArgs)
       case SparkSubmitAction.KILL => kill(appArgs)
@@ -151,6 +166,14 @@ object SparkSubmit {
    * main class.
    */
   private def submit(args: SparkSubmitArguments): Unit = {
+
+    /**
+     * 根据SparkSubmitArguments解析出四大变量(这里的child表示什么含义? 因为SparkSubmit这个main要运行用户提交的main-class，因此称为子进程)
+     * childArgs  --- 运行子进程需要的参数
+     * childClasspath --- 运行子进程需要的classpath
+     * sysProps  --- 运行子进程需要的system properties？（A进程启动B进程，那么A的system properties和B的system properties是独立的，也就是说B虽然由A启动，但是B并不复用A的环境变量？）
+     * childMainClass -- 启动子进程的main class
+     */
     val (childArgs, childClasspath, sysProps, childMainClass) = prepareSubmitEnvironment(args)
 
     def doRunMain(): Unit = {

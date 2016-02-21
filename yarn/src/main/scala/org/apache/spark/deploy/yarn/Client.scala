@@ -894,7 +894,7 @@ private[spark] class Client(
       }
 
     /**
-     * 如果是Cluster模式，那么启动ApplicationMaster进程；如果是Client模式，那么启动ExecutorLauncer进程
+     * 如果是Cluster模式，那么启动ApplicationMaster进程；如果是Client模式，那么启动ExecutorLauncher进程
      */
     val amClass =
       if (isClusterMode) {

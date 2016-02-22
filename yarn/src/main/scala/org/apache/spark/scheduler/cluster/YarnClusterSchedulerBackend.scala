@@ -27,6 +27,10 @@ import org.apache.spark.util.Utils
 
 /**
   * 对于YARN CLUSTER模式，application	master starts	the	driver program	before	allocating	resources	for executors.
+  *
+  * YarnClusterSchedulerBackend是YARN CLUSTER模式下的Scheduler Backend
+  *
+  * 在分配executor之前就启动了Driver
   * @param scheduler
   * @param sc
   */

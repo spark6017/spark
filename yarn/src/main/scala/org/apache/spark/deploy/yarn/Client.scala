@@ -381,6 +381,10 @@ private[spark] class Client(
     // Upload Spark and the application JAR to the remote file system if necessary,
     // and add them as local resources to the application master.
     val fs = FileSystem.get(hadoopConf)
+
+    /**
+      * /user/{user.name}/{appStagingDir}
+      */
     val dst = new Path(fs.getHomeDirectory(), appStagingDir)
     val nns = YarnSparkHadoopUtil.get.getNameNodesToAccess(sparkConf) + dst
     YarnSparkHadoopUtil.get.obtainTokensForNamenodes(nns, hadoopConf, credentials)
@@ -658,6 +662,11 @@ private[spark] class Client(
 
   /**
    * Set up the environment for launching our ApplicationMaster container.
+    *
+    * LaunchEnv是一个HashMap，那么
+    * 1. 这个LaunchEnv Map里都包含哪些东西？
+    * 2. 这个Map中定义的K和V如何使用？
+    *
    */
   private def setupLaunchEnv(
       stagingDir: String,
@@ -670,8 +679,15 @@ private[spark] class Client(
      */
     val driverExtraClassPath = sparkConf.getOption("spark.driver.extraClassPath")
 
+
+    /**
+      * 为LaunchEnv设置Classpath？
+      */
     populateClasspath(args, yarnConf, sparkConf, env, true, driverExtraClassPath)
 
+    /**
+      * 设置SPARK_YARN_MODE、SPARK_USER和SPARK_YARN_STAGING_DIR
+      */
     env("SPARK_YARN_MODE") = "true"
     env("SPARK_YARN_STAGING_DIR") = stagingDir
     env("SPARK_USER") = UserGroupInformation.getCurrentUser().getShortUserName()
@@ -797,13 +813,24 @@ private[spark] class Client(
      * launchEnv是一个HashMap
      */
     val launchEnv = setupLaunchEnv(appStagingDir, pySparkArchives)
+
+    /**
+      * 上传本地文件到HADOOP HDFS，比如HADOOP的配置文件以及Spark的配置信息
+      */
     val localResources = prepareLocalResources(appStagingDir, pySparkArchives)
 
     // Set the environment variables to be passed on to the executors.
     distCacheMgr.setDistFilesEnv(launchEnv)
     distCacheMgr.setDistArchivesEnv(launchEnv)
 
+    /**
+      * 创建ContainerLaunchContext
+      */
     val amContainer = Records.newRecord(classOf[ContainerLaunchContext])
+
+    /**
+      * 设置ContainerLaunchContext的LocalResources和Environment
+      */
     amContainer.setLocalResources(localResources.asJava)
     amContainer.setEnvironment(launchEnv.asJava)
 
@@ -1368,19 +1395,39 @@ object Client extends Logging {
       extraClassPath: Option[String] = None): Unit = {
 
     /** *
-      * 将extraClassPath见到Classpath上
+      * extraClassPath是一个Option，它有一个foreach方法
+      *
       */
-    extraClassPath.foreach { cp =>
-      addClasspathEntry(getClusterPath(sparkConf, cp), env)
+    extraClassPath.foreach { classpath =>
+
+      /**
+        * clusterPath指的是什么？ 可以不关心细节，认为是classpath值即可
+        */
+      val clusterPath = getClusterPath(sparkConf, classpath)
+
+      /**
+        * clusterPath可能是一个以逗号分割的路径，所以addClasspathEntry应该有按照逗号进行分割的逻辑
+        */
+      addClasspathEntry(clusterPath, env)
     }
+
+
+
     addClasspathEntry(YarnSparkHadoopUtil.expandEnvironment(Environment.PWD), env)
 
+    /**
+      * 如果是AM，则将__spark_conf__加入到Classpath
+      */
     if (isAM) {
       addClasspathEntry(
         YarnSparkHadoopUtil.expandEnvironment(Environment.PWD) + Path.SEPARATOR +
           LOCALIZED_CONF_DIR, env)
     }
 
+    /**
+      * 如果user jar优先
+      *
+      */
     if (sparkConf.getBoolean("spark.yarn.user.classpath.first", false)) {
       // in order to properly add the app jar when user classpath is first
       // we have to do the mainJar separate in order to send the right thing
@@ -1403,8 +1450,18 @@ object Client extends Logging {
         addFileToClasspath(sparkConf, conf, x, null, env)
       }
     }
+
+    /**
+      * 将Spark的assembly jar加到classpath上
+      */
     addFileToClasspath(sparkConf, conf, new URI(sparkJar(sparkConf)), SPARK_JAR, env)
+
+
+    /**
+      * 将YARN和Hadoop
+      */
     populateHadoopClasspath(conf, env)
+
     sys.env.get(ENV_DIST_CLASSPATH).foreach { cp =>
       addClasspathEntry(getClusterPath(sparkConf, cp), env)
     }
@@ -1472,7 +1529,14 @@ object Client extends Logging {
    * 将path添加到CLASSPATH环境变量中
    */
   private def addClasspathEntry(path: String, env: HashMap[String, String]): Unit =
-    YarnSparkHadoopUtil.addPathToEnvironment(env, Environment.CLASSPATH.name, path)
+    {
+      val key = Environment.CLASSPATH.name
+
+      /**
+        * 将路径加到Environment中，key是CLASSPATH
+        */
+      YarnSparkHadoopUtil.addPathToEnvironment(env, key, path)
+    }
 
   /**
    * Returns the path to be sent to the NM for a path that is valid on the gateway.
@@ -1488,6 +1552,10 @@ object Client extends Logging {
    * If either config is not available, the input path is returned.
    */
   def getClusterPath(conf: SparkConf, path: String): String = {
+
+    /**
+      * 把path中的localPath替换为clusterPath
+      */
     val localPath = conf.get("spark.yarn.config.gatewayPath", null)
     val clusterPath = conf.get("spark.yarn.config.replacementPath", null)
     if (localPath != null && clusterPath != null) {

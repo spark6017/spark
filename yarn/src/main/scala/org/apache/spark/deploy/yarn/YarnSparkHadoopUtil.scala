@@ -294,8 +294,15 @@ object YarnSparkHadoopUtil {
   /**
    * Add a path variable to the given environment map.
    * If the map already contains this key, append the value to the existing value instead.
+    *
+    * 将key/value加入到env这个HashMap中
    */
   def addPathToEnvironment(env: HashMap[String, String], key: String, value: String): Unit = {
+
+    /**
+      * 如果env中已经包含了key这个entry，那么调用getClassPathSeparator获得分隔符拼上value
+      * 如果env中没有key这个entry，那么直接加入到env这个HashMap中
+      */
     val newValue = if (env.contains(key)) { env(key) + getClassPathSeparator  + value } else value
     env.put(key, newValue)
   }

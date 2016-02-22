@@ -186,9 +186,15 @@ private[spark] class ApplicationMaster(
         delegationTokenRenewerOption.foreach(_.scheduleLoginFromKeytab())
       }
 
+      /**
+        * 如果是Cluster Mode，那么在ApplicationMaster中启动Driver
+        */
       if (isClusterMode) {
         runDriver(securityMgr)
       } else {
+        /**
+          * 如果是Client模式，那么调用runExecutorLauncher
+          */
         runExecutorLauncher(securityMgr)
       }
     } catch {
@@ -535,6 +541,9 @@ private[spark] class ApplicationMaster(
    * we assume it was successful, for all other cases we assume failure.
    *
    * Returns the user thread that was started.
+    *
+    *
+    * 执行用户class的main方法
    */
   private def startUserApplication(): Thread = {
     logInfo("Starting the user application in a separate Thread")
@@ -566,6 +575,10 @@ private[spark] class ApplicationMaster(
       override def run() {
         try {
           mainMethod.invoke(null, userArgs.toArray)
+
+          /**
+            * finish方法是干啥的？
+            */
           finish(FinalApplicationStatus.SUCCEEDED, ApplicationMaster.EXIT_SUCCESS)
           logDebug("Done running users class")
         } catch {

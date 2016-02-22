@@ -664,8 +664,14 @@ private[spark] class Client(
       pySparkArchives: Seq[String]): HashMap[String, String] = {
     logInfo("Setting up the launch environment for our AM container")
     val env = new HashMap[String, String]()
-    val extraCp = sparkConf.getOption("spark.driver.extraClassPath")
-    populateClasspath(args, yarnConf, sparkConf, env, true, extraCp)
+
+    /**
+     * spark.driver.extraClassPath
+     */
+    val driverExtraClassPath = sparkConf.getOption("spark.driver.extraClassPath")
+
+    populateClasspath(args, yarnConf, sparkConf, env, true, driverExtraClassPath)
+
     env("SPARK_YARN_MODE") = "true"
     env("SPARK_YARN_STAGING_DIR") = stagingDir
     env("SPARK_USER") = UserGroupInformation.getCurrentUser().getShortUserName()
@@ -769,8 +775,16 @@ private[spark] class Client(
    */
   private def createContainerLaunchContext(newAppResponse: GetNewApplicationResponse)
     : ContainerLaunchContext = {
+
+    /**
+     * ApplicationMaster进程运行于一个YARN Container中，此处setup AM Container
+     */
     logInfo("Setting up container launch context for our AM")
     val appId = newAppResponse.getApplicationId
+
+    /**
+     * appStagingDir是一个相对目录
+     */
     val appStagingDir = getAppStagingDir(appId)
     val pySparkArchives =
       if (sparkConf.getBoolean("spark.yarn.isPython", false)) {
@@ -778,6 +792,10 @@ private[spark] class Client(
       } else {
         Nil
       }
+
+    /**
+     * launchEnv是一个HashMap
+     */
     val launchEnv = setupLaunchEnv(appStagingDir, pySparkArchives)
     val localResources = prepareLocalResources(appStagingDir, pySparkArchives)
 
@@ -1173,6 +1191,10 @@ object Client extends Logging {
     if (!Utils.isDynamicAllocationEnabled(sparkConf)) {
       sparkConf.setIfMissing("spark.executor.instances", args.numExecutors.toString)
     }
+
+    /**
+     * 创建Client实例
+     */
     new Client(args, sparkConf).run()
   }
 
@@ -1254,6 +1276,8 @@ object Client extends Logging {
 
   /**
    * Return the path to the given application's staging directory.
+   *
+   * getAppStagingDir的值是.sparkStaging/{appId},这是个相对路径，它的路径前缀是哪个？
    */
   private def getAppStagingDir(appId: ApplicationId): String = {
     buildPath(SPARK_STAGING, appId.toString())
@@ -1329,6 +1353,11 @@ object Client extends Logging {
    * always made available through the system class path.
    *
    * @param args Client arguments (when starting the AM) or null (when starting executors).
+   * @param conf
+   * @param sparkConf
+   * @param env
+   * @param isAM
+   * @param extraClassPath 对于Driver而言就是spark.driver.extraClassPath，对于Executor而言就是spark.executor.extraClassPath
    */
   private[yarn] def populateClasspath(
       args: ClientArguments,
@@ -1337,6 +1366,10 @@ object Client extends Logging {
       env: HashMap[String, String],
       isAM: Boolean,
       extraClassPath: Option[String] = None): Unit = {
+
+    /** *
+      * 将extraClassPath见到Classpath上
+      */
     extraClassPath.foreach { cp =>
       addClasspathEntry(getClusterPath(sparkConf, cp), env)
     }
@@ -1435,6 +1468,8 @@ object Client extends Logging {
   /**
    * Add the given path to the classpath entry of the given environment map.
    * If the classpath is already set, this appends the new path to the existing classpath.
+   *
+   * 将path添加到CLASSPATH环境变量中
    */
   private def addClasspathEntry(path: String, env: HashMap[String, String]): Unit =
     YarnSparkHadoopUtil.addPathToEnvironment(env, Environment.CLASSPATH.name, path)

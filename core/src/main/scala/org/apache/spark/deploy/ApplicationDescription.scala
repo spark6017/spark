@@ -28,7 +28,7 @@ private[spark] case class ApplicationDescription(
     eventLogDir: Option[URI] = None,
     // short name of compression codec used when writing event logs, if any (e.g. lzf)
     eventLogCodec: Option[String] = None,
-    coresPerExecutor: Option[Int] = None,
+    coresPerExecutor: Option[Int] = None, /**如果ApplicationDescription是None，那么默认值何时给定？*/
     user: String = System.getProperty("user.name", "<unknown>")) {
 
   override def toString: String = "ApplicationDescription(" + name + ")"

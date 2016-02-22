@@ -100,6 +100,11 @@ private[spark] class SparkDeploySchedulerBackend(
 
 
     val appUIAddress = sc.ui.map(_.appUIAddress).getOrElse("")
+
+    /**
+      * 每个executor使用的CPU内核数,在Standalone模式下，SparkConf如果没有指定spark.executor.cores，那么下面的
+      * 语句将得到None，即coresPerExecutor是一个Option类型的数据
+      */
     val coresPerExecutor = conf.getOption("spark.executor.cores").map(_.toInt)
 
     /**

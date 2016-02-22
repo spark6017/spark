@@ -598,8 +598,8 @@ private[deploy] class Master(
       usableWorkers: Array[WorkerInfo],
       spreadOutApps: Boolean): Array[Int] = {
     val coresPerExecutor = app.desc.coresPerExecutor
-    val minCoresPerExecutor = coresPerExecutor.getOrElse(1)
-    val oneExecutorPerWorker = coresPerExecutor.isEmpty
+    val minCoresPerExecutor = coresPerExecutor.getOrElse(1) /**如果coresPerExecutor为None，那么默认值为1*/
+    val oneExecutorPerWorker = coresPerExecutor.isEmpty /**每个Worker一个Executor*/
     val memoryPerExecutor = app.desc.memoryPerExecutorMB
     val numUsable = usableWorkers.length
     val assignedCores = new Array[Int](numUsable) // Number of cores to give to each worker
@@ -669,7 +669,7 @@ private[deploy] class Master(
       // Filter out workers that don't have enough resources to launch an executor
       val usableWorkers = workers.toArray.filter(_.state == WorkerState.ALIVE)
         .filter(worker => worker.memoryFree >= app.desc.memoryPerExecutorMB &&
-          worker.coresFree >= coresPerExecutor.getOrElse(1))
+          worker.coresFree >= coresPerExecutor.getOrElse(1)) /**如果coresPerExecutor为None，那么给默认值1*/
         .sortBy(_.coresFree).reverse
       val assignedCores = scheduleExecutorsOnWorkers(app, usableWorkers, spreadOutApps)
 
@@ -691,12 +691,22 @@ private[deploy] class Master(
   private def allocateWorkerResourceToExecutors(
       app: ApplicationInfo,
       assignedCores: Int,
-      coresPerExecutor: Option[Int],
+      coresPerExecutor: Option[Int], /**在standalone模式下，通过--executor-cores指定每个executor的内核数，默认是1*/
       worker: WorkerInfo): Unit = {
     // If the number of cores per executor is specified, we divide the cores assigned
     // to this worker evenly among the executors with no remainder.
     // Otherwise, we launch a single executor that grabs all the assignedCores on this worker.
+
+    /***
+      * 如果指定了每个Executor的内核数，那么将Worker上可用内核进行平分；例如worker有9个cores，每个executor占用2个core，那么本Worker将启动4个Executor
+      *
+      * 如果没有指定，那么只启动一个Executor，这个executor将独占多有的cores
+      */
     val numExecutors = coresPerExecutor.map { assignedCores / _ }.getOrElse(1)
+
+    /***
+      * 分配给每个Executor的内核数，如果没有指定coresPerExecutor，那么全给
+      */
     val coresToAssign = coresPerExecutor.getOrElse(assignedCores)
     for (i <- 1 to numExecutors) {
       val exec = app.addExecutor(worker, coresToAssign)

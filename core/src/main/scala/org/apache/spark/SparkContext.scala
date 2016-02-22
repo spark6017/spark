@@ -2387,6 +2387,9 @@ object SparkContext extends Logging {
         scheduler.initialize(backend)
         (backend, scheduler)
 
+      /***
+        * 在Standalone模式下，SchedulerBackend是SparkDeploySchedulerBackend
+        */
       case SPARK_REGEX(sparkUrl) =>
         val scheduler = new TaskSchedulerImpl(sc)
         val masterUrls = sparkUrl.split(",").map("spark://" + _)
@@ -2394,6 +2397,9 @@ object SparkContext extends Logging {
         scheduler.initialize(backend)
         (backend, scheduler)
 
+      /***
+        * 在LOCAL CLUSTER模式下，SchedulerBackend是SparkDeploySchedulerBackend
+        */
       case LOCAL_CLUSTER_REGEX(numSlaves, coresPerSlave, memoryPerSlave) =>
         // Check to make sure memory requested <= memoryPerSlave. Otherwise Spark will just hang.
         val memoryPerSlaveInt = memoryPerSlave.toInt
@@ -2414,6 +2420,11 @@ object SparkContext extends Logging {
         }
         (backend, scheduler)
 
+      /***
+        * 在yarn-cluster模式下，
+        * Scheduler是YarnClusterScheduler
+        * SchedulerBackend是YarnClusterSchedulerBackend
+        */
       case "yarn-standalone" | "yarn-cluster" =>
         if (master == "yarn-standalone") {
           logWarning(
@@ -2443,6 +2454,9 @@ object SparkContext extends Logging {
         scheduler.initialize(backend)
         (backend, scheduler)
 
+      /***
+        * 在yarn-client模式下，SchedulerBackend是YarnClientSchedulerBackend
+        */
       case "yarn-client" =>
         val scheduler = try {
           val clazz = Utils.classForName("org.apache.spark.scheduler.cluster.YarnScheduler")

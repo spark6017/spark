@@ -135,7 +135,7 @@ private[spark] class YarnClientSchedulerBackend(
    * If the application has finished, failed or been killed in the process, throw an exception.
    * This assumes both `client` and `appId` have already been set.
     *
-    * Driver等待Application运行起来
+    * Driver等待Application运行起来（而不是运行结束，returnOnRunning=true）
    */
   private def waitForApplication(): Unit = {
     assert(client != null && appId.isDefined, "Application has not been submitted yet!")

@@ -49,6 +49,12 @@ private[spark] class ApplicationMaster(
 
   // Load the properties file with the Spark configuration and set entries as system properties,
   // so that user code run inside the AM also has access to them.
+
+  /***
+    * 首先把传递给ApplicationMaster的配置文件逐一解析出来放到系统环境变量中
+    * 然后ApplicationMaster创建默认的SparkConf时，会读取系统变量以spark.开头的配置加到SparkConf中
+    * 比如用户jar，是放在spark.yarn.user.jar这个系统属性中的
+    */
   if (args.propertiesFile != null) {
     Utils.getPropertiesFromFile(args.propertiesFile).foreach { case (k, v) =>
       sys.props(k) = v
@@ -58,6 +64,7 @@ private[spark] class ApplicationMaster(
   // TODO: Currently, task to container is computed once (TaskSetManager) - which need not be
   // optimal as more containers are available. Might need to handle this better.
 
+  //这是默认的SparkConf？创建SparkConf时，会加载system properties上的以spark.开头的属性
   private val sparkConf = new SparkConf()
   private val yarnConf: YarnConfiguration = SparkHadoopUtil.get.newConfiguration(sparkConf)
     .asInstanceOf[YarnConfiguration]
@@ -261,6 +268,10 @@ private[spark] class ApplicationMaster(
     }
   }
 
+  /**
+    * 更新sparkContextRef变量
+    * @param sc
+    */
   private def sparkContextInitialized(sc: SparkContext) = {
     sparkContextRef.synchronized {
       sparkContextRef.compareAndSet(null, sc)
@@ -272,6 +283,15 @@ private[spark] class ApplicationMaster(
     sparkContextRef.compareAndSet(sc, null)
   }
 
+  /**
+    * 启动完ApplicationMaster和Driver后，ApplicationMaster就可以申请计算资源了
+    *
+    * 假如我在spark-submit上指定了申请了10个executor，这个信息，ApplicationMaster是如何得知的？
+    * @param _rpcEnv
+    * @param driverRef
+    * @param uiAddress
+    * @param securityMgr
+    */
   private def registerAM(
       _rpcEnv: RpcEnv,
       driverRef: RpcEndpointRef,
@@ -287,6 +307,9 @@ private[spark] class ApplicationMaster(
         .map { address => s"${address}${HistoryServer.UI_PATH_PREFIX}/${appId}/${attemptId}" }
         .getOrElse("")
 
+    /**
+      * 获得用户的SparkConf
+      */
     val _sparkConf = if (sc != null) sc.getConf else sparkConf
     val driverUrl = RpcEndpointAddress(
       _sparkConf.get("spark.driver.host"),
@@ -296,7 +319,7 @@ private[spark] class ApplicationMaster(
 
     /**
       * 调用YarnRMClient的register方法，返回一个YarnAllocator对象，
-      * 具体分配多少个Container在什么地方设置的？
+      * 具体分配多少个Container在什么地方设置的(分配多少个Container)？
       */
     allocator = client.register(driverUrl,
       driverRef,
@@ -306,6 +329,9 @@ private[spark] class ApplicationMaster(
       historyAddress,
       securityMgr)
 
+    /**
+      * 分配资源
+      */
     allocator.allocateResources()
     reporterThread = launchReporterThread()
   }
@@ -333,6 +359,8 @@ private[spark] class ApplicationMaster(
   /**
     * 在startUserAplicaion执行用户程序中的main然后等SparkContext初始化成功
     *
+    * 因为Driver和ApplicationMaster运行在同一个Java进程中，因此对于设置到system properties中的spark属性，Driver的用户代码通过new SparkConf创建SparkConf也可以读取到
+    *
     * @param securityMgr
     */
   private def runDriver(securityMgr: SecurityManager): Unit = {
@@ -341,6 +369,10 @@ private[spark] class ApplicationMaster(
 
     // This a bit hacky, but we need to wait until the spark.driver.port property has
     // been set by the Thread executing the user class.
+
+    /***
+      * 如何判断Driver（或者SparkContext)已经初始化完成
+      */
     val sc = waitForSparkContextInitialized()
 
     // If there is no SparkContext at this point, just fail the app.
@@ -356,7 +388,7 @@ private[spark] class ApplicationMaster(
         isClusterMode = true)
 
       /**
-        * 注册AM
+        * 注册AM?在ApplicationMaster中运行registerAM
         */
       registerAM(rpcEnv, driverRef, sc.ui.map(_.appUIAddress).getOrElse(""), securityMgr)
       userClassThread.join()
@@ -473,6 +505,9 @@ private[spark] class ApplicationMaster(
       val totalWaitTime = sparkConf.getTimeAsMs("spark.yarn.am.waitTime", "100s")
       val deadline = System.currentTimeMillis() + totalWaitTime
 
+      /**
+        * 每隔10秒钟醒一次
+        */
       while (sparkContextRef.get() == null && System.currentTimeMillis < deadline && !finished) {
         logInfo("Waiting for spark context initialization ... ")
         sparkContextRef.wait(10000L)
@@ -548,10 +583,17 @@ private[spark] class ApplicationMaster(
   private def startUserApplication(): Thread = {
     logInfo("Starting the user application in a separate Thread")
 
+    /**
+      * 从SparkConf中得到用户jar的路径，是一个HDFS路径
+      */
     val classpath = Client.getUserClasspath(sparkConf)
     val urls = classpath.map { entry =>
       new URL("file:" + new File(entry.getPath()).getAbsolutePath())
     }
+
+    /**
+      * 将urls作为classpath的一部分启动ClassLoader
+      */
     val userClassLoader =
       if (Client.isUserClassPathFirst(sparkConf, isDriver = true)) {
         new ChildFirstURLClassLoader(urls, Utils.getContextOrSparkClassLoader)
@@ -574,6 +616,10 @@ private[spark] class ApplicationMaster(
     val userThread = new Thread {
       override def run() {
         try {
+
+          /**
+            * 启动Driver
+            */
           mainMethod.invoke(null, userArgs.toArray)
 
           /**
@@ -687,6 +733,9 @@ object ApplicationMaster extends Logging {
   private val EXIT_SECURITY = 14
   private val EXIT_EXCEPTION_USER_CLASS = 15
 
+  /**
+    * ApplicationMaster对象
+    */
   private var master: ApplicationMaster = _
 
   /**

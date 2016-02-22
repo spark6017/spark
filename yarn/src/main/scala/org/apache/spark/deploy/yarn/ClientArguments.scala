@@ -154,6 +154,9 @@ private[spark] class ClientArguments(args: Array[String], sparkConf: SparkConf) 
     // scalastyle:off println
     while (!args.isEmpty) {
       args match {
+        /***
+          * 包含用户代码的jar包
+          */
         case ("--jar") :: value :: tail =>
           userJar = value
           args = tail
@@ -170,6 +173,9 @@ private[spark] class ClientArguments(args: Array[String], sparkConf: SparkConf) 
           primaryRFile = value
           args = tail
 
+        /**
+          *
+          */
         case ("--args" | "--arg") :: value :: tail =>
           if (args(0) == "--args") {
             println("--args is deprecated. Use --arg instead.")

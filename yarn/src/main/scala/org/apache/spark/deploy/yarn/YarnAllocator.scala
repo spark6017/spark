@@ -85,6 +85,9 @@ private[yarn] class YarnAllocator(
   private var executorIdCounter = 0
   @volatile private var numExecutorsFailed = 0
 
+  /**
+    * 要获取的Executor数目
+    */
   @volatile private var targetNumExecutors =
     YarnSparkHadoopUtil.getInitialTargetExecutorNumber(sparkConf)
 
@@ -232,6 +235,9 @@ private[yarn] class YarnAllocator(
           numExecutorsRunning,
           allocateResponse.getAvailableResources))
 
+      /***
+        *
+        */
       handleAllocatedContainers(allocatedContainers.asScala)
     }
 
@@ -258,6 +264,10 @@ private[yarn] class YarnAllocator(
     val numPendingAllocate = pendingAllocate.size
     val missing = targetNumExecutors - numPendingAllocate - numExecutorsRunning
 
+
+    /***
+      * 需要申请missing个executor container
+      */
     if (missing > 0) {
       logInfo(s"Will request $missing executor containers, each with ${resource.getVirtualCores} " +
         s"cores and ${resource.getMemory} MB memory including $memoryOverhead MB overhead")
@@ -281,13 +291,22 @@ private[yarn] class YarnAllocator(
           allocatedHostToContainersMap, localityMatched)
 
       for (locality <- containerLocalityPreferences) {
+
+        /***
+          * 创建Container Request
+          */
         val request = createContainerRequest(resource, locality.nodes, locality.racks)
         amClient.addContainerRequest(request)
         val nodes = request.getNodes
         val hostStr = if (nodes == null || nodes.isEmpty) "Any" else nodes.asScala.last
         logInfo(s"Container request (host: $hostStr, capability: $resource)")
       }
-    } else if (missing < 0) {
+    }
+
+    /***
+      * missing可能小于0，表示申请的大于实际需要的
+      */
+    else if (missing < 0) {
       val numToCancel = math.min(numPendingAllocate, -missing)
       logInfo(s"Canceling requests for $numToCancel executor containers")
 

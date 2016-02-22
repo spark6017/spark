@@ -42,6 +42,19 @@ import org.apache.spark.launcher.YarnCommandBuilderUtils
 import org.apache.spark.network.util.JavaUtils
 import org.apache.spark.util.Utils
 
+/**
+  * 提交给NodeManager执行，执行的进程是启动CoarseGrainedExecutorBackend进程
+  * @param container
+  * @param conf
+  * @param sparkConf
+  * @param masterAddress
+  * @param slaveId
+  * @param hostname
+  * @param executorMemory
+  * @param executorCores
+  * @param appId
+  * @param securityMgr
+  */
 class ExecutorRunnable(
     container: Container,
     conf: Configuration,
@@ -202,6 +215,10 @@ class ExecutorRunnable(
     javaOpts += ("-Dspark.yarn.app.container.log.dir=" + ApplicationConstants.LOG_DIR_EXPANSION_VAR)
     YarnCommandBuilderUtils.addPermGenSizeOpt(javaOpts)
 
+
+    /**
+      * --user-class-path参数
+      */
     val userClassPath = Client.getUserClasspath(sparkConf).flatMap { uri =>
       val absPath =
         if (new File(uri.getPath()).isAbsolute()) {

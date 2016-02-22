@@ -448,6 +448,8 @@ private[spark] class Client(
         appMasterOnly: Boolean = false): (Boolean, String) = {
       val trimmedPath = path.trim()
       val localURI = Utils.resolveURI(trimmedPath)
+
+      //对于file://abc.jar，它的scheme是file
       if (localURI.getScheme != LOCAL_SCHEME) {
         if (addDistributedUri(localURI)) {
           val localPath = getQualifiedLocalPath(localURI, hadoopConf)
@@ -493,7 +495,7 @@ private[spark] class Client(
      *   (3) Spark property key to set if the scheme is not local
      */
     List(
-      (SPARK_JAR, sparkJar(sparkConf), CONF_SPARK_JAR),  /**spark assemly jar*/
+      (SPARK_JAR, sparkJar(sparkConf), CONF_SPARK_JAR),  /**spark assemly jar,spark本身的jar包*/
       (APP_JAR, args.userJar, CONF_SPARK_USER_JAR), /**spark user jar, 包含用户代码的jar包， args.userJar是以file:///开头的jar文件*/
       ("log4j.properties", oldLog4jConf.orNull, null)
     ).foreach { case (destName, path, confKey) =>
@@ -1230,7 +1232,7 @@ object Client extends Logging {
     val sparkConf = new SparkConf
 
     /**
-     * 将命令行参数解析为ClientArguments对象
+     * 在yarn-cluster模式下，SparkSubmit通过反射的方式调用Client的main方法将命令行参数传递给Client，Client解析为ClientArguments对象
      */
     val args = new ClientArguments(argStrings, sparkConf)
     // to maintain backwards-compatibility
@@ -1488,6 +1490,8 @@ object Client extends Logging {
 
   /**
    * Returns a list of URIs representing the user classpath.
+    *
+    * 用户jar放在spark.yarn.user.jar中
    *
    * @param conf Spark configuration.
    */

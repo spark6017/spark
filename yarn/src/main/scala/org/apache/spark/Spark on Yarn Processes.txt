@@ -8,5 +8,11 @@ spark on yarn client
 spark on yarn cluster
 22394 org.apache.spark.executor.CoarseGrainedExecutorBackend --driver-url spark://CoarseGrainedScheduler@10.12.167.42:52563 --executor-id 2 --hostname yuzt-Aspire-TC-606 --cores 1 --app-id application_1453270984424_0032 --user-class-path file:/home/yuzt/software/bigdata/data/tmp/nm-local-dir/usercache/yuzt/appcache/application_1453270984424_0032/container_1453270984424_0032_01_000003/__app__.jar
 21680 org.apache.spark.deploy.SparkSubmit --master yarn-cluster --class com.bit.WordcountTest2 examples/learn.spark-1.0-SNAPSHOT.jar 120
+
+
 22238 org.apache.spark.deploy.yarn.ApplicationMaster --class com.bit.WordcountTest2 --jar file:/home/yuzt/software/bigdata/spark-1.6.0-bin-hadoop2.6.0-withouthive/bin/examples/learn.spark-1.0-SNAPSHOT.jar --arg 120 --executor-memory 1024m --executor-cores 1 --properties-file /home/yuzt/software/bigdata/data/tmp/nm-local-dir/usercache/yuzt/appcache/application_1453270984424_0032/container_1453270984424_0032_01_000001/__spark_conf__/__spark_conf__.properties
+
+
+
+
 22340 org.apache.spark.executor.CoarseGrainedExecutorBackend --driver-url spark://CoarseGrainedScheduler@10.12.167.42:52563 --executor-id 1 --hostname yuzt-Aspire-TC-606 --cores 1 --app-id application_1453270984424_0032 --user-class-path file:/home/yuzt/software/bigdata/data/tmp/nm-local-dir/usercache/yuzt/appcache/application_1453270984424_0032/container_1453270984424_0032_01_000002/__app__.jar

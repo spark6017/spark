@@ -437,6 +437,8 @@ private[spark] class Client(
      *         The localized path will be null if the URI has already been added to the cache.
      *
      *         将文件广播到HADOOP集群
+      *
+      * 将资源通过DistributedCache进行分发
      */
     def distribute(
         path: String,
@@ -470,6 +472,12 @@ private[spark] class Client(
     if (loginFromKeytab) {
       logInfo("To enable the AM to login from keytab, credentials are being copied over to the AM" +
         " via the YARN Secure Distributed Cache.")
+
+      /**
+        *
+        * 广播keytab文件
+        */
+
       val (_, localizedPath) = distribute(keytab,
         destName = Some(sparkConf.get("spark.yarn.keytab")),
         appMasterOnly = true)
@@ -485,16 +493,27 @@ private[spark] class Client(
      *   (3) Spark property key to set if the scheme is not local
      */
     List(
-      (SPARK_JAR, sparkJar(sparkConf), CONF_SPARK_JAR),
-      (APP_JAR, args.userJar, CONF_SPARK_USER_JAR),
+      (SPARK_JAR, sparkJar(sparkConf), CONF_SPARK_JAR),  /**spark assemly jar*/
+      (APP_JAR, args.userJar, CONF_SPARK_USER_JAR), /**spark user jar, 包含用户代码的jar包， args.userJar是以file:///开头的jar文件*/
       ("log4j.properties", oldLog4jConf.orNull, null)
     ).foreach { case (destName, path, confKey) =>
       if (path != null && !path.trim().isEmpty()) {
+
+        /**
+          * isLocal表示什么含义？
+          * localizedPath表示HDFS上缓存的路径？
+          */
         val (isLocal, localizedPath) = distribute(path, destName = Some(destName))
+
+
         if (isLocal && confKey != null) {
           require(localizedPath != null, s"Path $path already distributed.")
           // If the resource is intended for local use only, handle this downstream
           // by setting the appropriate property
+
+          /***
+            * 将"spark.yarn.user.jar写到SparkConfiguration中
+            */
           sparkConf.set(confKey, localizedPath)
         }
       }

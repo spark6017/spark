@@ -23,7 +23,7 @@ import org.apache.spark.deploy.yarn.YarnSparkHadoopUtil._
 import org.apache.spark.util.{IntParam, MemoryParam}
 
 /**
- * propertiesFile是如何传递给ApplicationMaster的？这个在ApplicationMaster进程中，是以--properties-file形式出现的
+ * propertiesFile是如何传递给ApplicationMaster的？这个在ApplicationMaster进程中，是以--properties-file形式出现的(并且指向HDFS路径)
  * @param args
  */
 class ApplicationMasterArguments(val args: Array[String]) {
@@ -47,10 +47,16 @@ class ApplicationMasterArguments(val args: Array[String]) {
       // --num-workers, --worker-memory, and --worker-cores are deprecated since 1.0,
       // the properties with executor in their names are preferred.
       args match {
+        /**
+          * 用户提交作业的jar包，在YARN Cluster模式下为什么指向本地jar路径？
+          */
         case ("--jar") :: value :: tail =>
           userJar = value
           args = tail
 
+        /**
+          * 用户提交作业通过--class指定的main class
+          */
         case ("--class") :: value :: tail =>
           userClass = value
           args = tail

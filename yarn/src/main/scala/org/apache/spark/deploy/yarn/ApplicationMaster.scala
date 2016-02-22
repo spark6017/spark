@@ -689,6 +689,11 @@ object ApplicationMaster extends Logging {
 
   private var master: ApplicationMaster = _
 
+  /**
+    * ApplicationMaster进程可用的参数包装在ApplicationMasterArguments类中
+    *
+    * @param args
+    */
   def main(args: Array[String]): Unit = {
     SignalLogger.register(log)
     val amArgs = new ApplicationMasterArguments(args)

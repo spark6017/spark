@@ -178,6 +178,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             }
           logInfo(s"Registered executor $executorRef ($executorAddress) with ID $executorId")
           addressToExecutorId(executorAddress) = executorId
+
+          /***
+            * totalCoreCount用于计算默认并行度，有多个core，并行度就是多少
+            * 也就是说，这个并行度跟application使用的内核数是相同的
+            */
           totalCoreCount.addAndGet(cores)
           totalRegisteredExecutors.addAndGet(1)
           val data = new ExecutorData(executorRef, executorRef.address, executorAddress.host,
@@ -436,6 +441,12 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     driverEndpoint.send(KillTask(taskId, executorId, interruptThread))
   }
 
+  /***
+    * 在CoarseGrainedSchedulerBackend，如果配置了spark.default.parallelism，则默认取这个值；
+    *
+    * 如果没配置这个值，那么并行度最小为2
+    * @return
+    */
   override def defaultParallelism(): Int = {
     conf.getInt("spark.default.parallelism", math.max(totalCoreCount.get(), 2))
   }

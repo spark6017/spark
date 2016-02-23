@@ -1995,7 +1995,15 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
 
   def getCheckpointDir: Option[String] = checkpointDir
 
-  /** Default level of parallelism to use when not given by user (e.g. parallelize and makeRDD). */
+  /**
+    * Default level of parallelism to use when not given by user (e.g. parallelize and makeRDD).
+    * SparkContext的默认并行度（defaultParallelism方法）是跟集群模式相关的，不同的模式使用不同的并行度?
+    *
+    * 主要区分Local模式和CoarseGrained模式
+    *
+    * 它是调用的TaskScheduler的defaultParallelism，其计算方法是：
+    *
+    * */
   def defaultParallelism: Int = {
     assertNotStopped()
     taskScheduler.defaultParallelism
@@ -2358,6 +2366,9 @@ object SparkContext extends Logging {
       */
     val MAX_LOCAL_TASK_FAILURES = 2
 
+    /**
+      * 如果是local模式，那么并行度为1，失败数是MAX_LOCAL_TASK_FAILURES
+      */
     master match {
       case "local" =>
         val scheduler = new TaskSchedulerImpl(sc, MAX_LOCAL_TASK_FAILURES, isLocal = true)
@@ -2365,6 +2376,12 @@ object SparkContext extends Logging {
         scheduler.initialize(backend)
         (backend, scheduler)
 
+      /**
+        * 如果是local[*]，那么并行度就取所有的内核数
+        * 如果是local[x]，那么并行度就取x个内核
+        *
+        * 如果local只有8个核，那么设置local[16]是什么情况？并行度是16？
+        */
       case LOCAL_N_REGEX(threads) =>
         def localCpuCount: Int = Runtime.getRuntime.availableProcessors()
         // local[*] estimates the number of cores on the machine; local[N] uses exactly N threads.
@@ -2377,6 +2394,9 @@ object SparkContext extends Logging {
         scheduler.initialize(backend)
         (backend, scheduler)
 
+      /**
+        * local模式下支持最大失败数的，
+        */
       case LOCAL_N_FAILURES_REGEX(threads, maxFailures) =>
         def localCpuCount: Int = Runtime.getRuntime.availableProcessors()
         // local[*, M] means the number of cores on the computer with M failures

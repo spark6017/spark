@@ -588,6 +588,10 @@ private[spark] class TaskSchedulerImpl(
     starvationTimer.cancel()
   }
 
+  /***
+    * 调用SchedulerBackend获取默认并行度
+    * @return
+    */
   override def defaultParallelism(): Int = backend.defaultParallelism()
 
   // Check for speculatable tasks in all our active jobs.

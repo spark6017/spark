@@ -144,6 +144,13 @@ private[spark] class LocalBackend(
     localEndpoint.send(ReviveOffers)
   }
 
+  /***
+    * local模式下首先获取spark.default.parallelism，如果没有配置则使用N个
+    * local[N]
+    *
+    * 问题：如果local只有8个core，而默认并行度设成了16，何解？
+    * @return
+    */
   override def defaultParallelism(): Int =
     scheduler.conf.getInt("spark.default.parallelism", totalCores)
 

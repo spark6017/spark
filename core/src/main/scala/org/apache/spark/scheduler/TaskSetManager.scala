@@ -862,9 +862,20 @@ private[spark] class TaskSetManager(
     // and we are not using an external shuffle server which could serve the shuffle outputs.
     // The reason is the next stage wouldn't be able to fetch the data from this dead executor
     // so we would need to rerun these tasks on other executors.
+    /**
+     * 如果正在执行的是ShuffleMapStage，并且没有开启External Shuffle Service，那么所有的任务都要重新运行
+     */
     if (tasks(0).isInstanceOf[ShuffleMapTask] && !env.blockManager.externalShuffleServiceEnabled) {
+
+      /**
+       * 从taskInfos中取出所有属于executorId的任务
+       */
       for ((tid, info) <- taskInfos if info.executorId == execId) {
         val index = taskInfos(tid).index
+
+        /**
+         * 执行成功的也得重新执行
+         */
         if (successful(index)) {
           successful(index) = false
           copiesRunning(index) -= 1
@@ -879,6 +890,10 @@ private[spark] class TaskSetManager(
         }
       }
     }
+
+    /**
+     * 再次遍历taskInfos找出属于lost的executor的TaskInfo
+     */
     for ((tid, info) <- taskInfos if info.running && info.executorId == execId) {
       val exitCausedByApp: Boolean = reason match {
         case exited: ExecutorExited => exited.exitCausedByApp

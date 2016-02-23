@@ -388,6 +388,12 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    * the merging locally on each mapper before sending results to a reducer, similarly to a
    * "combiner" in MapReduce. Output will be hash-partitioned with the existing partitioner/
    * parallelism level.
+    *
+    * 如果不显式指定分区数，那么reduceByKey的分区数是怎么定义的？
+    * 如下所示：
+    * val bRDD = aRDD.reduceyByKey(_ + _)； 假如aRDD的并行度是10，那么bRDD的并行度是多少？
+    *
+    * 调用默认分区函数defaultPartitioner，参数是self，那么就是aRDD把？
    */
   def reduceByKey(func: (V, V) => V): RDD[(K, V)] = self.withScope {
     reduceByKey(defaultPartitioner(self), func)

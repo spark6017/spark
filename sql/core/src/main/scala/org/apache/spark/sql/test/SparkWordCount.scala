@@ -16,6 +16,16 @@ object SparkWordCount {
       .flatMap(_.split(" "))
       .map(word => (word, 1))
       .reduceByKey(_ + _, 3)
+
+
+    val rdd2 = sc.textFile(file, 5)
+      .flatMap(_.split(" "))
+      .map(word => (word, 1))
+      .reduceByKey(_ + _)
+
+
+    println("rdd2.partitions.length: " + rdd2.partitions.length);
+
     rdd.foreach(println)
 
     println("begin to write to file system")

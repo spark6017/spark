@@ -50,6 +50,9 @@ private[spark] class ApplicationInfo(
 
   @transient private var nextExecutorId: Int = _
 
+  /***
+    * 调用初始化方法
+    */
   init()
 
   private def readObject(in: java.io.ObjectInputStream): Unit = Utils.tryOrIOException {

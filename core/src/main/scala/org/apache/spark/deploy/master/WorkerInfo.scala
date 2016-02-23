@@ -85,6 +85,10 @@ private[spark] class WorkerInfo(
     executors.values.exists(_.application == app)
   }
 
+  /***
+    * Worker更新数据结构，包括使用的内存和使用的内核数
+    * @param driver
+    */
   def addDriver(driver: DriverInfo) {
     drivers(driver.id) = driver
     memoryUsed += driver.desc.mem

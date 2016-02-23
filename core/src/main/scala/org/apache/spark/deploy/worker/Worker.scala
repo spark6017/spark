@@ -434,7 +434,7 @@ private[deploy] class Worker(
       registerWithMaster()
 
     /**
-     * LaunchExecutor消息
+     * LaunchExecutor消息，Master让Worker启动Executor
      */
     case LaunchExecutor(masterUrl, appId, execId, appDesc, cores_, memory_) =>
       if (masterUrl != activeMasterUrl) {

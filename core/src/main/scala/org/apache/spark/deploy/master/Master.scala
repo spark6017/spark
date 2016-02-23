@@ -124,6 +124,10 @@ private[deploy] class Master(
   // As a temporary workaround before better ways of configuring memory, we allow users to set
   // a flag that will perform round-robin scheduling across the nodes (spreading out each app
   // among all the nodes) instead of trying to consolidate each app onto a small # of nodes.
+
+  /**
+    * 默认为true，表示在可用的worker上平均分配，而不是在一个Worker上集中分配
+    */
   private val spreadOutApps = conf.getBoolean("spark.deploy.spreadOut", true)
 
   // Default maxCores for applications that don't specify it (i.e. pass Int.MaxValue)
@@ -245,21 +249,39 @@ private[deploy] class Master(
       System.exit(0)
     }
 
+    /**
+      * Driver注册Application事件，涉及调度
+      */
     case RegisterApplication(description, driver) => {
       // TODO Prevent repeated registrations from some driver
       if (state == RecoveryState.STANDBY) {
         // ignore, don't send response
       } else {
         logInfo("Registering app " + description.name)
+
+        /***
+          * Master创建一个ApplicationInfo实例，用于维护Application的状态
+          */
         val app = createApplication(description, driver)
         registerApplication(app)
         logInfo("Registered app " + description.name + " with ID " + app.id)
         persistenceEngine.addApplication(app)
+
+        /***
+          * 通知Driver，Application注册成功
+          */
         driver.send(RegisteredApplication(app.id, self))
+
+        /***
+          * 进入调度环节
+          */
         schedule()
       }
     }
 
+    /**
+      * ExecutorStateChanged事件涉及调度
+      */
     case ExecutorStateChanged(appId, execId, state, message, exitStatus) => {
       val execOption = idToApp.get(appId).flatMap(app => app.executors.get(execId))
       execOption match {
@@ -388,7 +410,16 @@ private[deploy] class Master(
       Option(appIdToUI.get(appId)).foreach { ui => webUi.attachSparkUI(ui) }
   }
 
+  /**
+    *
+    * @param context
+    * @return
+    */
   override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
+
+    /**
+      * 注册Worker事件，涉及调度
+      */
     case RegisterWorker(
         id, workerHost, workerPort, workerRef, cores, memory, workerWebUiUrl) => {
       logInfo("Registering worker %s:%d with %d cores, %s RAM".format(
@@ -414,6 +445,9 @@ private[deploy] class Master(
       }
     }
 
+    /***
+      * Master收到RequestSubmitDriver事件，涉及调度
+      */
     case RequestSubmitDriver(description) => {
       if (state != RecoveryState.ALIVE) {
         val msg = s"${Utils.BACKUP_STANDALONE_MASTER_PREFIX}: $state. " +
@@ -660,21 +694,49 @@ private[deploy] class Master(
 
   /**
    * Schedule and launch executors on workers
+    *
+    * 所谓的startExecutorsOnWorkers，就是在Worker上为等待运行的application分配资源（确切的说，是为Application分配Application所需要的cores，分配可能不是一次就完成）
+    * 问题：waitingApps什么时候做remove操作？即Application运行起来后，要在waitingApps中删除它
    */
   private def startExecutorsOnWorkers(): Unit = {
     // Right now this is a very simple FIFO scheduler. We keep trying to fit in the first app
     // in the queue, then the second app, etc.
+
+    /**
+      * 如果waitingApps中的Application还需要继续分配cores(app.coresLeft>0)
+      */
     for (app <- waitingApps if app.coresLeft > 0) {
       val coresPerExecutor: Option[Int] = app.desc.coresPerExecutor
       // Filter out workers that don't have enough resources to launch an executor
+
+      /***
+        * 针对一个指定的app，过滤出满足条件的Worker(usableWorkers是按照可用的内核数进行降序)
+        *
+        * 1. 首先过滤出处于ALIVE状态的Worker，filter是过滤出满足条件的集合
+        * 2. 过滤出Worker的剩余可用的内存两>=该app单个Executor所需的内存量，比如worker有5G可用，而该app的每个executor需要4G
+        * 3. 过滤出Worker的剩余可用的内核书>=该app单个Executor所需的cores数(如果不指定--executor-cores，那么默认是1)
+        * 4. 按照剩余内核数排序，再翻转，即usableWorkers是内核数多的排前面
+        */
       val usableWorkers = workers.toArray.filter(_.state == WorkerState.ALIVE)
         .filter(worker => worker.memoryFree >= app.desc.memoryPerExecutorMB &&
           worker.coresFree >= coresPerExecutor.getOrElse(1)) /**如果coresPerExecutor为None，那么给默认值1*/
         .sortBy(_.coresFree).reverse
+
+
+
+      /***
+        * 为app分配cores，这只是得到一个数组，每个元素对应一个worker分配的cores
+        */
       val assignedCores = scheduleExecutorsOnWorkers(app, usableWorkers, spreadOutApps)
 
       // Now that we've decided how many cores to allocate on each worker, let's allocate them
+      /***
+        * 在分配了Core的worker上，启动Executor
+        */
       for (pos <- 0 until usableWorkers.length if assignedCores(pos) > 0) {
+        /**
+          * 分配cores并启动Executor
+          */
         allocateWorkerResourceToExecutors(
           app, assignedCores(pos), coresPerExecutor, usableWorkers(pos))
       }
@@ -725,9 +787,12 @@ private[deploy] class Master(
     val shuffledWorkers = Random.shuffle(workers) // Randomization helps balance drivers
     for (worker <- shuffledWorkers if worker.state == WorkerState.ALIVE) {
 
-      /**首先调度Driver*/
+      /**首先调度等待运行的Driver*/
       for (driver <- waitingDrivers) {
         if (worker.memoryFree >= driver.desc.mem && worker.coresFree >= driver.desc.cores) {
+          /***
+            * 启动Driver，为什么Driver占用的内存和内核数没有减去？减掉了，在launchDriver方法中，调用WorkerInfo.addDriver方法
+            */
           launchDriver(worker, driver)
           waitingDrivers -= driver
         }
@@ -818,6 +883,10 @@ private[deploy] class Master(
     persistenceEngine.removeWorker(worker)
   }
 
+  /***
+    * 重新启动Driver，涉及调度，因为waitingDrivers增加了一个driver
+    * @param driver
+    */
   private def relaunchDriver(driver: DriverInfo) {
     driver.worker = None
     driver.state = DriverState.RELAUNCHING
@@ -825,6 +894,12 @@ private[deploy] class Master(
     schedule()
   }
 
+  /**
+    * Master负责生成Application的ID
+    * @param desc
+    * @param driver
+    * @return
+    */
   private def createApplication(desc: ApplicationDescription, driver: RpcEndpointRef):
       ApplicationInfo = {
     val now = System.currentTimeMillis()
@@ -833,6 +908,10 @@ private[deploy] class Master(
     new ApplicationInfo(now, appId, desc, date, driver, defaultCores)
   }
 
+  /***
+    * 更新Master维护的数据结构，包括apps，waitingApps
+    * @param app
+    */
   private def registerApplication(app: ApplicationInfo): Unit = {
     val appAddress = app.driver.address
     if (addressToApp.contains(appAddress)) {
@@ -852,6 +931,11 @@ private[deploy] class Master(
     removeApplication(app, ApplicationState.FINISHED)
   }
 
+  /***
+    * Application删除导致重新调度，因为被删除Application占用的资源被释放
+    * @param app
+    * @param state
+    */
   def removeApplication(app: ApplicationInfo, state: ApplicationState.Value) {
     if (apps.contains(app)) {
       logInfo("Removing app " + app.id)
@@ -896,6 +980,9 @@ private[deploy] class Master(
    * If the executor limit is adjusted upwards, new executors will be launched provided
    * that there are workers with sufficient resources. If it is adjusted downwards, however,
    * we do not kill existing executors until we explicitly receive a kill request.
+    *
+    *
+    * Application请求的Executor数发生变化，重新调度，因为Application可能需要更多的Executor
    *
    * @return whether the application has previously registered with this Master.
    */
@@ -918,6 +1005,8 @@ private[deploy] class Master(
    * This method assumes the executor limit has already been adjusted downwards through
    * a separate [[RequestExecutors]] message, such that we do not launch new executors
    * immediately after the old ones are removed.
+    *
+    * Executor被Kill需要重新调度
    *
    * @return whether the application has previously registered with this Master.
    */
@@ -1100,6 +1189,12 @@ private[deploy] class Master(
     driver.state = DriverState.RUNNING
   }
 
+  /**
+    * Driver被删除，需要重新调度
+    * @param driverId
+    * @param finalState
+    * @param exception
+    */
   private def removeDriver(
       driverId: String,
       finalState: DriverState,

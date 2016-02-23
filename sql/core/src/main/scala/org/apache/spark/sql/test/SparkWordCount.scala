@@ -17,6 +17,11 @@ object SparkWordCount {
       .map(word => (word, 1))
       .reduceByKey(_ + _, 3)
     rdd.foreach(println)
+
+    println("begin to write to file system")
+    sc.textFile(file, 20).saveAsTextFile(file + "." + System.currentTimeMillis())
+
+
     scala.io.StdIn.readLine()
     sc.stop()
   }

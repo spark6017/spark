@@ -809,6 +809,10 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
   /**
    * Read a text file from HDFS, a local file system (available on all nodes), or any
    * Hadoop-supported file system URI, and return it as an RDD of Strings.
+    *
+    *
+    * 第二个参数是最小分区数，如果文件的Block数突破这个分区数，那么会使用Block个数作为并行度
+    * 问题：如果指定的最小分区数大于Block个数，Spark如何进行分区调整？
    */
   def textFile(
       path: String,
@@ -987,6 +991,9 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
    * operation will create many references to the same object.
    * If you plan to directly cache, sort, or aggregate Hadoop writable objects, you should first
    * copy them using a `map` function.
+    *
+    *
+    * 将最小分区数传递给HadoopRDD
    */
   def hadoopFile[K, V](
       path: String,

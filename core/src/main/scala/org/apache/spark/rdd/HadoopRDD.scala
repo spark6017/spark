@@ -192,6 +192,11 @@ class HadoopRDD[K, V](
     newInputFormat
   }
 
+  /***
+    * 获取分区数，Hadoop的InputFormat本身就支持调用getSplits方法时指定分区数
+    * 也就是说，如果一个文件在HDFS上有3个分区，那么可以要求它返回10个分区
+    * @return
+    */
   override def getPartitions: Array[Partition] = {
     val jobConf = getJobConf()
     // add the credentials here as this can be called before SparkContext initialized

@@ -153,6 +153,16 @@ abstract class RDD[T: ClassTag](
 
   /**
    * Mark this RDD for persisting using the specified level.
+    *
+    * 如果RDD已经缓存过，那么如果改变RDD的缓存级别，那么会报错，除非设置overwrite了
+    *
+    * 只是标记该RDD需要缓存，在action执行时，如果缓存中没有，则首先计算，然后再存到缓存，之后再有action读取这个RDD的时候，就会从缓存中读取
+    * rdd.cache >> rdd.count(计算并写缓存)
+    *           >> rdd.foreach(略过计算直接读缓存)
+    *
+    *
+    * 在RDD的iterator方法中compute或者read cache
+    *
    *
    * @param newLevel the target storage level
    * @param allowOverride whether to override any existing level with the new one
@@ -177,6 +187,13 @@ abstract class RDD[T: ClassTag](
    * Set this RDD's storage level to persist its values across operations after the first time
    * it is computed. This can only be used to assign a new storage level if the RDD does not
    * have a storage level set yet. Local checkpointing is an exception.
+    *
+    *
+    * 1. 首先判断是否是isLocallyCheckpointed？何为LocallyCheckepointed?
+    * 2.
+    *
+    *
+    * 问题：如果一个RDD已经persist过，比如先persist到内存，后persist到内存+磁盘，这个处理过程如何？
    */
   def persist(newLevel: StorageLevel): this.type = {
     if (isLocallyCheckpointed) {
@@ -189,10 +206,21 @@ abstract class RDD[T: ClassTag](
     }
   }
 
-  /** Persist this RDD with the default storage level (`MEMORY_ONLY`). */
-  def persist(): this.type = persist(StorageLevel.MEMORY_ONLY)
+  /**
+    * Persist this RDD with the default storage level (`MEMORY_ONLY`).
+    *
+    * 存储级别为MEMORY_ONLY
+    * */
+  def persist(): this.type = {
+    persist(StorageLevel.MEMORY_ONLY)
+  }
 
-  /** Persist this RDD with the default storage level (`MEMORY_ONLY`). */
+  /**
+    * Persist this RDD with the default storage level (`MEMORY_ONLY`).
+    *
+    * 将数据缓存到内存（不涉及序列化操作，也就是MEMORY_ONLY)
+    *
+    */
   def cache(): this.type = persist()
 
   /**
@@ -269,8 +297,17 @@ abstract class RDD[T: ClassTag](
    * Internal method to this RDD; will read from cache if applicable, or otherwise compute it.
    * This should ''not'' be called by users directly, but is available for implementors of custom
    * subclasses of RDD.
+    *
+    * 1. 如果该RDD标记为已经Cache，那么从CacheManager中读取
+    * 2. 如果没有标记为Cache，那么先计算或者从Checkpoint中读取
+    *
+    * 从这个逻辑中可以看出，如果一个RDD既被cache又做了checkpoint，那么只会从cache中读取
    */
   final def iterator(split: Partition, context: TaskContext): Iterator[T] = {
+
+    /***
+      * 如果存储级别不是NONE，表示RDD被标记为Cache(如果没有真正的cache那么首先计算再进行cache)
+      */
     if (storageLevel != StorageLevel.NONE) {
       SparkEnv.get.cacheManager.getOrCompute(this, split, context, storageLevel)
     } else {
@@ -307,9 +344,15 @@ abstract class RDD[T: ClassTag](
    */
   private[spark] def computeOrReadCheckpoint(split: Partition, context: TaskContext): Iterator[T] =
   {
+    /***
+      * 如果已经checkpoint，那么调用firstParent的iterator方法
+      */
     if (isCheckpointedAndMaterialized) {
       firstParent[T].iterator(split, context)
     } else {
+      /***
+        * 否则进行计算
+        */
       compute(split, context)
     }
   }
@@ -1452,6 +1495,8 @@ abstract class RDD[T: ClassTag](
    * `spark.dynamicAllocation.cachedExecutorIdleTimeout` to a high value.
    *
    * The checkpoint directory set through `SparkContext#setCheckpointDir` is not used.
+    *
+    *
    */
   def localCheckpoint(): this.type = RDDCheckpointData.synchronized {
     if (conf.getBoolean("spark.dynamicAllocation.enabled", false) &&
@@ -1498,6 +1543,9 @@ abstract class RDD[T: ClassTag](
 
   /**
    * Return whether this RDD is checkpointed and materialized, either reliably or locally.
+    *
+    * 检查RDD是否已经完成checkpoint了，状态为isCheckpointed为true
+    * checkpointData是一个Option，它有exists方法，表示Option是否有数据，并且数据满足某个条件
    */
   def isCheckpointed: Boolean = checkpointData.exists(_.isCheckpointed)
 

@@ -25,37 +25,71 @@ import org.apache.spark.storage._
 /**
  * Spark class responsible for passing RDDs partition contents to the BlockManager and making
  * sure a node doesn't load two copies of an RDD at once.
+  *
+  * 把一个RDD的分区保存到CacheManager中
+  *
  */
 private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
 
   /** Keys of RDD partitions that are being computed/loaded. */
   private val loading = new mutable.HashSet[RDDBlockId]
 
-  /** Gets or computes an RDD partition. Used by RDD.iterator() when an RDD is cached. */
+  /** Gets or computes an RDD partition. Used by RDD.iterator() when an RDD is cached.
+    *
+    *
+    *
+    * */
   def getOrCompute[T](
       rdd: RDD[T],
       partition: Partition,
       context: TaskContext,
       storageLevel: StorageLevel): Iterator[T] = {
 
+    /**
+      * RDD的一个partition对应的BlockId,包括rdd的id和partition的id
+      */
     val key = RDDBlockId(rdd.id, partition.index)
     logDebug(s"Looking for partition $key")
+
+    /***
+      * 从BlockManager中获取
+      */
     blockManager.get(key) match {
+
+      /***
+        * 如果读到数据，则放到blockResult中，blockResult的类型是BlockResult
+        */
       case Some(blockResult) =>
         // Partition is already materialized, so just return its values
         val existingMetrics = context.taskMetrics().registerInputMetrics(blockResult.readMethod)
         existingMetrics.incBytesRead(blockResult.bytes)
 
+        /***
+          * BlockResult的data是一个Iterator
+          */
         val iter = blockResult.data.asInstanceOf[Iterator[T]]
+
+        /**
+          * 这里的delegate就是InterruptibleIterator构造参数的第二个iter
+          */
         new InterruptibleIterator[T](context, iter) {
           override def next(): T = {
             existingMetrics.incRecordsRead(1)
             delegate.next()
           }
         }
+
+      /***
+        * 如果BlockManager中没有数据，那么进行计算再缓存
+        */
       case None =>
         // Acquire a lock for loading this partition
         // If another thread already holds the lock, wait for it to finish return its results
+        /**
+          * 等待其它线程计算+缓存完，直接其它线程缓存的结果
+          *
+          * 如果返回值没有定义，那么会做加锁操作(对loading对象进行加锁)
+          */
         val storedValues = acquireLockForPartition[T](key)
         if (storedValues.isDefined) {
           return new InterruptibleIterator[T](context, storedValues.get)
@@ -64,8 +98,21 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
         // Otherwise, we have to load the partition ourselves
         try {
           logInfo(s"Partition $key not found, computing it")
+
+          /***
+            * 调用RDD的computeOrReadCheckpoint计算一个结果，此处的逻辑是：
+            * 如果在checkpoint之前就把数据cache了，则不会再读取checkpoint；如果在cache之前把checkpoint了，那么cache直接读取checkpoint然后放到cache中
+            *
+            */
           val computedValues = rdd.computeOrReadCheckpoint(partition, context)
+          /***
+            * 将数据写入缓存(BlockManager管理）
+            */
           val cachedValues = putInBlockManager(key, computedValues, storageLevel)
+
+          /**
+            * 返回缓存的数据
+            */
           new InterruptibleIterator(context, cachedValues)
         } finally {
           loading.synchronized {

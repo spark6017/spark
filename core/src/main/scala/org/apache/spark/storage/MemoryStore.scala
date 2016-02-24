@@ -28,6 +28,12 @@ import org.apache.spark.memory.MemoryManager
 import org.apache.spark.util.{SizeEstimator, Utils}
 import org.apache.spark.util.collection.SizeTrackingVector
 
+/***
+  *
+  * @param value 可以是Java对象数组，也可以是ByteBuffer(字节流)
+  * @param size 内存使用量
+  * @param deserialized 是否反序列化
+  */
 private case class MemoryEntry(value: Any, size: Long, deserialized: Boolean)
 
 /**
@@ -50,6 +56,9 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
 
   // A mapping from taskAttemptId to amount of memory used for unrolling a block (in bytes)
   // All accesses of this map are assumed to have manually synchronized on `memoryManager`
+  /***
+    * unrollMemory指的的hiunroll一个block需要的内存？
+    */
   private val unrollMemoryMap = mutable.HashMap[Long, Long]()
   // Same as `unrollMemoryMap`, but for pending unroll memory as defined below.
   // Pending unroll memory refers to the intermediate memory occupied by a task
@@ -61,6 +70,7 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
   private val pendingUnrollMemoryMap = mutable.HashMap[Long, Long]()
 
   // Initial memory to request before unrolling any block
+  // 在unroll any block之前分配的unrollmemory
   private val unrollMemoryThreshold: Long =
     conf.getLong("spark.storage.unrollMemoryThreshold", 1024 * 1024)
 
@@ -185,6 +195,11 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
     }
   }
 
+  /***
+    * 返回字节(包装于ByteBuffer中）
+    * @param blockId
+    * @return
+    */
   override def getBytes(blockId: BlockId): Option[ByteBuffer] = {
     val entry = entries.synchronized {
       entries.get(blockId)
@@ -198,6 +213,11 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
     }
   }
 
+  /***
+    * 返回一个Iterator
+    * @param blockId
+    * @return
+    */
   override def getValues(blockId: BlockId): Option[Iterator[Any]] = {
     val entry = entries.synchronized {
       entries.get(blockId)
@@ -384,6 +404,9 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
       } else {
         // Tell the block manager that we couldn't put it in memory so that it can drop it to
         // disk if the block allows disk storage.
+        /***
+          * 怎么告诉BlockManager？
+          */
         lazy val data = if (deserialized) {
           Left(value().asInstanceOf[Array[Any]])
         } else {

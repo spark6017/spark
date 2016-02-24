@@ -1040,8 +1040,15 @@ private[spark] class BlockManager(
         val level = info.level
 
         // Drop to disk, if storage level requires
+        /***
+          * 如果该Block能够写到磁盘，那么进行写磁盘操作
+          */
         if (level.useDisk && !diskStore.contains(blockId)) {
           logInfo(s"Writing block $blockId to disk")
+
+          /**
+            * data()是一个Either，有两个值Left和Right，这两个值怎么定义的？
+            */
           data() match {
             case Left(elements) =>
               diskStore.putArray(blockId, elements, level, returnValues = false)

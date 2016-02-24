@@ -60,6 +60,9 @@ private[spark] class BlockResult(
  * retrieving blocks both locally and remotely into various stores (memory, disk, and off-heap).
  *
  * Note that [[initialize()]] must be called before the BlockManager is usable.
+  *
+  * BlockManager构造方法持有BlockManagerMaster，在成员变量中持有一个slaveEndpoint（BlockManagerSlaveEndpoint）
+  *
  */
 private[spark] class BlockManager(
     executorId: String,
@@ -168,11 +171,17 @@ private[spark] class BlockManager(
    * This method initializes the BlockTransferService and ShuffleClient, registers with the
    * BlockManagerMaster, starts the BlockManagerWorker endpoint, and registers with a local shuffle
    * service if configured.
+    *
+    *
+    * initialize方法不是在构造方法中创建的，而是创建完成后显式的调用
    */
   def initialize(appId: String): Unit = {
     blockTransferService.init(this)
     shuffleClient.init(appId)
 
+    /***
+      * 构造出BlockManager对应的BlockManagerId
+      */
     blockManagerId = BlockManagerId(
       executorId, blockTransferService.hostName, blockTransferService.port)
 
@@ -184,7 +193,10 @@ private[spark] class BlockManager(
     }
 
     /***
-      * 注册BlockManager
+      * 通过master注册BlockManager，master是BlockManagerMasterEndpoint或者BlockManagerMasterEndpoint的ref
+      * driverEndpoint: NettyRpcEndpointRef(spark://BlockManagerMaster@10.12.167.42:50867)
+      * isDriver true
+      * master的类型是BlockManagerMaster,它持有blockManagerMasterEndpoint的ref
       */
     master.registerBlockManager(blockManagerId, maxMemory, slaveEndpoint)
 
@@ -769,6 +781,10 @@ private[spark] class BlockManager(
       try {
         // returnValues - Whether to return the values put
         // blockStore - The type of storage to put these values into
+        /**
+          * blockStore可以是MemoryStore，也可以是DiskStore
+          *
+        */
         val (returnValues, blockStore: BlockStore) = {
           if (putLevel.useMemory) {
             // Put it in memory first, even if it also has useDisk set to true;

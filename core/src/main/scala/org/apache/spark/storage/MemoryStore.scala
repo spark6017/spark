@@ -33,13 +33,18 @@ private case class MemoryEntry(value: Any, size: Long, deserialized: Boolean)
 /**
  * Stores blocks in memory, either as Arrays of deserialized Java objects or as
  * serialized ByteBuffers.
+  *
+  * 将Block数据存储到从内存中，存储时存储格式可能是Java对象数组，也可能是序列化后的ByteBuffer
+  * MemoryStore关联一个BlockManager
  */
 private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: MemoryManager)
   extends BlockStore(blockManager) {
 
   // Note: all changes to memory allocations, notably putting blocks, evicting blocks, and
   // acquiring or releasing unroll memory, must be synchronized on `memoryManager`!
-
+  /***
+    * 何为unroll memory？
+    */
   private val conf = blockManager.conf
   private val entries = new LinkedHashMap[BlockId, MemoryEntry](32, 0.75f, true)
 

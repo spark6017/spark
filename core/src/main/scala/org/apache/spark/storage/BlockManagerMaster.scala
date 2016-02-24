@@ -28,11 +28,17 @@ import org.apache.spark.util.{RpcUtils, ThreadUtils}
 
 /**
   * BlockManagerMaster位于Master和Executor上，它们通过isDriver进行区分
-  * Driver上的BlockManagerMaster持有driverEndpoint，而Executor上的driverEndpoint只是一个endpoint Ref
+  *
+  * BlockManagerMaster是什么东西？为什么没有BlockManagerSlave？
+  *
+  * 1. 对于Driver，BlockManagerMaster拥有BlockManagerMasterEndpoint的endpoint(使用blockManagerMasterEndpoint表示)
+  * 2. 对于Executor，BlockManagerMaster拥有BlockManagerMasterEndpoint的endpoint ref(也使用blockManagerMasterEndpoint表示)
+  *
+  *
   */
 private[spark]
 class BlockManagerMaster(
-    var driverEndpoint: RpcEndpointRef,
+    var blockManagerMasterEndpoint: RpcEndpointRef,
     conf: SparkConf,
     isDriver: Boolean)
   extends Logging {
@@ -59,7 +65,7 @@ class BlockManagerMaster(
       storageLevel: StorageLevel,
       memSize: Long,
       diskSize: Long): Boolean = {
-    val res = driverEndpoint.askWithRetry[Boolean](
+    val res = blockManagerMasterEndpoint.askWithRetry[Boolean](
       UpdateBlockInfo(blockManagerId, blockId, storageLevel, memSize, diskSize))
     logDebug(s"Updated info of block $blockId")
     res
@@ -67,12 +73,12 @@ class BlockManagerMaster(
 
   /** Get locations of the blockId from the driver */
   def getLocations(blockId: BlockId): Seq[BlockManagerId] = {
-    driverEndpoint.askWithRetry[Seq[BlockManagerId]](GetLocations(blockId))
+    blockManagerMasterEndpoint.askWithRetry[Seq[BlockManagerId]](GetLocations(blockId))
   }
 
   /** Get locations of multiple blockIds from the driver */
   def getLocations(blockIds: Array[BlockId]): IndexedSeq[Seq[BlockManagerId]] = {
-    driverEndpoint.askWithRetry[IndexedSeq[Seq[BlockManagerId]]](
+    blockManagerMasterEndpoint.askWithRetry[IndexedSeq[Seq[BlockManagerId]]](
       GetLocationsMultipleBlockIds(blockIds))
   }
 
@@ -86,11 +92,11 @@ class BlockManagerMaster(
 
   /** Get ids of other nodes in the cluster from the driver */
   def getPeers(blockManagerId: BlockManagerId): Seq[BlockManagerId] = {
-    driverEndpoint.askWithRetry[Seq[BlockManagerId]](GetPeers(blockManagerId))
+    blockManagerMasterEndpoint.askWithRetry[Seq[BlockManagerId]](GetPeers(blockManagerId))
   }
 
   def getExecutorEndpointRef(executorId: String): Option[RpcEndpointRef] = {
-    driverEndpoint.askWithRetry[Option[RpcEndpointRef]](GetExecutorEndpointRef(executorId))
+    blockManagerMasterEndpoint.askWithRetry[Option[RpcEndpointRef]](GetExecutorEndpointRef(executorId))
   }
 
   /**
@@ -98,12 +104,12 @@ class BlockManagerMaster(
    * blocks that the driver knows about.
    */
   def removeBlock(blockId: BlockId) {
-    driverEndpoint.askWithRetry[Boolean](RemoveBlock(blockId))
+    blockManagerMasterEndpoint.askWithRetry[Boolean](RemoveBlock(blockId))
   }
 
   /** Remove all blocks belonging to the given RDD. */
   def removeRdd(rddId: Int, blocking: Boolean) {
-    val future = driverEndpoint.askWithRetry[Future[Seq[Int]]](RemoveRdd(rddId))
+    val future = blockManagerMasterEndpoint.askWithRetry[Future[Seq[Int]]](RemoveRdd(rddId))
     future.onFailure {
       case e: Exception =>
         logWarning(s"Failed to remove RDD $rddId - ${e.getMessage}", e)
@@ -115,7 +121,7 @@ class BlockManagerMaster(
 
   /** Remove all blocks belonging to the given shuffle. */
   def removeShuffle(shuffleId: Int, blocking: Boolean) {
-    val future = driverEndpoint.askWithRetry[Future[Seq[Boolean]]](RemoveShuffle(shuffleId))
+    val future = blockManagerMasterEndpoint.askWithRetry[Future[Seq[Boolean]]](RemoveShuffle(shuffleId))
     future.onFailure {
       case e: Exception =>
         logWarning(s"Failed to remove shuffle $shuffleId - ${e.getMessage}", e)
@@ -127,7 +133,7 @@ class BlockManagerMaster(
 
   /** Remove all blocks belonging to the given broadcast. */
   def removeBroadcast(broadcastId: Long, removeFromMaster: Boolean, blocking: Boolean) {
-    val future = driverEndpoint.askWithRetry[Future[Seq[Int]]](
+    val future = blockManagerMasterEndpoint.askWithRetry[Future[Seq[Int]]](
       RemoveBroadcast(broadcastId, removeFromMaster))
     future.onFailure {
       case e: Exception =>
@@ -146,11 +152,11 @@ class BlockManagerMaster(
    * amount of remaining memory.
    */
   def getMemoryStatus: Map[BlockManagerId, (Long, Long)] = {
-    driverEndpoint.askWithRetry[Map[BlockManagerId, (Long, Long)]](GetMemoryStatus)
+    blockManagerMasterEndpoint.askWithRetry[Map[BlockManagerId, (Long, Long)]](GetMemoryStatus)
   }
 
   def getStorageStatus: Array[StorageStatus] = {
-    driverEndpoint.askWithRetry[Array[StorageStatus]](GetStorageStatus)
+    blockManagerMasterEndpoint.askWithRetry[Array[StorageStatus]](GetStorageStatus)
   }
 
   /**
@@ -170,7 +176,7 @@ class BlockManagerMaster(
      * should not block on waiting for a block manager, which can in turn be waiting for the
      * master endpoint for a response to a prior message.
      */
-    val response = driverEndpoint.
+    val response = blockManagerMasterEndpoint.
       askWithRetry[Map[BlockManagerId, Future[Option[BlockStatus]]]](msg)
     val (blockManagerIds, futures) = response.unzip
     implicit val sameThread = ThreadUtils.sameThread
@@ -201,7 +207,7 @@ class BlockManagerMaster(
       filter: BlockId => Boolean,
       askSlaves: Boolean): Seq[BlockId] = {
     val msg = GetMatchingBlockIds(filter, askSlaves)
-    val future = driverEndpoint.askWithRetry[Future[Seq[BlockId]]](msg)
+    val future = blockManagerMasterEndpoint.askWithRetry[Future[Seq[BlockId]]](msg)
     timeout.awaitResult(future)
   }
 
@@ -210,21 +216,26 @@ class BlockManagerMaster(
    * since they are not reported the master.
    */
   def hasCachedBlocks(executorId: String): Boolean = {
-    driverEndpoint.askWithRetry[Boolean](HasCachedBlocks(executorId))
+    blockManagerMasterEndpoint.askWithRetry[Boolean](HasCachedBlocks(executorId))
   }
 
   /** Stop the driver endpoint, called only on the Spark driver node */
   def stop() {
-    if (driverEndpoint != null && isDriver) {
+    if (blockManagerMasterEndpoint != null && isDriver) {
       tell(StopBlockManagerMaster)
-      driverEndpoint = null
+      blockManagerMasterEndpoint = null
       logInfo("BlockManagerMaster stopped")
     }
   }
 
-  /** Send a one-way message to the master endpoint, to which we expect it to reply with true. */
+  /**
+    *
+    * Send a one-way message to the master endpoint, to which we expect it to reply with true.
+    * 给driverEndpoint发送消息,收消息的是BlockManagerMasterEndpoint
+    *
+    * */
   private def tell(message: Any) {
-    if (!driverEndpoint.askWithRetry[Boolean](message)) {
+    if (!blockManagerMasterEndpoint.askWithRetry[Boolean](message)) {
       throw new SparkException("BlockManagerMasterEndpoint returned false, expected true.")
     }
   }

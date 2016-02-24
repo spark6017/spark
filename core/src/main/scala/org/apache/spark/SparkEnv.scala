@@ -404,6 +404,8 @@ object SparkEnv extends Logging {
       * 不管是Executor还是Driver，都会创建BlockManagerMaster实例,这个实例创建完了会设置到BlockManager中
       *
       * 也就是说，在Driver上BlockManagerMaster是真实存在的，在Executor上，BlockManagerMaster只是包含指向Driver BlockManager的endpoint ref
+      *
+      * endpoint可能是BlockManagerMasterEndpoint本尊也可能是BlockManagerMasterEndpoint的引用
       */
     val blockManagerMaster = new BlockManagerMaster(endpoint, conf, isDriver)
 

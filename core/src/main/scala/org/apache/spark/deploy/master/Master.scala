@@ -731,7 +731,7 @@ private[deploy] class Master(
         *
         * 1. 过滤出处于ALIVE状态的Worker，filter是过滤出满足条件的集合
         * 2. 过滤出Worker的剩余可用的内存两>=该app单个Executor所需的内存量，比如worker有5G可用，而该app的每个executor需要4G
-        * 3. 过滤出Worker的剩余可用的内核书>=该app单个Executor所需的cores数(如果不指定--executor-cores，那么默认是1)
+        * 3. 过滤出Worker的剩余可用的内核数>=该app单个Executor所需的cores数(如果不指定--executor-cores，那么默认是1)
         * 4. 按照剩余内核数排序，再翻转，即usableWorkers是内核数多的排前面
         */
       val usableWorkers = workers.toArray.filter(_.state == WorkerState.ALIVE)
@@ -742,7 +742,9 @@ private[deploy] class Master(
 
 
       /***
-        * 为app分配cores，这只是得到一个数组，每个元素对应一个worker分配的cores
+        * 为app分配cores，这只是得到一个数组，数组的每个元素对应相同数组下标位置的usableWorker分配的cores
+        * 还未真正的分配，只是先统计出每个worker出多少资源，
+        * speadOutApps表示是集中分配模式还是分散模式(将executor分配到尽可能多的机器上，有利于数据本地性)
         */
       val assignedCores = scheduleExecutorsOnWorkers(app, usableWorkers, spreadOutApps)
 
@@ -778,15 +780,21 @@ private[deploy] class Master(
 
     /***
       * 如果指定了每个Executor的内核数，那么将Worker上可用内核进行平分；例如worker有9个cores，每个executor占用2个core，那么本Worker将启动4个Executor
+      * 如果没有指定，那么只启动一个Executor，这个executor将独占所有的cores
       *
-      * 如果没有指定，那么只启动一个Executor，这个executor将独占多有的cores
+      * numExecutors表示在worker上启动的executor数目，如果用户没有指定每个--executor--cores，那么executor数目就是1
+      * 如果指定了，内核数=worker可用的内核数/单个executor所需的内核数
       */
     val numExecutors = coresPerExecutor.map { assignedCores / _ }.getOrElse(1)
 
     /***
-      * 分配给每个Executor的内核数，如果没有指定coresPerExecutor，那么全给
+      * coresToAssign表示分给每个executor的内核数，如果没有指定coresPerExecutor，那么把worker的用户内核数(assignedCores)全给
       */
     val coresToAssign = coresPerExecutor.getOrElse(assignedCores)
+
+    /** *
+      * 启动在该Worker上要启动的numExecutors
+      */
     for (i <- 1 to numExecutors) {
       val exec = app.addExecutor(worker, coresToAssign)
       launchExecutor(worker, exec)
@@ -846,7 +854,7 @@ private[deploy] class Master(
       exec.application.id, exec.id, exec.application.desc, exec.cores, exec.memory))
 
     /**
-     * 给Driver发送ExecutorAdded消息
+     * Master给Driver发送ExecutorAdded消息，因此Driver确切的知道当前application可用的executor详细信息
      */
     exec.application.driver.send(
       ExecutorAdded(exec.id, worker.id, worker.hostPort, exec.cores, exec.memory))

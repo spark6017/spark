@@ -95,6 +95,7 @@ private[spark] class AppClient(
 
     /**
      *  Register with all masters asynchronously and returns an array `Future`s for cancellation.
+     *  向Master注册Application
      */
     private def tryRegisterAllMasters(): Array[JFuture[_]] = {
       for (masterAddress <- masterRpcAddresses) yield {

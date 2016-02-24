@@ -66,6 +66,9 @@ private[deploy] class Master(
 
   private def createDateFormat = new SimpleDateFormat("yyyyMMddHHmmss") // For application IDs
 
+  /** *
+    * Worker心跳超时时间
+    */
   private val WORKER_TIMEOUT_MS = conf.getLong("spark.worker.timeout", 60) * 1000
   private val RETAINED_APPLICATIONS = conf.getInt("spark.deploy.retainedApplications", 200)
   private val RETAINED_DRIVERS = conf.getInt("spark.deploy.retainedDrivers", 200)
@@ -126,7 +129,8 @@ private[deploy] class Master(
   // among all the nodes) instead of trying to consolidate each app onto a small # of nodes.
 
   /**
-    * 默认为true，表示在可用的worker上平均分配，而不是在一个Worker上集中分配
+    * 默认为true，表示将app需要的executor尽量分配到足够多的机器上，而不是在一个Worker上集中分配
+   * 这样有利于数据本地性
     */
   private val spreadOutApps = conf.getBoolean("spark.deploy.spreadOut", true)
 
@@ -137,7 +141,7 @@ private[deploy] class Master(
   }
 
   // Alternative application submission gateway that is stable across Spark versions
-  //通过REST接口提交任务？
+  //通过REST接口提交任务？是的，Spark REST Server
   private val restServerEnabled = conf.getBoolean("spark.master.rest.enabled", true)
   private var restServer: Option[StandaloneRestServer] = None
   private var restServerBoundPort: Option[Int] = None
@@ -157,6 +161,9 @@ private[deploy] class Master(
       }
     }, 0, WORKER_TIMEOUT_MS, TimeUnit.MILLISECONDS)
 
+    /** *
+      * 启动REST Server，restServer是一个Option，它有map方法，map的目的是把一个Option转换为另一个Option
+      */
     if (restServerEnabled) {
       val port = conf.getInt("spark.master.rest.port", 6066)
       restServer = Some(new StandaloneRestServer(address.host, port, conf, self, masterUrl))
@@ -250,7 +257,8 @@ private[deploy] class Master(
     }
 
     /**
-      * Driver注册Application事件，涉及调度
+      * AppClient注册Application事件，涉及调度
+     *  发送事件是在AppClient的tryRegisterAllMasters的方法中
       */
     case RegisterApplication(description, driver) => {
       // TODO Prevent repeated registrations from some driver
@@ -706,16 +714,22 @@ private[deploy] class Master(
     // in the queue, then the second app, etc.
 
     /**
-      * 如果waitingApps中的Application还需要继续分配cores(app.coresLeft>0)
+      * 遍历waitingApps，找出还需要继续分配cores的app(app.coresLeft>0)
       */
     for (app <- waitingApps if app.coresLeft > 0) {
+
+      /** *
+        * 首先取出用户指定的每个Executor使用多少cores，就是用户通过--executor-cores指定的值
+        * 这是一个Option，即可能为None
+        *
+        */
       val coresPerExecutor: Option[Int] = app.desc.coresPerExecutor
       // Filter out workers that don't have enough resources to launch an executor
 
       /***
-        * 针对一个指定的app，过滤出满足条件的Worker(usableWorkers是按照可用的内核数进行降序)
+        * 针对一个指定的app，过滤出满足条件的Worker存放到usableWorkers中(usableWorkers是按照可用的内核数进行降序)
         *
-        * 1. 首先过滤出处于ALIVE状态的Worker，filter是过滤出满足条件的集合
+        * 1. 过滤出处于ALIVE状态的Worker，filter是过滤出满足条件的集合
         * 2. 过滤出Worker的剩余可用的内存两>=该app单个Executor所需的内存量，比如worker有5G可用，而该app的每个executor需要4G
         * 3. 过滤出Worker的剩余可用的内核书>=该app单个Executor所需的cores数(如果不指定--executor-cores，那么默认是1)
         * 4. 按照剩余内核数排序，再翻转，即usableWorkers是内核数多的排前面
@@ -783,14 +797,20 @@ private[deploy] class Master(
   /**
    * Schedule the currently available resources among waiting apps. This method will be called
    * every time a new app joins or resource availability changes.
+   *
+   * 为用用分配可用的计算资源，有新作业提交或者可用资源发生变化(Executor Added、Lost等)
    */
   private def schedule(): Unit = {
     if (state != RecoveryState.ALIVE) { return }
     // Drivers take strict precedence over executors
     val shuffledWorkers = Random.shuffle(workers) // Randomization helps balance drivers
+
+    /** *
+      * 遍历每个处于ALIVE的Worker
+      */
     for (worker <- shuffledWorkers if worker.state == WorkerState.ALIVE) {
 
-      /**首先调度等待运行的Driver*/
+      /**首先调度等待运行的Driver，*/
       for (driver <- waitingDrivers) {
         if (worker.memoryFree >= driver.desc.mem && worker.coresFree >= driver.desc.cores) {
           /***
@@ -802,7 +822,11 @@ private[deploy] class Master(
       }
     }
 
-    /**在Worker上启动Executors，在Standalone模式下支持一个Worker启动多个Executor*/
+    /**
+     *  在Worker上启动Executors，在Standalone模式下支持一个Worker启动多个Executor
+      * 这个方法是为application分配executor
+      *
+      * */
     startExecutorsOnWorkers()
   }
 
@@ -898,7 +922,7 @@ private[deploy] class Master(
   }
 
   /**
-    * Master负责生成Application的ID
+    * Master负责生成Application的ID，ApplicationDescription是AppClient生成的
     * @param desc
     * @param driver
     * @return
@@ -907,7 +931,7 @@ private[deploy] class Master(
       ApplicationInfo = {
     val now = System.currentTimeMillis()
     val date = new Date(now)
-    val appId = newApplicationId(date)
+    val appId = newApplicationId(date) /**Cluster Manager负责接受任务提交并且进行资源分配（CPU和内存）*/
     new ApplicationInfo(now, appId, desc, date, driver, defaultCores)
   }
 

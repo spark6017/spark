@@ -256,6 +256,9 @@ private[spark] object Utils extends Logging {
           maxAttempts + " attempts!")
       }
       try {
+        /***
+          * 目录拼加UUID
+          */
         dir = new File(root, namePrefix + "-" + UUID.randomUUID.toString)
         if (dir.exists() || !dir.mkdirs()) {
           dir = null
@@ -743,6 +746,9 @@ private[spark] object Utils extends Logging {
       // In non-Yarn mode (or for the driver in yarn-client mode), we cannot trust the user
       // configuration to point to a secure directory. So create a subdirectory with restricted
       // permissions under each listed directory.
+      /***
+        * 默认返回Java的临时目录
+        */
       conf.get("spark.local.dir", System.getProperty("java.io.tmpdir")).split(",")
     }
   }
@@ -1264,6 +1270,12 @@ private[spark] object Utils extends Logging {
    * in `out.write`, it's likely `out` may be corrupted and `out.close` will
    * fail as well. This would then suppress the original/likely more meaningful
    * exception from the original `out.write` call.
+    *
+    * try{
+    *   block
+    * } finally {
+    *   finallyBlock
+    * }
    */
   def tryWithSafeFinally[T](block: => T)(finallyBlock: => Unit): T = {
     // It would be nice to find a method on Try that did this

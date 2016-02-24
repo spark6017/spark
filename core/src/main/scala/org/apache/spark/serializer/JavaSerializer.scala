@@ -29,6 +29,10 @@ import org.apache.spark.util.{ByteBufferInputStream, ByteBufferOutputStream, Uti
 private[spark] class JavaSerializationStream(
     out: OutputStream, counterReset: Int, extraDebugInfo: Boolean)
   extends SerializationStream {
+
+  /***
+    * 将out封装一个ObjectOutputStream
+    */
   private val objOut = new ObjectOutputStream(out)
   private var counter = 0
 
@@ -57,9 +61,17 @@ private[spark] class JavaSerializationStream(
   def close() { objOut.close() }
 }
 
+/***
+  * 如果数据压缩，解压缩逻辑在什么地方？
+  * @param in
+  * @param loader
+  */
 private[spark] class JavaDeserializationStream(in: InputStream, loader: ClassLoader)
   extends DeserializationStream {
 
+  /**
+    *
+    */
   private val objIn = new ObjectInputStream(in) {
     override def resolveClass(desc: ObjectStreamClass): Class[_] =
       try {

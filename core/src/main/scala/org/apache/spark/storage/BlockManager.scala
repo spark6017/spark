@@ -1156,19 +1156,40 @@ private[spark] class BlockManager(
 
   /**
    * Wrap an input stream for compression if block compression is enabled for its block type
+    * compressionCodec.compressedInputStream(InputStream)是对InputStream进行包装
+    * 比如LZ4BlockInputStream内置了解压逻辑
    */
   def wrapForCompression(blockId: BlockId, s: InputStream): InputStream = {
     if (shouldCompress(blockId)) compressionCodec.compressedInputStream(s) else s
   }
 
-  /** Serializes into a stream. */
+  /**
+    * 将数据序列化到输出流中
+    *
+    * Serializes into a stream.
+    *
+    *
+    * */
   def dataSerializeStream(
       blockId: BlockId,
       outputStream: OutputStream,
       values: Iterator[Any]): Unit = {
+    /***
+      * 包装成BufferedOutputStream
+      */
     val byteStream = new BufferedOutputStream(outputStream)
+
+    /***
+      * 返回SerializerInstance实例
+      */
     val ser = defaultSerializer.newInstance()
-    ser.serializeStream(wrapForCompression(blockId, byteStream)).writeAll(values).close()
+
+    /***
+      * 1. wrapForCompression,获得一个启用压缩的OutputStream，写入数据时可以压缩
+      * 2.
+      */
+    val compressionOutputStream = wrapForCompression(blockId, byteStream)
+    ser.serializeStream(compressionOutputStream).writeAll(values).close()
   }
 
   /** Serializes into a byte buffer. */
@@ -1181,6 +1202,8 @@ private[spark] class BlockManager(
   /**
    * Deserializes a ByteBuffer into an iterator of values and disposes of it when the end of
    * the iterator is reached.
+    * 对ByteBuffer中的数据进行反序列化
+    *
    */
   def dataDeserialize(blockId: BlockId, bytes: ByteBuffer): Iterator[Any] = {
     bytes.rewind()

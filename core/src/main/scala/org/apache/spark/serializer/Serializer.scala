@@ -130,6 +130,11 @@ abstract class SerializerInstance {
 
   def serializeStream(s: OutputStream): SerializationStream
 
+  /***
+    * 对解压后的InputStream数据进行反序列化
+    * @param s 如果数据有压缩，那么传给deserializeStream是解压了的
+    * @return
+    */
   def deserializeStream(s: InputStream): DeserializationStream
 }
 
@@ -148,6 +153,12 @@ abstract class SerializationStream {
   def flush(): Unit
   def close(): Unit
 
+  /***
+    * 调用writeObject写入数据
+    * @param iter
+    * @tparam T
+    * @return
+    */
   def writeAll[T: ClassTag](iter: Iterator[T]): SerializationStream = {
     while (iter.hasNext) {
       writeObject(iter.next())

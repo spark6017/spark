@@ -36,13 +36,22 @@ import org.apache.spark.util.{ShutdownHookManager, Utils}
 private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkConf)
   extends Logging {
 
+  /***
+    * 子目录是64个二级目录
+    */
   private[spark]
   val subDirsPerLocalDir = blockManager.conf.getInt("spark.diskStore.subDirectories", 64)
+
+
   var printFileLocation = true
 
   /* Create one local directory for each path mentioned in spark.local.dir; then, inside this
    * directory, create multiple subdirectories that we will hash files into, in order to avoid
-   * having really large inodes at the top level. */
+   * having really large inodes at the top level.
+   *
+   *
+   *
+   * */
   private[spark] val localDirs: Array[File] = createLocalDirs(conf)
   if (localDirs.isEmpty) {
     logError("Failed to create any local dir.")
@@ -59,6 +68,11 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon
   // org.apache.spark.network.shuffle.ExternalShuffleBlockResolver#getFile().
   def getFile(filename: String): File = {
     // Figure out which local directory it hashes to, and which subdirectory in that
+    /**
+      * 1. 根据文件名计算hash值
+      * 2. 在localDirs目录集合中获得属于那个目录(通过localDirs[dirId])
+      * 3. 算法是(hash / localDirs.length) % subDirsPerLocalDir
+      */
     val hash = Utils.nonNegativeHash(filename)
     val dirId = hash % localDirs.length
     val subDirId = (hash / localDirs.length) % subDirsPerLocalDir
@@ -81,7 +95,14 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon
     new File(subDir, filename)
   }
 
-  def getFile(blockId: BlockId): File = getFile(blockId.name)
+  /***
+    * 根据BlockId的名称获得文件名
+    * @param blockId
+    * @return
+    */
+  def getFile(blockId: BlockId): File = {
+    getFile(blockId.name)
+  }
 
   /** Check if disk block manager has a block. */
   def containsBlock(blockId: BlockId): Boolean = {
@@ -138,8 +159,15 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon
    * be deleted on JVM exit when using the external shuffle service.
    */
   private def createLocalDirs(conf: SparkConf): Array[File] = {
-    Utils.getConfiguredLocalDirs(conf).flatMap { rootDir =>
+    /***
+      * 获取配置的local directories
+      */
+    val localdirs = Utils.getConfiguredLocalDirs(conf)
+    localDirs.flatMap { rootDir =>
       try {
+        /***
+          * 创建目录，
+          */
         val localDir = Utils.createDirectory(rootDir, "blockmgr")
         logInfo(s"Created local directory at $localDir")
         Some(localDir)

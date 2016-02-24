@@ -27,12 +27,23 @@ import org.apache.spark.util.Utils
 
 /**
  * Stores BlockManager blocks on disk.
+  *
+  * 关联一个DiskBlockManager
  */
 private[spark] class DiskStore(blockManager: BlockManager, diskManager: DiskBlockManager)
   extends BlockStore(blockManager) with Logging {
 
+  /**
+    * 从文件中读取数据时，超过多大数据量时则使用内存映射的办法；如果不超过这个量，则直接读取
+    */
   val minMemoryMapBytes = blockManager.conf.getSizeAsBytes("spark.storage.memoryMapThreshold", "2m")
 
+  /**
+    * 返回BlockId的字节数
+    * 问题： DiskBlockManager.getFile(blockId.name)返回一个文件吗？如果是目录，那么调用它的length是没有定义的
+    * @param blockId
+    * @return
+    */
   override def getSize(blockId: BlockId): Long = {
     diskManager.getFile(blockId.name).length
   }
@@ -74,9 +85,20 @@ private[spark] class DiskStore(blockManager: BlockManager, diskManager: DiskBloc
 
     logDebug(s"Attempting to write values for block $blockId")
     val startTime = System.currentTimeMillis
+
+    /***
+      * 根据blockId获得文件
+      */
     val file = diskManager.getFile(blockId)
+
+    /***
+      * 打开文件写入流
+      */
     val outputStream = new FileOutputStream(file)
     try {
+      /**
+        * 柯里化
+        */
       Utils.tryWithSafeFinally {
         blockManager.dataSerializeStream(blockId, outputStream, values)
       } {
@@ -109,12 +131,27 @@ private[spark] class DiskStore(blockManager: BlockManager, diskManager: DiskBloc
   }
 
   private def getBytes(file: File, offset: Long, length: Long): Option[ByteBuffer] = {
+
+    /***
+      * 从随机文件获得一个channel
+      */
     val channel = new RandomAccessFile(file, "r").getChannel
     Utils.tryWithSafeFinally {
       // For small files, directly read rather than memory map
       if (length < minMemoryMapBytes) {
+        /***
+          * 需要length长度的ByteBuffere
+          */
         val buf = ByteBuffer.allocate(length.toInt)
+
+        /**
+          * 定位到offset
+          */
         channel.position(offset)
+
+        /***
+          * 读取length个数据
+          */
         while (buf.remaining() != 0) {
           if (channel.read(buf) == -1) {
             throw new IOException("Reached EOF before filling buffer\n" +
@@ -124,6 +161,10 @@ private[spark] class DiskStore(blockManager: BlockManager, diskManager: DiskBloc
         buf.flip()
         Some(buf)
       } else {
+
+        /***
+          * 调用内存映射方法,将文件的一块区域映射到内存
+          */
         Some(channel.map(MapMode.READ_ONLY, offset, length))
       }
     } {
@@ -131,17 +172,34 @@ private[spark] class DiskStore(blockManager: BlockManager, diskManager: DiskBloc
     }
   }
 
+  /***
+    * 读取BlockId对应的完整文件
+    *
+    * @param blockId
+    * @return
+    */
   override def getBytes(blockId: BlockId): Option[ByteBuffer] = {
     val file = diskManager.getFile(blockId.name)
     getBytes(file, 0, file.length)
   }
 
+  /***
+    * 读取FileSegment对应文件(从偏移offset开始读，读取长度是length)
+    * @param segment
+    * @return
+    */
   def getBytes(segment: FileSegment): Option[ByteBuffer] = {
     getBytes(segment.file, segment.offset, segment.length)
   }
 
+  /**
+    * 调用BlockManager的dataDeserialize将数据反序列化为Iterator（可遍历的数据集合）
+    * @param blockId
+    * @return
+    */
   override def getValues(blockId: BlockId): Option[Iterator[Any]] = {
-    getBytes(blockId).map(buffer => blockManager.dataDeserialize(blockId, buffer))
+    val buffer = getBytes(blockId)
+    buffer.map(buffer => blockManager.dataDeserialize(blockId, buffer))
   }
 
   override def remove(blockId: BlockId): Boolean = {

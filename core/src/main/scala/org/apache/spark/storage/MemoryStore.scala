@@ -40,8 +40,15 @@ private case class MemoryEntry(value: Any, size: Long, deserialized: Boolean)
  * Stores blocks in memory, either as Arrays of deserialized Java objects or as
  * serialized ByteBuffers.
   *
+  * 在MemoryStore中存放block必须确保内存足够容纳下该block，若内存不足则会尝试将block写到文件中(如果也Block也支持DISK存储级别)
+  *
+  *
   * 将Block数据存储到从内存中，存储时存储格式可能是Java对象数组，也可能是序列化后的ByteBuffer
   * MemoryStore关联一个BlockManager
+  *
+  *
+  * 1. putIterator方法调用unrollSafely进行尝试
+  * 2. putBytes方法调用tryToPut进行尝试
  */
 private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: MemoryManager)
   extends BlockStore(blockManager) {
@@ -52,6 +59,13 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
     * 何为unroll memory？
     */
   private val conf = blockManager.conf
+
+  /***
+    * LinkedHashMap保持写入顺序
+    *
+    * entries这个数据结构记录了写入到本MemoryStore的数据情况
+    * 每个MemoryEntry包括数据value（可以是Java对象数组也可以是二进制数据ByteBuffer）、使用的内存量以及存储的数据是原始数据还是经过序列化的数据
+    */
   private val entries = new LinkedHashMap[BlockId, MemoryEntry](32, 0.75f, true)
 
   // A mapping from taskAttemptId to amount of memory used for unrolling a block (in bytes)
@@ -102,10 +116,22 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
     }
   }
 
+  /***
+    * 将BlockId对应数据_bytes写入到磁盘中，因为是put二进制数据，所以，deserialized为false表示这是序列化数据
+    * @param blockId
+    * @param _bytes
+    * @param level
+    * @return
+    */
   override def putBytes(blockId: BlockId, _bytes: ByteBuffer, level: StorageLevel): PutResult = {
     // Work on a duplicate - since the original input might be used elsewhere.
     val bytes = _bytes.duplicate()
     bytes.rewind()
+
+    /***
+      * 存储级别指定使用原始数据(未序列化)，那么首先需要进行反序列化，得到原始数据Iterator
+      * 否则
+      */
     if (level.deserialized) {
       val values = blockManager.dataDeserialize(blockId, bytes)
       putIterator(blockId, values, level, returnValues = true)
@@ -123,6 +149,10 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
    */
   def putBytes(blockId: BlockId, size: Long, _bytes: () => ByteBuffer): PutResult = {
     // Work on a duplicate - since the original input might be used elsewhere.
+    /***
+      * bytes是延迟计算，tryToPut方法为什么使用()=>bytes作为参数，原因是要保持bytes的延迟计算特性，如果直接在tryToPut方法中写bytes，
+      * 那么bytes将进行计算
+      */
     lazy val bytes = _bytes().duplicate().rewind().asInstanceOf[ByteBuffer]
     val putSuccess = tryToPut(blockId, () => bytes, size, deserialized = false)
     val data =
@@ -363,6 +393,8 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
    *
    * `value` will be lazily created. If it cannot be put into MemoryStore or disk, `value` won't be
    * created to avoid OOM since it may be a big ByteBuffer.
+    *
+    * value是延迟计算的，这个方法只是简单的返回延迟计算的bytes数据（在不计算数据的情况下检查是否能放下values数据）
    *
    * Synchronize on `memoryManager` to ensure that all the put requests and its associated block
    * dropping is done by only on thread at a time. Otherwise while one thread is dropping
@@ -392,6 +424,10 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
       // synchronized on the same lock.
       releasePendingUnrollMemoryForThisTask()
       val enoughMemory = memoryManager.acquireStorageMemory(blockId, size)
+
+      /***
+        * 如果有足够的内存，那么创建MemoryEntry，调用value方法计算数据，然后加到entries集合中进行维护
+        */
       if (enoughMemory) {
         // We acquired enough memory for the block, so go ahead and put it
         val entry = new MemoryEntry(value(), size, deserialized)
@@ -405,13 +441,18 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
         // Tell the block manager that we couldn't put it in memory so that it can drop it to
         // disk if the block allows disk storage.
         /***
-          * 怎么告诉BlockManager？
+          * data是延迟计算的,
+          * 因为data是延迟计算的，那么data中调用的value也不会立即执行
           */
         lazy val data = if (deserialized) {
           Left(value().asInstanceOf[Array[Any]])
         } else {
           Right(value().asInstanceOf[ByteBuffer].duplicate())
         }
+
+        /***
+          * data延时计算，dropFromMemory的()=>data保持了data的延迟加载特性
+          */
         blockManager.dropFromMemory(blockId, () => data)
       }
       enoughMemory
@@ -476,6 +517,11 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
     }
   }
 
+  /***
+    * 检查entries是否包含指定的BlockId
+    * @param blockId
+    * @return
+    */
   override def contains(blockId: BlockId): Boolean = {
     entries.synchronized { entries.containsKey(blockId) }
   }

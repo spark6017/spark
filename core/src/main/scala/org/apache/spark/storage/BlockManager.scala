@@ -80,6 +80,9 @@ private[spark] class BlockManager(
 
   val diskBlockManager = new DiskBlockManager(this, conf)
 
+  /***
+    * BlockId与BlockInfo的对应关系，如果一个Block在内存放不下而存储级别是Memory_Only，那么将它删除
+    */
   private val blockInfo = new ConcurrentHashMap[BlockId, BlockInfo]
 
   private val futureExecutionContext = ExecutionContext.fromExecutorService(
@@ -390,6 +393,8 @@ private[spark] class BlockManager(
    * Return the updated storage status of the block with the given ID. More specifically, if
    * the block is dropped from memory and possibly added to disk, return the new storage level
    * and the updated in-memory and on-disk sizes.
+    *
+    * 更新BlockStatus，包括存储级别以及内存和磁盘的使用量
    */
   private def getCurrentBlockStatus(blockId: BlockId, info: BlockInfo): BlockStatus = {
     info.synchronized {
@@ -1041,7 +1046,7 @@ private[spark] class BlockManager(
 
         // Drop to disk, if storage level requires
         /***
-          * 如果该Block能够写到磁盘，那么进行写磁盘操作
+          * 如果该Block能够写到磁盘，那么此时调用data()进行计算然后完成写磁盘操作
           */
         if (level.useDisk && !diskStore.contains(blockId)) {
           logInfo(s"Writing block $blockId to disk")
@@ -1059,8 +1064,11 @@ private[spark] class BlockManager(
         }
 
         // Actually drop from memory store
+        // 为什么会出现memoryStore.contains(blockId)为真的情况，下面还调用了memoryStore.remove(blockId)进行了删除操作
         val droppedMemorySize =
           if (memoryStore.contains(blockId)) memoryStore.getSize(blockId) else 0L
+
+
         val blockIsRemoved = memoryStore.remove(blockId)
         if (blockIsRemoved) {
           blockIsUpdated = true

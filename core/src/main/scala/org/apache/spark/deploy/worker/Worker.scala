@@ -503,6 +503,9 @@ private[deploy] class Worker(
     case executorStateChanged @ ExecutorStateChanged(appId, execId, state, message, exitStatus) =>
       handleExecutorStateChanged(executorStateChanged)
 
+    /***
+      * KillExecutor就是停止Executor进程，那么需要将可用的内存收回啊？
+      */
     case KillExecutor(masterUrl, appId, execId) =>
       if (masterUrl != activeMasterUrl) {
         logWarning("Invalid Master (" + masterUrl + ") attempted to launch executor " + execId)

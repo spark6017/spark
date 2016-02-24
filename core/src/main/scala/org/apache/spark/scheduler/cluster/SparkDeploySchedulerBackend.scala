@@ -216,6 +216,10 @@ private[spark] class SparkDeploySchedulerBackend(
     registrationBarrier.release()
   }
 
+  /***
+    * 停止SchedulerBackend
+    * @param finalState
+    */
   private def stop(finalState: SparkAppHandle.State): Unit = synchronized {
     try {
       stopping = true

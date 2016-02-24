@@ -73,6 +73,9 @@ private[deploy] class ExecutorRunner(
     }
     workerThread.start()
     // Shutdown hook that kills actors on shutdown.
+    /***
+      * 杀死Executor进程
+      */
     shutdownHook = ShutdownHookManager.addShutdownHook { () =>
       // It's possible that we arrive here before calling `fetchAndRunExecutor`, then `state` will
       // be `ExecutorState.RUNNING`. In this case, we should set `state` to `FAILED`.
@@ -110,7 +113,10 @@ private[deploy] class ExecutorRunner(
     }
   }
 
-  /** Stop this executor runner, including killing the process it launched */
+  /**
+    * Stop this executor runner, including killing the process it launched
+    *
+    * */
   private[worker] def kill() {
     if (workerThread != null) {
       // the workerThread will kill the child process when interrupted

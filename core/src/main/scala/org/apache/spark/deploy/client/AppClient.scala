@@ -193,6 +193,10 @@ private[spark] class AppClient(
     }
 
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
+      /**
+        * StopAppClient事件，然后通知Master，作业结束
+        *
+        */
       case StopAppClient =>
         markDead("Application has been stopped.")
         sendToMaster(UnregisterApplication(appId.get))

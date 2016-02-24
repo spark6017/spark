@@ -397,6 +397,9 @@ private[deploy] class Master(
       if (canCompleteRecovery) { completeRecovery() }
     }
 
+    /**
+      * 当用户调用SparkContext的stop方法时，表示作业执行完成可以退出了
+      */
     case UnregisterApplication(applicationId) =>
       logInfo(s"Received unregister request from application $applicationId")
       idToApp.get(applicationId).foreach(finishApplication)
@@ -927,12 +930,17 @@ private[deploy] class Master(
     waitingApps += app
   }
 
+  /***
+    * 应用结束，参数是ApplicationInfo
+    * @param app
+    */
   private def finishApplication(app: ApplicationInfo) {
     removeApplication(app, ApplicationState.FINISHED)
   }
 
   /***
     * Application删除导致重新调度，因为被删除Application占用的资源被释放
+    * 问题：Application成功结束以及失败结束是怎么判定的
     * @param app
     * @param state
     */
@@ -1053,6 +1061,8 @@ private[deploy] class Master(
 
   /**
    * Ask the worker on which the specified executor is launched to kill the executor.
+    *
+    * Worker只要停止Executor吗？
    */
   private def killExecutor(exec: ExecutorDesc): Unit = {
     exec.worker.removeExecutor(exec)

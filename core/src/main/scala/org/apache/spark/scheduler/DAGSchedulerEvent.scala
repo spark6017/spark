@@ -97,6 +97,7 @@ private[scheduler] case class CompletionEvent(
 
 /***
   * DAGScheduler收到ExecutorAdded消息，如何处理？
+  * TaskSchedulerImpl调用DAGScheduler的executorAdded方法
   * @param execId
   * @param host
   */

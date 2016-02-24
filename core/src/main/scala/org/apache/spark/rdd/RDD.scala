@@ -1102,8 +1102,15 @@ abstract class RDD[T: ClassTag](
 
   /**
    * Return the number of elements in the RDD.
+    * 如果Job执行失败，那么SparkContext将抛出异常，此时异常抛给count，由于count没有捕获异常，因此运行用户代码的JVM将异常退出，
+    * 由于SparkContext注册了JVM推出时调用SparkContext的stop方法，因此将启动Application结束的流程，最终调用AppClient的stop方法时，给Master发送removeApplication的消息
+    *
+    *
+    *
    */
-  def count(): Long = sc.runJob(this, Utils.getIteratorSize _).sum
+  def count(): Long = {
+    sc.runJob(this, Utils.getIteratorSize _).sum
+  }
 
   /**
    * Approximate version of count() that returns a potentially incomplete result

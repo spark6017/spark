@@ -163,7 +163,7 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon
       * 获取配置的local directories
       */
     val localdirs = Utils.getConfiguredLocalDirs(conf)
-    localDirs.flatMap { rootDir =>
+    localdirs.flatMap { rootDir =>
       try {
         /***
           * 创建目录，

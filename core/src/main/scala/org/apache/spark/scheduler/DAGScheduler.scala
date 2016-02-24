@@ -632,6 +632,10 @@ class DAGScheduler(
       case scala.util.Success(_) =>
         logInfo("Job %d finished: %s, took %f s".format
           (waiter.jobId, callSite.shortForm, (System.nanoTime - start) / 1e9))
+
+      /***
+        * 任务执行失败，将异常抛出，因为DAGScheduler的runJob是SparkContext调到的，所以异常抛给了SparkCotnext
+        */
       case scala.util.Failure(exception) =>
         logInfo("Job %d failed: %s, took %f s".format
           (waiter.jobId, callSite.shortForm, (System.nanoTime - start) / 1e9))

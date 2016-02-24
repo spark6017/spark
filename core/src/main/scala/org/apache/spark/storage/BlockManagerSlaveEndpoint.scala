@@ -28,8 +28,18 @@ import org.apache.spark.util.{ThreadUtils, Utils}
  * An RpcEndpoint to take commands from the master to execute options. For example,
  * this is used to remove blocks from the slave's BlockManager.
   *
+  *BlockManagerSlaveEndpoint是Executor上BlockManager对外通信的对象
   *
-  * 每个BlockManagerSlaveEndpoint都会关联一个BlockManager,构造BlockManager时传入
+  * 每个BlockManagerSlaveEndpoint都会关联一个BlockManager,构造BlockManager时传入。
+  *
+  *
+  * BlockManagerSlaveEndpoint是Driver的BlockManager向Executor的BlockManager下达操作指令，
+  * 1. 删除Block
+  * 2. 删除RDD Block
+  * 3. 删除Shuffle Block
+  * 4. 删除Broadcast Block
+  * 5. 获取Block的状态
+  * 6.
  */
 private[storage]
 class BlockManagerSlaveEndpoint(
@@ -45,7 +55,7 @@ class BlockManagerSlaveEndpoint(
   /**
     * Operations that involve removing blocks may be slow and should be done asynchronously
     *
-    * BlockManagerMasterEndpoint向BlockManagerSlaveEndpoint发送指令
+    * BlockManagerMasterEndpoint向BlockManagerSlaveEndpoint发送指令，这是一个应答式请求响应，通过context返回响应
     *
     */
   override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
@@ -84,10 +94,19 @@ class BlockManagerSlaveEndpoint(
   }
 
   private def doAsync[T](actionMessage: String, context: RpcCallContext)(body: => T) {
+
+    /***
+      * 封装成异步任务，返回异步任务执行句柄
+      */
     val future = Future {
       logDebug(actionMessage)
       body
     }
+
+    /***
+      * 注册异步任务回调句柄，任务成功则回调onSuccess方法，失误失败则回调onError方法
+      *
+      */
     future.onSuccess { case response =>
       logDebug("Done " + actionMessage + ", response is " + response)
       context.reply(response)

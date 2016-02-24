@@ -32,7 +32,7 @@ import org.apache.spark.memory.{MemoryManager, StaticMemoryManager, UnifiedMemor
 import org.apache.spark.metrics.MetricsSystem
 import org.apache.spark.network.BlockTransferService
 import org.apache.spark.network.netty.NettyBlockTransferService
-import org.apache.spark.rpc.{RpcEndpoint, RpcEndpointRef, RpcEnv}
+import org.apache.spark.rpc.{RpcAddress, RpcEndpoint, RpcEndpointRef, RpcEnv}
 import org.apache.spark.scheduler.{LiveListenerBus, OutputCommitCoordinator}
 import org.apache.spark.scheduler.OutputCommitCoordinator.OutputCommitCoordinatorEndpoint
 import org.apache.spark.serializer.Serializer
@@ -165,8 +165,15 @@ object SparkEnv extends Logging {
   /**
    * Create a SparkEnv for the driver.
     *
-    * 创建Driver的SparkEnv
-   */
+    * 创建Driver端的SparkEnv
+    *
+    * @param conf
+    * @param isLocal 表示是本地运行模式，比如--master local
+    * @param listenerBus
+    * @param numCores Driver使用的内核数，通过--driver-cores指定
+    * @param mockOutputCommitCoordinator 对于Executor的SparkEnv没有传递这个参数，因此去默认值None
+    * @return
+    */
   private[spark] def createDriverEnv(
       conf: SparkConf,
       isLocal: Boolean,
@@ -203,6 +210,10 @@ object SparkEnv extends Logging {
       port: Int,
       numCores: Int,
       isLocal: Boolean): SparkEnv = {
+
+    /**
+      * 创建Executor端的SparkEnv
+      */
     val env = create(
       conf,
       executorId,
@@ -222,7 +233,18 @@ object SparkEnv extends Logging {
 
   /**
    * Helper method to create a SparkEnv for a driver or an executor.
-   */
+    *
+    * @param conf
+    * @param executorId 可能是Driver的ID，也可能是Executor的ID
+    * @param hostname
+    * @param port
+    * @param isDriver 是否创建Driver的SparkEnv
+    * @param isLocal 是否运行于本地模式，比如--master local
+    * @param numUsableCores
+    * @param listenerBus
+    * @param mockOutputCommitCoordinator
+    * @return
+    */
   private def create(
       conf: SparkConf,
       executorId: String,
@@ -242,12 +264,17 @@ object SparkEnv extends Logging {
     val securityManager = new SecurityManager(conf)
 
     val systemName = if (isDriver) driverSystemName else executorSystemName
+
+    /***
+      * clientMode是什么意思？如果是Driver就不是client模式，如果是Executor就是client模式
+      */
     val rpcEnv = RpcEnv.create(systemName, hostname, port, conf, securityManager,
       clientMode = !isDriver)
 
     // Figure out which port RpcEnv actually bound to in case the original port is 0 or occupied.
     // In the non-driver case, the RPC env's address may be null since it may not be listening
     // for incoming connections.
+    //从这个地方看出来，Driver运行于哪个端口是调用RpcEnv.create得到的
     if (isDriver) {
       conf.set("spark.driver.port", rpcEnv.address.port.toString)
     } else if (rpcEnv.address != null) {
@@ -280,18 +307,29 @@ object SparkEnv extends Logging {
       instantiateClass[T](conf.get(propertyName, defaultClassName))
     }
 
+    /**
+      * 通过反射创建JavaSerializer（以SparkConf为参数）
+      */
     val serializer = instantiateClassFromConf[Serializer](
       "spark.serializer", "org.apache.spark.serializer.JavaSerializer")
     logDebug(s"Using serializer: ${serializer.getClass}")
 
+    /***
+      * 初始化闭包序列化类，默认也是JavaSerializer（以SparkConf为参数）
+      */
     val closureSerializer = instantiateClassFromConf[Serializer](
       "spark.closure.serializer", "org.apache.spark.serializer.JavaSerializer")
 
     /**
       *
+      *
+      * 分区Driver和Executor
+      * 如果是Driver，那么给全局的rpcEnv调用setupEndpoint
+      * 如果是Executor，那么给全局的rpcEnv调用setupEndpointRef
+      *
       * @param name
       * @param endpointCreator
-      * @return
+      * @return 返回RpcEndpointRef实例
       */
     def registerOrLookupEndpoint(
         name: String, endpointCreator: => RpcEndpoint):
@@ -300,12 +338,15 @@ object SparkEnv extends Logging {
         logInfo("Registering " + name)
         rpcEnv.setupEndpoint(name, endpointCreator)
       } else {
-        RpcUtils.makeDriverRef(name, conf, rpcEnv)
+        val driverHost: String = conf.get("spark.driver.host", "localhost")
+        val driverPort: Int = conf.getInt("spark.driver.port", 7077)
+        Utils.checkHost(driverHost, "Expected hostname")
+        rpcEnv.setupEndpointRef(RpcAddress(driverHost, driverPort), name)
       }
     }
 
     /**
-      * 如果是Driver，那么就是MapOutputTrackerMaster,否则就是MapOutputTrackerWorker
+      * 如果是Driver，那么就创建MapOutputTrackerMaster,否则就是MapOutputTrackerWorker
       */
     val mapOutputTracker = if (isDriver) {
       new MapOutputTrackerMaster(conf)
@@ -315,11 +356,18 @@ object SparkEnv extends Logging {
 
     // Have to assign trackerEndpoint after initialization as MapOutputTrackerEndpoint
     // requires the MapOutputTracker itself
-    mapOutputTracker.trackerEndpoint = registerOrLookupEndpoint(MapOutputTracker.ENDPOINT_NAME,
-      new MapOutputTrackerMasterEndpoint(
-        rpcEnv, mapOutputTracker.asInstanceOf[MapOutputTrackerMaster], conf))
+    /**
+      * register或者lookup是什么含义？
+      * 首先masterEndPoint是RpcEndpoint类型
+      * 如果是Driver是什么情况？如果是Executor又是什么情况？
+      */
+    val masterEndPoint = new MapOutputTrackerMasterEndpoint(rpcEnv, mapOutputTracker.asInstanceOf[MapOutputTrackerMaster], conf)
+    mapOutputTracker.trackerEndpoint = registerOrLookupEndpoint(MapOutputTracker.ENDPOINT_NAME,masterEndPoint)
 
     // Let the user specify short names for shuffle managers
+    /***
+      * ShuffleManager
+      */
     val shortShuffleMgrNames = Map(
       "hash" -> "org.apache.spark.shuffle.hash.HashShuffleManager",
       "sort" -> "org.apache.spark.shuffle.sort.SortShuffleManager",
@@ -328,6 +376,9 @@ object SparkEnv extends Logging {
     val shuffleMgrClass = shortShuffleMgrNames.getOrElse(shuffleMgrName.toLowerCase, shuffleMgrName)
     val shuffleManager = instantiateClass[ShuffleManager](shuffleMgrClass)
 
+    /***
+      * MemoryManager
+      */
     val useLegacyMemoryManager = conf.getBoolean("spark.memory.useLegacyMode", false)
     val memoryManager: MemoryManager =
       if (useLegacyMemoryManager) {
@@ -336,19 +387,23 @@ object SparkEnv extends Logging {
         UnifiedMemoryManager(conf, numUsableCores)
       }
 
+    /***
+      * NettyBlockTransferService
+      */
     val blockTransferService = new NettyBlockTransferService(conf, securityManager, numUsableCores)
 
     /**
-      * 不管是Driver还是Executor，都会创建爱你BlockManagerMasterEndpoint实例
+      * 不管是Driver还是Executor，都会创建BlockManagerMasterEndpoint实例,
+      *
+      * 但是对于Driver，endpoint指向BlockManagerMasterEndpoint本尊，而对于Executor，endpoint指向BlockManagerMasterEndpoint引用
       */
     val bmmEndpoint = new BlockManagerMasterEndpoint(rpcEnv, isLocal, conf, listenerBus)
     val endpoint = registerOrLookupEndpoint(BlockManagerMaster.DRIVER_ENDPOINT_NAME, bmmEndpoint)
 
     /***
       * 不管是Executor还是Driver，都会创建BlockManagerMaster实例,这个实例创建完了会设置到BlockManager中
-      * BlockManagerMaster的endPoint实际上是指向Driver
       *
-      * 也就是说，在Driver上BlockManagerMaster是真实存在的，在Executor上，BlockManagerMaster只是包含只想Driver的endpoint ref
+      * 也就是说，在Driver上BlockManagerMaster是真实存在的，在Executor上，BlockManagerMaster只是包含指向Driver BlockManager的endpoint ref
       */
     val blockManagerMaster = new BlockManagerMaster(endpoint, conf, isDriver)
 

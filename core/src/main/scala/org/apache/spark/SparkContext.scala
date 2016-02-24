@@ -248,6 +248,10 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
   private[spark] def eventLogDir: Option[URI] = _eventLogDir
   private[spark] def eventLogCodec: Option[String] = _eventLogCodec
 
+  /***
+    * isLocal表示本地运行模式
+    * @return
+    */
   def isLocal: Boolean = (master == "local" || master.startsWith("local["))
 
   /**
@@ -261,7 +265,7 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
   // This function allows components created by SparkEnv to be mocked in unit tests:
 
   /**
-    * 在SparkContext中创建Driver的SparkEnv
+    * 在SparkContext中创建Driver的SparkEnv，因为SparkContext运行于Driver中，因此此处创建的SparkEnv一定是Driver的Spark Env
     * @param conf
     * @param isLocal
     * @param listenerBus

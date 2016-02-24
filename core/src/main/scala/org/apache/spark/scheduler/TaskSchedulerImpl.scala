@@ -345,10 +345,27 @@ private[spark] class TaskSchedulerImpl(
     // Also track if new executor is added
     var newExecAvail = false
     for (o <- offers) {
+
+      /***
+        * executorId与exectorHost的对应关系
+        */
       executorIdToHost(o.executorId) = o.host
+
+      /***
+        * executorId与它指定的任务数之间的对应关系
+        */
       executorIdToTaskCount.getOrElseUpdate(o.executorId, 0)
+
+      /***
+        * 如果之前维持的executorsByHost不包含o.host，那么表示该Executor是新加入的,并且是在新机器上加入的，既然是在新机器上加入的，那么
+        * 就需要重新计算数据本地性
+        */
       if (!executorsByHost.contains(o.host)) {
         executorsByHost(o.host) = new HashSet[String]()
+
+        /***
+          * 给TaskScheduler提供的可用资源包括了新的executor，调用DAGScheduler的executorAdded方法
+          */
         executorAdded(o.executorId, o.host)
         newExecAvail = true
       }
@@ -680,6 +697,11 @@ private[spark] class TaskSchedulerImpl(
     }
   }
 
+  /***
+    * 调用DAGScheduler的executorAdded方法(DAGScheduler发给自身发出ExecutorAdded消息)
+    * @param execId
+    * @param host
+    */
   def executorAdded(execId: String, host: String) {
     dagScheduler.executorAdded(execId, host)
   }

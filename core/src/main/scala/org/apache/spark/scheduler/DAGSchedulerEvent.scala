@@ -55,6 +55,18 @@ private[scheduler] case class MapStageSubmitted(
   properties: Properties = null)
   extends DAGSchedulerEvent
 
+
+/**==============================================================================================================================
+  *
+  *
+  * DAGScheduler定义的消息事件，有case class，有case object
+  *
+==============================================================================================================================***/
+
+/***
+  * DAGScheduler收到StageCancelled，如何处理？
+  * @param stageId
+  */
 private[scheduler] case class StageCancelled(stageId: Int) extends DAGSchedulerEvent
 
 private[scheduler] case class JobCancelled(jobId: Int) extends DAGSchedulerEvent
@@ -63,12 +75,18 @@ private[scheduler] case class JobGroupCancelled(groupId: String) extends DAGSche
 
 private[scheduler] case object AllJobsCancelled extends DAGSchedulerEvent
 
-private[scheduler]
-case class BeginEvent(task: Task[_], taskInfo: TaskInfo) extends DAGSchedulerEvent
+private[scheduler] case class BeginEvent(task: Task[_], taskInfo: TaskInfo) extends DAGSchedulerEvent
 
-private[scheduler]
-case class GettingResultEvent(taskInfo: TaskInfo) extends DAGSchedulerEvent
+private[scheduler] case class GettingResultEvent(taskInfo: TaskInfo) extends DAGSchedulerEvent
 
+/***
+  * DAGScheduler收到CompletionEvent（任务执行完成消息）
+  * @param task
+  * @param reason
+  * @param result
+  * @param accumUpdates
+  * @param taskInfo
+  */
 private[scheduler] case class CompletionEvent(
     task: Task[_],
     reason: TaskEndReason,
@@ -77,12 +95,29 @@ private[scheduler] case class CompletionEvent(
     taskInfo: TaskInfo)
   extends DAGSchedulerEvent
 
+/***
+  * DAGScheduler收到ExecutorAdded消息，如何处理？
+  * @param execId
+  * @param host
+  */
 private[scheduler] case class ExecutorAdded(execId: String, host: String) extends DAGSchedulerEvent
 
+/***
+  * DAGScheduler收到ExecutorLost消息，如何处理
+  * @param execId
+  */
 private[scheduler] case class ExecutorLost(execId: String) extends DAGSchedulerEvent
 
-private[scheduler]
-case class TaskSetFailed(taskSet: TaskSet, reason: String, exception: Option[Throwable])
-  extends DAGSchedulerEvent
 
+/***
+  * DAGScheduler收到TaskSetFailed消息，如何处理？
+  * @param taskSet
+  * @param reason
+  * @param exception
+  */
+private[scheduler] case class TaskSetFailed(taskSet: TaskSet, reason: String, exception: Option[Throwable]) extends DAGSchedulerEvent
+
+/***
+  * DAGScheduler收到ResubmitFailedStages，如何处理？
+  */
 private[scheduler] case object ResubmitFailedStages extends DAGSchedulerEvent

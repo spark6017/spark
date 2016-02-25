@@ -369,6 +369,11 @@ abstract class RDD[T: ClassTag](
 
   /**
    * Return a new RDD by applying a function to all elements of this RDD.
+    * 构造preservesPartitioning使用的是false，为什么分区算法丢失？
+    *
+    * 比如rdd1的partitioner是HashPartitioner，而rdd2的partitioner是None
+    * val rdd1 = rdd.reduceByKey(_+_,3)
+    * val rdd2 = rdd1.map(identity)
    */
   def map[U: ClassTag](f: T => U): RDD[U] = withScope {
     val cleanF = sc.clean(f)
@@ -457,6 +462,9 @@ abstract class RDD[T: ClassTag](
       } : Iterator[(Int, T)]
 
       // include a shuffle step so that our upstream tasks are still distributed
+      /***
+        * Key是Partition的ID
+        */
       new CoalescedRDD(
         new ShuffledRDD[Int, T, T](mapPartitionsWithIndex(distributePartition),
         new HashPartitioner(numPartitions)),

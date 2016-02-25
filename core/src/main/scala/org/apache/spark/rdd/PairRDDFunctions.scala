@@ -592,6 +592,14 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
 
   /**
    * Return a copy of the RDD partitioned using the specified partitioner.
+    *
+    * partitionBy和repartition有何分别与联系？
+    * 1. partitionBy只对RDD[K,V]有效，repartition则对任意的RDD都有效
+    * 2. 它们都会涉及到分区操作
+    *
+    *
+    * 按照指定的分区策略进行充分区，这个只对RDD[K,V]有效，并且如果RDD算法已经和指定的分区算法，那么不做任何操作
+    * 否则使用ShuffledRDD进行分区
    */
   def partitionBy(partitioner: Partitioner): RDD[(K, V)] = self.withScope {
     if (keyClass.isArray && partitioner.isInstanceOf[HashPartitioner]) {

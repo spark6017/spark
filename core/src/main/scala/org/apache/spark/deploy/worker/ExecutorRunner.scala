@@ -38,7 +38,7 @@ import org.apache.spark.util.logging.FileAppender
 private[deploy] class ExecutorRunner(
     val appId: String,
     val execId: Int,
-    val appDesc: ApplicationDescription,
+    val appDesc: ApplicationDescription, /**封装了启动ExecutorBackend的命令*/
     val cores: Int,
     val memory: Int,
     val worker: RpcEndpointRef,
@@ -67,6 +67,9 @@ private[deploy] class ExecutorRunner(
   // make sense to remove this in the future.
   private var shutdownHook: AnyRef = null
 
+  /**
+    * 开启线程启动ExecutorBackend进程
+    */
   private[worker] def start() {
     workerThread = new Thread("ExecutorRunner for " + fullId) {
       override def run() { fetchAndRunExecutor() }
@@ -143,6 +146,9 @@ private[deploy] class ExecutorRunner(
 
   /**
    * Download and run the executor described in our ApplicationDescription
+    *
+    * 问题：需要下载什么东西？
+    * 1. 用户作业的jar包
    */
   private def fetchAndRunExecutor() {
     try {
@@ -165,6 +171,9 @@ private[deploy] class ExecutorRunner(
       builder.environment.put("SPARK_LOG_URL_STDERR", s"${baseUrl}stderr")
       builder.environment.put("SPARK_LOG_URL_STDOUT", s"${baseUrl}stdout")
 
+      /**
+        * 启动进程？
+        */
       process = builder.start()
       val header = "Spark Executor Command: %s\n%s\n\n".format(
         formattedCommand, "=" * 40)
@@ -182,6 +191,10 @@ private[deploy] class ExecutorRunner(
       val exitCode = process.waitFor()
       state = ExecutorState.EXITED
       val message = "Command exited with code " + exitCode
+
+      /**
+        * ExecutorRunner给Worker发送executor退出的消息
+        */
       worker.send(ExecutorStateChanged(appId, execId, state, Some(message), Some(exitCode)))
     } catch {
       case interrupted: InterruptedException => {

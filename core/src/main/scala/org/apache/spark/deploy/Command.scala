@@ -19,6 +19,16 @@ package org.apache.spark.deploy
 
 import scala.collection.Map
 
+/***
+  * 启动Java进程相关的配置项
+  * 问题： 怎么把Command的这些属性用起来
+  * @param mainClass 主类
+  * @param arguments 提供给主类使用的参数列表
+  * @param environment 环境变量信息 每个Java进程都有自己的System Properties
+  * @param classPathEntries Java进程依赖的classpath
+  * @param libraryPathEntries Java进程依赖的库文件
+  * @param javaOpts JVM配置项，比如设置内存-Xms -Xmx等
+  */
 private[spark] case class Command(
     mainClass: String,
     arguments: Seq[String],

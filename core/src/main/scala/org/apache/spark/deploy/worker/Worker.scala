@@ -435,6 +435,8 @@ private[deploy] class Worker(
 
     /**
      * LaunchExecutor消息，Master让Worker启动Executor
+      * Worker构造ExecutorRunner实例，然后调用ExecutorRunner的start方法启动ExecutorBackend进程
+      * ExecutorBackend进程持有一个Executor对象，Executor对象持有一个Java线程池
      */
     case LaunchExecutor(masterUrl, appId, execId, appDesc, cores_, memory_) =>
       if (masterUrl != activeMasterUrl) {
@@ -444,6 +446,9 @@ private[deploy] class Worker(
           logInfo("Asked to launch executor %s/%d for %s".format(appId, execId, appDesc.name))
 
           // Create the executor's working directory
+          /**
+            * 进程需要一个工作目录
+            */
           val executorDir = new File(workDir, appId + "/" + execId)
           if (!executorDir.mkdirs()) {
             throw new IOException("Failed to create directory " + executorDir)
@@ -476,7 +481,7 @@ private[deploy] class Worker(
             webUi.boundPort,
             publicAddress,
             sparkHome,
-            executorDir,
+            executorDir, /**工作目录*/
             workerUri,
             conf,
             appLocalDirs, ExecutorState.RUNNING)

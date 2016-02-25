@@ -1986,9 +1986,14 @@ private[spark] object Utils extends Logging {
     }
   }
 
-  /**
-   * Convert all spark properties set in the given SparkConf to a sequence of java options.
-   */
+  /***
+    *
+    * 从SparkConf中取出满足filterKey为true的那些配置
+    * Convert all spark properties set in the given SparkConf to a sequence of java options.
+    * @param conf
+    * @param filterKey 类型为String=>Boolean的函数，这个函数默认的执行逻辑是都会返回true
+    * @return 元素是格式为-Dx=y的字符串集合
+    */
   def sparkJavaOpts(conf: SparkConf, filterKey: (String => Boolean) = _ => true): Seq[String] = {
     conf.getAll
       .filter { case (k, _) => filterKey(k) }

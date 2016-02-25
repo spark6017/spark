@@ -39,7 +39,18 @@ object CommandUtils extends Logging {
    * The `env` argument is exposed for testing.
    *
    * 构造ProcessBuilder对象，ProcessBuilder是java.lang包，即是Java标准的Process Builder API
-   */
+    * Command对象封装了构造一个ProcessBuilder的所有信息
+    *
+    *
+    * @param command
+    * @param securityMgr
+    * @param memory
+    * @param sparkHome
+    * @param substituteArguments
+    * @param classPaths
+    * @param env
+    * @return
+    */
   def buildProcessBuilder(
       command: Command,
       securityMgr: SecurityManager,

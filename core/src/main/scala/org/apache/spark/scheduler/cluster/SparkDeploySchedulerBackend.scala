@@ -64,6 +64,10 @@ private[spark] class SparkDeploySchedulerBackend(
       sc.conf.get("spark.driver.host"),
       sc.conf.get("spark.driver.port").toInt,
       CoarseGrainedSchedulerBackend.ENDPOINT_NAME).toString
+
+    /***
+      *执行CoarseGrainedBackend的main函数的参数列表
+      */
     val args = Seq(
       "--driver-url", driverUrl,
       "--executor-id", "{{EXECUTOR_ID}}",
@@ -71,10 +75,22 @@ private[spark] class SparkDeploySchedulerBackend(
       "--cores", "{{CORES}}",
       "--app-id", "{{APP_ID}}",
       "--worker-url", "{{WORKER_URL}}")
+
+    /**
+      * CoarseGrainedExecutorBackend进程使用的extraJavaOptions
+      */
     val extraJavaOpts = sc.conf.getOption("spark.executor.extraJavaOptions")
       .map(Utils.splitCommandString).getOrElse(Seq.empty)
+
+    /**
+      * CoarseGrainedExecutorBackend进程使用的extraClassPath
+      */
     val classPathEntries = sc.conf.getOption("spark.executor.extraClassPath")
       .map(_.split(java.io.File.pathSeparator).toSeq).getOrElse(Nil)
+
+    /**
+      * CoarseGrainedExecutorBackend进程使用的extraLibraryPath
+      */
     val libraryPathEntries = sc.conf.getOption("spark.executor.extraLibraryPath")
       .map(_.split(java.io.File.pathSeparator).toSeq).getOrElse(Nil)
 
@@ -88,12 +104,20 @@ private[spark] class SparkDeploySchedulerBackend(
         Nil
       }
 
-    // Start executors with a few necessary configs for registering with the scheduler
+    /***
+      * Start executors with a few necessary configs for registering with the scheduler
+      *
+      * 启动Executor，除了指定的spark.executor.extraJavaOptions之外，需要Spark本身的一些配置JavaOptions配置
+      *
+      * SparkConf.isExecutorStartupConf不带()，表示是一个偏函数，传给Utils.sparkJavaOpts，这是一个filterKey
+      */
     val sparkJavaOpts = Utils.sparkJavaOpts(conf, SparkConf.isExecutorStartupConf)
+
     val javaOpts = sparkJavaOpts ++ extraJavaOpts
 
     /**
-     * ApplicationDescription的command是启动CoarseGrainedExecutorBackend进程
+     * ApplicationDescription的command是启动CoarseGrainedExecutorBackend进程,
+     * Command类封装了启动一个Java进程的所有信息，这是一个可以借鉴的做法
      */
     val command = Command("org.apache.spark.executor.CoarseGrainedExecutorBackend",
       args, sc.executorEnvs, classPathEntries ++ testingClassPath, libraryPathEntries, javaOpts)

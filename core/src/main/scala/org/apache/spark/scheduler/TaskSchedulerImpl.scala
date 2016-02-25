@@ -364,7 +364,7 @@ private[spark] class TaskSchedulerImpl(
         executorsByHost(o.host) = new HashSet[String]()
 
         /***
-          * 给TaskScheduler提供的可用资源包括了新的executor，调用DAGScheduler的executorAdded方法
+          * 给TaskScheduler提供的executor属于一个新加入的host，调用DAGScheduler的executorAdded方法，同时将newExecAvail置为true，接下来需要重新计算数据本地性
           */
         executorAdded(o.executorId, o.host)
         newExecAvail = true
@@ -397,6 +397,10 @@ private[spark] class TaskSchedulerImpl(
     for (taskSetManager <- sortedTaskSetManagers) {
       logInfo("parentName: %s, name: %s, runningTasks: %s".format(
         taskSetManager.parent.name, taskSetManager.name, taskSetManager.runningTasks))
+
+      /**
+        * newExecAvail为true表示有属于新host加入，那么调用taskSetManager.executorAdded()时会重新计算本地性
+        */
       if (newExecAvail) {
         taskSetManager.executorAdded()
       }

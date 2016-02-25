@@ -913,13 +913,17 @@ private[deploy] class Master(
     worker.addExecutor(exec)
 
     /**
-     * 给Worker发送启动Executor消息
+     * 给Worker发送启动Executor消息，Worker会启动CoarseGrainedExecutorBackend进程，CoarseGrainedExecutorBackend进程启动后会向
+      * Driver发送注册Executor消息
      */
     worker.endpoint.send(LaunchExecutor(masterUrl,
       exec.application.id, exec.id, exec.application.desc, exec.cores, exec.memory))
 
     /**
      * Master给Driver发送ExecutorAdded消息，因此Driver确切的知道当前application可用的executor详细信息
+      * Driver收到Master发送过来的ExecutorAdded事件后，会做什么事情？
+      *
+      * TaskScheduler重新计算数据本地性是什么时候执行的？
      */
     exec.application.driver.send(
       ExecutorAdded(exec.id, worker.id, worker.hostPort, exec.cores, exec.memory))

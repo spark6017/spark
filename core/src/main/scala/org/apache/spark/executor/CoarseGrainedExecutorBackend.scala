@@ -50,7 +50,8 @@ private[spark] class CoarseGrainedExecutorBackend(
   private[this] val ser: SerializerInstance = env.closureSerializer.newInstance()
 
   /**
-    * CoarseGrainedExecutorBackend进程启动时，第一个事情是向Driver注册Executor
+    * CoarseGrainedExecutorBackend进程启动后(main函数执行完)，第一个事情是向Driver注册Executor
+    * 当CoarseGrainedExecutorBackend启动后会主动和Driver建立联系，那么Master通知Worker启动Executor进程这个过程中，Master和Worker是否会向Driver汇报消息？
     */
   override def onStart() {
     logInfo("Connecting to driver: " + driverUrl)

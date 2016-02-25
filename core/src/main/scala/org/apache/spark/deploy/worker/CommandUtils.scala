@@ -59,8 +59,14 @@ object CommandUtils extends Logging {
       substituteArguments: String => String,
       classPaths: Seq[String] = Seq[String](),
       env: Map[String, String] = sys.env): ProcessBuilder = {
+    /***
+      * 返回Command对象
+      */
     val localCommand = buildLocalCommand(
       command, securityMgr, substituteArguments, classPaths, env)
+
+
+
     val commandSeq = buildCommandSeq(localCommand, memory, sparkHome)
     val builder = new ProcessBuilder(commandSeq: _*)
     val environment = builder.environment()
@@ -92,6 +98,9 @@ object CommandUtils extends Logging {
     val libraryPathEntries = command.libraryPathEntries
     val cmdLibraryPath = command.environment.get(libraryPathName)
 
+    /***
+      * 构造新的environment
+      */
     var newEnvironment = if (libraryPathEntries.nonEmpty && libraryPathName.nonEmpty) {
       val libraryPaths = libraryPathEntries ++ cmdLibraryPath ++ env.get(libraryPathName)
       command.environment + ((libraryPathName, libraryPaths.mkString(File.pathSeparator)))
@@ -106,7 +115,7 @@ object CommandUtils extends Logging {
 
     Command(
       command.mainClass,
-      command.arguments.map(substituteArguments),
+      command.arguments.map(substituteArguments), /**变量替换*/
       newEnvironment,
       command.classPathEntries ++ classPath,
       Seq[String](), // library path already captured in environment variable

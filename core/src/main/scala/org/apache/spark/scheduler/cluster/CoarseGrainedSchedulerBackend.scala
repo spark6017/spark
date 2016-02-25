@@ -165,6 +165,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
 
+      /***
+        * Driver收到RegisterExecutor消息才明确的知道，现在有Executor进程启动就绪可以分配任务了
+        */
       case RegisterExecutor(executorId, executorRef, cores, logUrls) =>
         if (executorDataMap.contains(executorId)) {
           context.reply(RegisterExecutorFailed("Duplicate executor ID: " + executorId))
@@ -185,12 +188,20 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             */
           totalCoreCount.addAndGet(cores)
           totalRegisteredExecutors.addAndGet(1)
+
+          /***
+            * 将executor信息封装成ExecutorData进行维护
+            */
           val data = new ExecutorData(executorRef, executorRef.address, executorAddress.host,
             cores, cores, logUrls)
           // This must be synchronized because variables mutated
           // in this block are read when requesting executors
           CoarseGrainedSchedulerBackend.this.synchronized {
             executorDataMap.put(executorId, data)
+
+            /***
+              * numPendingExecutors记录了持有的executor数目与申请的executor数目之间的差值
+              */
             if (numPendingExecutors > 0) {
               numPendingExecutors -= 1
               logDebug(s"Decremented number of pending executors ($numPendingExecutors left)")
@@ -200,6 +211,10 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           context.reply(RegisteredExecutor(executorAddress.host))
           listenerBus.post(
             SparkListenerExecutorAdded(System.currentTimeMillis(), executorId, data))
+
+          /***
+            * 有新executor加入了，可以为它分配任务了
+            */
           makeOffers()
         }
 

@@ -179,6 +179,14 @@ private[spark] class SparkDeploySchedulerBackend(
     }
   }
 
+  /***
+    * 当有ExecutorAdded事件时，SparkDeploySchedulerBackend只写了一个log？
+    * @param fullId
+    * @param workerId
+    * @param hostPort
+    * @param cores
+    * @param memory
+    */
   override def executorAdded(fullId: String, workerId: String, hostPort: String, cores: Int,
     memory: Int) {
     logInfo("Granted executor ID %s on hostPort %s with %d cores, %s RAM".format(

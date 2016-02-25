@@ -947,8 +947,21 @@ private[spark] class TaskSetManager(
     foundTasks
   }
 
+  /***
+    * 计算不同任务本地性的等待时间
+    * @param level
+    * @return
+    */
   private def getLocalityWait(level: TaskLocality.TaskLocality): Long = {
+
+    /**
+      * 任务本地性的默认等待时间是3秒
+      */
     val defaultWait = conf.get("spark.locality.wait", "3s")
+
+    /***
+      * 不同的任务本地性级别的任务本地性的等待时间配置项
+      */
     val localityWaitKey = level match {
       case TaskLocality.PROCESS_LOCAL => "spark.locality.wait.process"
       case TaskLocality.NODE_LOCAL => "spark.locality.wait.node"
@@ -956,6 +969,9 @@ private[spark] class TaskSetManager(
       case _ => null
     }
 
+    /***
+      * 默认都是3秒
+      */
     if (localityWaitKey != null) {
       conf.getTimeAsMs(localityWaitKey, defaultWait)
     } else {
@@ -967,7 +983,7 @@ private[spark] class TaskSetManager(
    * Compute the locality levels used in this TaskSet. Assumes that all tasks have already been
    * added to queues using addPendingTask.
    *
-   * 计算有效的本地性级别，返回一个数组
+   * 计算有效的本地性级别，返回一个元素类型是TaskLocality.TaskLocality的数组，TaskLocality.TaskLocality是一个枚举类型
    *
    */
   private def computeValidLocalityLevels(): Array[TaskLocality.TaskLocality] = {
@@ -1000,6 +1016,9 @@ private[spark] class TaskSetManager(
     currentLocalityIndex = getLocalityIndex(previousLocalityLevel)
   }
 
+  /***
+    * 为本TaskSetManager计算本地性
+    */
   def executorAdded() {
     recomputeLocality()
   }

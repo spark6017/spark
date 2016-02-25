@@ -84,6 +84,13 @@ private[spark] class ApplicationInfo(
     }
   }
 
+  /** *
+    * 在Worker分配Executor的信息
+    * @param worker
+    * @param cores
+    * @param useID
+    * @return
+    */
   private[master] def addExecutor(
       worker: WorkerInfo,
       cores: Int,

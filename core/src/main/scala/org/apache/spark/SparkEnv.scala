@@ -321,26 +321,40 @@ object SparkEnv extends Logging {
       "spark.closure.serializer", "org.apache.spark.serializer.JavaSerializer")
 
     /**
-      *
+      * 返回一个RpcEndpointRef实例，表示是EndpointRef
       *
       * 分区Driver和Executor
       * 如果是Driver，那么给全局的rpcEnv调用setupEndpoint
       * 如果是Executor，那么给全局的rpcEnv调用setupEndpointRef
       *
       * @param name
-      * @param endpointCreator
+      * @param endpointCreator 返回类型
       * @return 返回RpcEndpointRef实例
       */
     def registerOrLookupEndpoint(
         name: String, endpointCreator: => RpcEndpoint):
       RpcEndpointRef = {
+      /**
+       * rpcEnv.setupEndpoint创建一个EndPoint(Endpoint有点类似于创建一个server)
+       */
       if (isDriver) {
         logInfo("Registering " + name)
+
+        /** *
+          * 注册一个Endpoint，其名称是name，返回该Endpoint对应的EndpointRef
+          */
         rpcEnv.setupEndpoint(name, endpointCreator)
       } else {
         val driverHost: String = conf.get("spark.driver.host", "localhost")
         val driverPort: Int = conf.getInt("spark.driver.port", 7077)
         Utils.checkHost(driverHost, "Expected hostname")
+
+        /** *
+          * rpcEnv.setupEndpointRef有点类似于创建一个跟Endpoint(类似于Server)通信的client
+          *
+          * 每个RpcEndpoint是由RpcAddress和name表征的，RpcAddress由Host和Port组成，
+          * 所以说RpcEndpoint类似于Server
+          */
         rpcEnv.setupEndpointRef(RpcAddress(driverHost, driverPort), name)
       }
     }
@@ -362,6 +376,10 @@ object SparkEnv extends Logging {
       * 如果是Driver是什么情况？如果是Executor又是什么情况？
       */
     val masterEndPoint = new MapOutputTrackerMasterEndpoint(rpcEnv, mapOutputTracker.asInstanceOf[MapOutputTrackerMaster], conf)
+
+    /** *
+      * trakerEndpoint是MapOutputTracker的一个可修改的成员变量
+      */
     mapOutputTracker.trackerEndpoint = registerOrLookupEndpoint(MapOutputTracker.ENDPOINT_NAME,masterEndPoint)
 
     // Let the user specify short names for shuffle managers
@@ -394,10 +412,19 @@ object SparkEnv extends Logging {
 
     /**
       * 不管是Driver还是Executor，都会创建BlockManagerMasterEndpoint实例,
-      *
       * 但是对于Driver，endpoint指向BlockManagerMasterEndpoint本尊，而对于Executor，endpoint指向BlockManagerMasterEndpoint引用
-      */
+     *
+     *   BlockManagerMasterEndpoint只是构造出来，并没有进行注册，在registerOrLookupEndpoint方法中，因为
+     *   driver先执行BlockManagerMasterEndpoint注册，然后Executor在通过lookup获得BlockManagerMasterEndpoint
+     *   的ref
+     *
+     */
     val bmmEndpoint = new BlockManagerMasterEndpoint(rpcEnv, isLocal, conf, listenerBus)
+
+    /** *
+      * endpoint是bmmEndpoint的ref，而BlockManagerMaster.DRIVER_ENDPOINT_NAME是BlockManagerMasterEndpoint的
+      * 名称
+      */
     val endpoint = registerOrLookupEndpoint(BlockManagerMaster.DRIVER_ENDPOINT_NAME, bmmEndpoint)
 
     /***
@@ -406,6 +433,17 @@ object SparkEnv extends Logging {
       * 也就是说，在Driver上BlockManagerMaster是真实存在的，在Executor上，BlockManagerMaster只是包含指向Driver BlockManager的endpoint ref
       *
       * endpoint可能是BlockManagerMasterEndpoint本尊也可能是BlockManagerMasterEndpoint的引用
+      *
+      * BlockManagerMaster在Driver和Executor上都存在，
+      *   1. 在Driver上，endpoint指向BlockManagerMasterEndpoint本尊ref
+      *   2. 在Executor上，endpoint是BlockManagerMasterEndpoint的ref
+      * 也就是说，作为一个有IP有端口的服务，BlockManagerMasterEndpoint运行在driver端
+      *
+      *
+      * BlockManagerMaster是通过给它持有的endpoint发送消息的方式来实现Spark操作BlockManager，也就是说，
+      * 用户不会直接给BlockManagerMasterEndpoint发送消息，而是调用BlockManagerMaster提供的API，然后由
+      * 这些API实现Endpoint发送消息
+      *
       */
     val blockManagerMaster = new BlockManagerMaster(endpoint, conf, isDriver)
 

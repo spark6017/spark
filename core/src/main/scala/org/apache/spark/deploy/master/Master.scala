@@ -642,22 +642,75 @@ private[deploy] class Master(
       app: ApplicationInfo,
       usableWorkers: Array[WorkerInfo],
       spreadOutApps: Boolean): Array[Int] = {
+
+    /***
+      * 用户提交作业是指定的每个Executor需要的内核数，由--executor-cores指定，如果没有指定那么coresPerExecutor可能是None
+      */
     val coresPerExecutor = app.desc.coresPerExecutor
-    val minCoresPerExecutor = coresPerExecutor.getOrElse(1) /**如果coresPerExecutor为None，那么默认值为1*/
-    val oneExecutorPerWorker = coresPerExecutor.isEmpty /**每个Worker一个Executor*/
+
+    /***
+      * 为每个Executor分配的最少内核数，如果用户没有指定--executor-cores(具体的说是coresPerExecutor为None),那么默认为1
+      */
+    val minCoresPerExecutor = coresPerExecutor.getOrElse(1)
+
+    /***
+      * 如果用户没有指定每个executor使用多少内核，那么每个worker分配一个executor，
+      * 这里不对，如果只有10个worker，而用户指定了--total-executor-cores 20，那么每个worker上肯定有两个或者以上的executor
+      */
+    val oneExecutorPerWorker = coresPerExecutor.isEmpty
+
+    /***
+      * 每个executor使用的内存量，以MB为单位
+      */
     val memoryPerExecutor = app.desc.memoryPerExecutorMB
+
+    /***
+      * 选出来的分配分配executor的worker数目
+      */
     val numUsable = usableWorkers.length
+
+    /***
+      * 长度为numUsable的数组，每个元素表示对应worker分配的内核数，比如assignedCores（1）=3表示第2个worker分配了3个core给app
+      */
     val assignedCores = new Array[Int](numUsable) // Number of cores to give to each worker
+
+    /***
+      * 长度为numUsable的数组，每个元素表示对应worker分配的executor数目
+      */
     val assignedExecutors = new Array[Int](numUsable) // Number of new executors on each worker
+
+    /**
+      * 本次分配给app的内核总数，它是app需要值和所有可用worker能提供的内核总数两者之间的较小者
+      *
+      * 问题：加入app.coresLeft大于usableWorkers的所有可用内核，能保证usableWorkers的所有内核都分配吗？
+      *
+      * 比如： 用户定义--executor-cores 3 --total-executor-cores 15 而workers是4,5，那么最多分配6个，而不是workers总数所指的9个
+      *
+      */
     var coresToAssign = math.min(app.coresLeft, usableWorkers.map(_.coresFree).sum)
 
-    /** Return whether the specified worker can launch an executor for this app. */
+    /**
+      * Return whether the specified worker can launch an executor for this app.
+      * 判断usableWorkers数组的pos位置的worker能够启动executor，第一次都应该可以
+      *
+      *
+      * */
     def canLaunchExecutor(pos: Int): Boolean = {
+      /**
+        * 需要分配的cores大于等于每个Executor需要的最少cores
+        */
       val keepScheduling = coresToAssign >= minCoresPerExecutor
+
+      /***
+        * pos位置是否还有足够的cores可供分配
+        */
       val enoughCores = usableWorkers(pos).coresFree - assignedCores(pos) >= minCoresPerExecutor
 
       // If we allow multiple executors per worker, then we can always launch new executors.
       // Otherwise, if there is already an executor on this worker, just give it more cores.
+      /***
+        * 如果是启动新的Executor（oneExecutorPerWorker为false表示用户指定了--executor-cores）
+        */
       val launchingNewExecutor = !oneExecutorPerWorker || assignedExecutors(pos) == 0
       if (launchingNewExecutor) {
         val assignedMemory = assignedExecutors(pos) * memoryPerExecutor
@@ -673,8 +726,16 @@ private[deploy] class Master(
 
     // Keep launching executors until no more workers can accommodate any
     // more executors, or if we have reached this application's limits
+    /***
+      * 过滤出能启动executor的worker，canLaunchExecutor这个方法将在下面的while循环继续调用
+      */
     var freeWorkers = (0 until numUsable).filter(canLaunchExecutor)
+
     while (freeWorkers.nonEmpty) {
+
+      /***
+        * 依次遍历freeWorkers的
+        */
       freeWorkers.foreach { pos =>
         var keepScheduling = true
         while (keepScheduling && canLaunchExecutor(pos)) {
@@ -698,6 +759,10 @@ private[deploy] class Master(
           }
         }
       }
+
+      /***
+        * 第一层循环过滤出满足canLaunchExecutor的workers
+        */
       freeWorkers = freeWorkers.filter(canLaunchExecutor)
     }
     assignedCores
@@ -742,7 +807,7 @@ private[deploy] class Master(
 
 
       /***
-        * 为app分配cores，这只是得到一个数组，数组的每个元素对应相同数组下标位置的usableWorker分配的cores
+        * 为app分配cores，这只是得到一个数组，数组的每个元素对应usableWorker数组相同下标位置的worker分配的cores
         * 还未真正的分配，只是先统计出每个worker出多少资源，
         * speadOutApps表示是集中分配模式还是分散模式(将executor分配到尽可能多的机器上，有利于数据本地性)
         */

@@ -58,6 +58,11 @@ private[spark] class BlockStoreShuffleReader[K, C](
      *
      *  Shuffle Read 数据
      *
+     *  问题：为什么返回类型是Seq[(BlockManagerId, Seq[(BlockId, Long)])]
+     *  因为，对于一个Reduce task，它所需要的数据来源于多个map task，而这些map task是由多个多个executor执行的
+     *  因此需要从多个executor要数据，而每个executor对应着一个BlockManagerId，也就是说一个reduce task会对应多个BlockManagerId
+     *  对于一个BlockManager，它可以管理这多个Block，每个Block都有数据长度，也就是说BlockManager和Block是一对多的关系
+     *
      */
     val blocksByAddress = mapOutputTracker.getMapSizesByExecutorId(handle.shuffleId, startPartition, endPartition)
 

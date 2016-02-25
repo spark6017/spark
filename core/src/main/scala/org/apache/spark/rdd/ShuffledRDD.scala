@@ -111,7 +111,9 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
     val dep = dependencies.head.asInstanceOf[ShuffleDependency[K, V, C]]
 
     /**
-     * 获取Shuffle Reader
+     * 获取Shuffle Reader，获取Shuffle Reader时需要提供的参数
+     * 1. ShuffleHandle，记录了shuffle Id
+     * 2. split，这是reduce任务要拉取数据的partition id
      */
    val reader =  SparkEnv.get.shuffleManager.getReader(dep.shuffleHandle, split.index, split.index + 1, context)
     val r = reader.read

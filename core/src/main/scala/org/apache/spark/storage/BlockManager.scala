@@ -451,9 +451,23 @@ private[spark] class BlockManager(
     }
   }
 
+  /***
+    * 从本地Executor的BlockManager中获取blockId对应的数据
+    * @param blockId
+    * @param asBlockResult 返回值是BlockResult还是ByteBuffer，如果asBlockResult则表示返回值是BlockResult类型，否则是ByteBuffer类型
+    * @return
+    */
   private def doGetLocal(blockId: BlockId, asBlockResult: Boolean): Option[Any] = {
+
+    /***
+      * 如果info为null，表示数据不在本地executor的BlockManager
+      */
     val info = blockInfo.get(blockId)
     if (info != null) {
+
+      /**
+        * 对info加锁，那么因为removeBlock也是对info枷锁，所以在加锁获取过程中，removeBlock就得等待
+        */
       info.synchronized {
         // Double check to make sure the block is still there. There is a small chance that the
         // block has been removed by removeBlock (which also synchronizes on the blockInfo object).
@@ -475,9 +489,15 @@ private[spark] class BlockManager(
         val level = info.level
         logDebug(s"Level for block $blockId is $level")
 
-        // Look for the block in memory
+        /***
+          * Block使用了内存存储
+          */
         if (level.useMemory) {
           logDebug(s"Getting block $blockId from memory")
+          /***
+            * 从memoryStore中读取，获取RDD[T]的一个分区数据时设置了asBlockResult为true，因此通过memoryStore.getValues方法获取
+            * 如果是获取二进制数据，那么使用memoryStore.getBytes获取
+            */
           val result = if (asBlockResult) {
             memoryStore.getValues(blockId).map(new BlockResult(_, DataReadMethod.Memory, info.size))
           } else {
@@ -491,8 +511,14 @@ private[spark] class BlockManager(
           }
         }
 
-        // Look for block on disk, potentially storing it back in memory if required
+        /***
+          * 如果内存没有，但是Block设置了磁盘存储级别，如果Block设置了Memory+Disk存储级别，那么代码走到这里表示内存没有放下这个Block而仅仅存放在磁盘上
+          */
         if (level.useDisk) {
+
+          /***
+            * 从磁盘中获取
+            */
           logDebug(s"Getting block $blockId from disk")
           val bytes: ByteBuffer = diskStore.getBytes(blockId) match {
             case Some(b) => b
@@ -502,6 +528,9 @@ private[spark] class BlockManager(
           }
           assert(0 == bytes.position())
 
+          /***
+            * 如果Block仅仅设置了磁盘级别，而没有设置内存级别，那么根据asBlockResult设置返回BlockResult还是ByteBuffer
+            */
           if (!level.useMemory) {
             // If the block shouldn't be stored in memory, we can just return it
             if (asBlockResult) {
@@ -510,8 +539,18 @@ private[spark] class BlockManager(
             } else {
               return Some(bytes)
             }
-          } else {
+          }
+
+          /***
+            * 如果是使用了内存存储级别，代码走到这个逻辑，表示Block是内存+磁盘的存储级别
+            */
+          else {
             // Otherwise, we also have to store something in the memory store
+            /**
+              * 如果Block数据是二进制形式(asBlockResult为false或者level.deserialized两个都可以进行判断)
+              * 将二进制数据写入到内存中
+              *
+              */
             if (!level.deserialized || !asBlockResult) {
               /* We'll store the bytes in memory if the block's storage level includes
                * "memory serialized", or if it should be cached as objects in memory
@@ -526,10 +565,23 @@ private[spark] class BlockManager(
               })
               bytes.rewind()
             }
+
+            /**
+              * 如果!asBlockResult为真，一方面数据在前面写入内存；另一方面，不需要进行反序列化直接返回
+              */
             if (!asBlockResult) {
               return Some(bytes)
             } else {
+
+              /***
+                * 如果asBlockResult为true，那么在level.deserialized为false时，数据已经写到内存，而level.deserialized为true时还没有写入
+                * 发序列化
+                */
               val values = dataDeserialize(blockId, bytes)
+
+              /***
+                * 存储的是原始数据，此时数据还没有写到缓存，通过putIterator写到内存
+                */
               if (level.deserialized) {
                 // Cache the values before returning them
                 val putResult = memoryStore.putIterator(
@@ -543,7 +595,12 @@ private[spark] class BlockManager(
                     // This only happens if we dropped the values back to disk (which is never)
                     throw new SparkException("Memory store did not return an iterator!")
                 }
-              } else {
+              }
+
+              /***
+                * 存储的是二进制数据，此时数据在前面已经写到缓存，此时直接返回
+                */
+              else {
                 return Some(new BlockResult(values, DataReadMethod.Disk, info.size))
               }
             }

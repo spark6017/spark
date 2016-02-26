@@ -647,7 +647,9 @@ private[spark] class BlockManager(
     val locs = Random.shuffle(locations)
 
     /***
-      * 按照BlockMangerId是否在本机进行分开
+      * 按照BlockMangerId是否在本机进行分开，优先选择本机的含义是什么？一个BlockId的数据完全属于一个BlockManagerId，如果数据有备份
+      * 那么会放在多个BlockManagerId中，
+      * 也就是说，最后只会使用一个BlockManagerId(优先从本机读取）
       */
     val (preferredLocs, otherLocs) = locs.partition { loc => blockManagerId.host == loc.host }
     preferredLocs ++ otherLocs
@@ -656,12 +658,13 @@ private[spark] class BlockManager(
   /***
     * 从远端获取Block数据
     * 问题：
-    * 1. 从远端获取过来的数据是否会存到本地，
-    * 2. 因为远端的Block由于存储的策略，可能配置多份，那么具体从哪个machine获取，这个策略如何定义的？
+    * 1. 从远端获取过来的数据是否会存到本地， --- 否
+    * 2. 因为远端的Block由于存储的策略，可能配置多份，那么具体从哪个machine获取，这个策略如何定义的？ ---只是优先从本机其它的blockmanager读取，其它情况下是随机选取一个机器进行读取
     * 3. 如果本地机器有多个executor，那么本地机器就有多个blockmanager，属于另一个executor的blockmanager是否也算是remote的？ 如果算是，如何优先从本机的blockmanager读取？
+    *    --算是remote blockmanager，优先从本机blockmanager读取
     * @param blockId
     * @param asBlockResult
-    * @return
+    * @return 如果从远程机器没有读取到，则返回None
     */
   private def doGetRemote(blockId: BlockId, asBlockResult: Boolean): Option[Any] = {
     require(blockId != null, "BlockId is null")
@@ -671,33 +674,57 @@ private[spark] class BlockManager(
       */
     val locations = getLocations(blockId)
     var numFetchFailures = 0
+
+    /***
+      * 遍历所有的BlockManagerId
+      */
     for (loc <- locations) {
       logDebug(s"Getting remote block $blockId from $loc")
       val data = try {
+        /***
+          * 同步fetch数据，从指定的host，port上(host+port怎么知道要读取多少数据？)
+          */
         blockTransferService.fetchBlockSync(
           loc.host, loc.port, loc.executorId, blockId.toString).nioByteBuffer()
       } catch {
         case NonFatal(e) =>
           numFetchFailures += 1
+
+          /***
+            * 读取所有位置的数据都败了，表示数据没有读到
+            */
           if (numFetchFailures == locations.size) {
             // An exception is thrown while fetching this block from all locations
             throw new BlockFetchException(s"Failed to fetch block from" +
               s" ${locations.size} locations. Most recent failure cause:", e)
           } else {
             // This location failed, so we retry fetch from a different one by returning null here
+            /***
+              * 从loc读取失败，下次循环从下一个loc读取，此处记录警告信息
+              */
             logWarning(s"Failed to fetch remote block $blockId " +
               s"from $loc (failed attempt $numFetchFailures)", e)
             null
           }
       }
 
+      /***
+        * data ！= null表示从loc这个位置fetch到了数据
+        */
       if (data != null) {
+
+        /***
+          * 如果要求返回BlockResult，则进行数据反序列化(因为数据是从远端读取过来的，读取到的数据必然是二进制数据）
+          */
         if (asBlockResult) {
           return Some(new BlockResult(
             dataDeserialize(blockId, data),
             DataReadMethod.Network,
             data.limit()))
         } else {
+          /***
+            * 数据原样返回
+            */
           return Some(data)
         }
       }
@@ -709,6 +736,8 @@ private[spark] class BlockManager(
 
   /***
     * Get a block from the block manager (either local or remote).
+    *
+    * 首先尝试从本地读取，如果本地读取不到，则从远端读取
     * @param blockId
     * @return
     */

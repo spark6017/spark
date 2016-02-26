@@ -82,6 +82,9 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
    *
    * getDependencies这个方法是说该RDD如何依赖它的父RDD，是窄依赖还是宽依赖。
    * ShuffleDependency看它的构造函数属性，有六个参数
+    *
+    *
+    * new ShuffleDependency操作会生成一个shuffle id，而getDependencies是唯一一个创建new ShuffleDependency的位置
    *
    * @return
    */

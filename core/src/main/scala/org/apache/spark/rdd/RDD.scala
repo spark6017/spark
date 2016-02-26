@@ -1114,6 +1114,10 @@ abstract class RDD[T: ClassTag](
     * 由于SparkContext注册了JVM推出时调用SparkContext的stop方法，因此将启动Application结束的流程，最终调用AppClient的stop方法时，给Master发送removeApplication的消息
     *
     *
+    * 如sc.textFile(...).flatMap(...).reduceByKey(_+_).count,那么传给SparkContext是最后一个RDD(调用count方法的rdd)
+    *
+    *
+    *
     *
    */
   def count(): Long = {

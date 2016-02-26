@@ -284,14 +284,28 @@ class DAGScheduler(
     cacheLocs.clear()
   }
 
-  /**
-   * Get or create a shuffle map stage for the given shuffle dependency's map side.
-   */
+  /***
+    * Get or create a shuffle map stage for the given shuffle dependency's map side.
+    *
+    * 根据ShuffleDependency(确切的说是shuffle id)获取ShuffleStage
+    *
+    * @param shuffleDep
+    * @param firstJobId
+    * @return
+    */
   private def getShuffleMapStage(
       shuffleDep: ShuffleDependency[_, _, _],
       firstJobId: Int): ShuffleMapStage = {
+
+    /**
+      *从shuffleToMapStage获取ShuffleMapStage，如果有则直接返回
+      */
     shuffleToMapStage.get(shuffleDep.shuffleId) match {
       case Some(stage) => stage
+
+      /***
+        * 如果shuffleToMapStage没有存放shuffle dependency对应的ShuffleMapStage
+        */
       case None =>
         // We are going to register ancestor shuffle dependencies
         getAncestorShuffleDependencies(shuffleDep.rdd).foreach { dep =>
@@ -304,11 +318,18 @@ class DAGScheduler(
     }
   }
 
-  /**
-   * Helper function to eliminate some code re-use when creating new stages.
-   */
+  /***
+    * Helper function to eliminate some code re-use when creating new stages.
+    *
+    * @param rdd 获取RDD所在的Stage对应的的parent stage
+    * @param firstJobId
+    * @return id指的是Stage的ID，只有parent stage全部全部建立完(包括创建ID)，也就是说，辈分越高的stage的stageId越小
+    */
   private def getParentStagesAndId(rdd: RDD[_], firstJobId: Int): (List[Stage], Int) = {
     val parentStages = getParentStages(rdd, firstJobId)
+    /***
+      * 创建完parent后创建本Stage的ID
+      */
     val id = nextStageId.getAndIncrement()
     (parentStages, id)
   }
@@ -389,6 +410,8 @@ class DAGScheduler(
   /**
    * Get or create the list of parent stages for a given RDD.  The new Stages will be created with
    * the provided firstJobId.
+    *
+    * 获取ParentStages，放到parents这个HashSet中，其实就是获取ShuffleStage
    */
   private def getParentStages(rdd: RDD[_], firstJobId: Int): List[Stage] = {
     val parents = new HashSet[Stage]
@@ -401,10 +424,22 @@ class DAGScheduler(
         visited += r
         // Kind of ugly: need to register RDDs with the cache here since
         // we can't do it in its constructor because # of partitions is unknown
+
+        /**
+          * 遍历RDD的依赖（r.dependencies，如果包含ShuffleDependency，那么会生成唯一的ShuffleId）
+          */
         for (dep <- r.dependencies) {
           dep match {
             case shufDep: ShuffleDependency[_, _, _] =>
-              parents += getShuffleMapStage(shufDep, firstJobId)
+
+              /***
+                * getShuffleMapStage获取Shuffle Stage
+                */
+            parents += getShuffleMapStage(shufDep, firstJobId)
+
+            /***
+              * 如果是Narrow Dependency，那么将它(dep.rdd表示parent rdd)加到当前Stage，等待遍历这个RDD
+              */
             case _ =>
               waitingForVisit.push(dep.rdd)
           }
@@ -865,6 +900,16 @@ class DAGScheduler(
     submitWaitingStages()
   }
 
+  /***
+    *
+    * @param jobId
+    * @param finalRDD 整个RDD链的最后一个RDD，调用了action方法的RDD
+    * @param func ResultTask执行的函数用于计算结果
+    * @param partitions
+    * @param callSite
+    * @param listener
+    * @param properties
+    */
   private[scheduler] def handleJobSubmitted(jobId: Int,
       finalRDD: RDD[_],
       func: (TaskContext, Iterator[_]) => _,
@@ -876,6 +921,11 @@ class DAGScheduler(
     try {
       // New stage creation may throw an exception if, for example, jobs are run on a
       // HadoopRDD whose underlying HDFS files have been deleted.
+
+      /***
+        * 创建ResultStage，每个job只有一个ResultStage并且ResultStage是整个DAG Stages的最后一个Stage
+        * 构造ResultStage时需要建立完整的Stage依赖关系，从这个角度来说，Stage应该有数据结构记录它依赖的parent stages
+        */
       finalStage = newResultStage(finalRDD, func, partitions, jobId, callSite)
     } catch {
       case e: Exception =>
@@ -1763,6 +1813,10 @@ private[scheduler] class DAGSchedulerEventProcessLoop(dagScheduler: DAGScheduler
   }
 
   private def doOnReceive(event: DAGSchedulerEvent): Unit = event match {
+
+    /***
+      * SparkContext提交了Job，调用DAGScheduler的handleJobSubmitted方法
+      */
     case JobSubmitted(jobId, rdd, func, partitions, callSite, listener, properties) =>
       dagScheduler.handleJobSubmitted(jobId, rdd, func, partitions, callSite, listener, properties)
 

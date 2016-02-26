@@ -613,9 +613,13 @@ private[spark] class BlockManager(
     None
   }
 
-  /**
-   * Get block from remote block managers.
-   */
+  /***
+    * Get block from remote block managers.
+    *
+    * 从远端获取数据，对于RDDBlockId这种存放Java对象的Block而言，应该调用这个方法
+    * @param blockId
+    * @return
+    */
   def getRemote(blockId: BlockId): Option[BlockResult] = {
     logDebug(s"Getting remote block $blockId")
     doGetRemote(blockId, asBlockResult = true).asInstanceOf[Option[BlockResult]]
@@ -632,15 +636,39 @@ private[spark] class BlockManager(
   /**
    * Return a list of locations for the given block, prioritizing the local machine since
    * multiple block managers can share the same host.
-   */
+    *
+    * 调用BlockManagerMaster的getLocations获取blockId对应的BlockManagerId集合
+    *
+    * @param blockId
+    * @return  Seq[BlockManagerId]
+    */
   private def getLocations(blockId: BlockId): Seq[BlockManagerId] = {
-    val locs = Random.shuffle(master.getLocations(blockId))
+    val locations = master.getLocations(blockId)
+    val locs = Random.shuffle(locations)
+
+    /***
+      * 按照BlockMangerId是否在本机进行分开
+      */
     val (preferredLocs, otherLocs) = locs.partition { loc => blockManagerId.host == loc.host }
     preferredLocs ++ otherLocs
   }
 
+  /***
+    * 从远端获取Block数据
+    * 问题：
+    * 1. 从远端获取过来的数据是否会存到本地，
+    * 2. 因为远端的Block由于存储的策略，可能配置多份，那么具体从哪个machine获取，这个策略如何定义的？
+    * 3. 如果本地机器有多个executor，那么本地机器就有多个blockmanager，属于另一个executor的blockmanager是否也算是remote的？ 如果算是，如何优先从本机的blockmanager读取？
+    * @param blockId
+    * @param asBlockResult
+    * @return
+    */
   private def doGetRemote(blockId: BlockId, asBlockResult: Boolean): Option[Any] = {
     require(blockId != null, "BlockId is null")
+
+    /***
+      * 根据BlockId获取数据存放的位置，locations是BlockManagerId的集合
+      */
     val locations = getLocations(blockId)
     var numFetchFailures = 0
     for (loc <- locations) {

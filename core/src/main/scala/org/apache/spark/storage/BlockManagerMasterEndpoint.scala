@@ -100,7 +100,7 @@ class BlockManagerMasterEndpoint(
       listenerBus.post(SparkListenerBlockUpdated(BlockUpdatedInfo(_updateBlockInfo)))
 
     /***
-      * 返回一个blockId位于哪些机器上
+      * 通过调用getLocations返回一个blockId位于哪些机器上
       */
     case GetLocations(blockId) =>
       context.reply(getLocations(blockId))
@@ -411,7 +411,7 @@ class BlockManagerMasterEndpoint(
   }
 
   /***
-    * 返回BlockManagerId的集合
+    * 返回BlockManagerId的集合，从blockLocations中获取
     * @param blockId
     * @return
     */

@@ -73,7 +73,12 @@ class BlockManagerMaster(
 
   /** Get locations of the blockId from the driver */
   def getLocations(blockId: BlockId): Seq[BlockManagerId] = {
-    blockManagerMasterEndpoint.askWithRetry[Seq[BlockManagerId]](GetLocations(blockId))
+    val msg = GetLocations(blockId)
+
+    /***
+      * 给blockManagerMasterEndpoint发送GetLocations消息，响应这个请求的是BlockManagerMasterEndpoint
+      */
+    blockManagerMasterEndpoint.askWithRetry[Seq[BlockManagerId]](msg)
   }
 
   /** Get locations of multiple blockIds from the driver */

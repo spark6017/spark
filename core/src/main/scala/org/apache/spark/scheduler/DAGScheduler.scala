@@ -261,6 +261,11 @@ class DAGScheduler(
     eventProcessLoop.post(TaskSetFailed(taskSet, reason, exception))
   }
 
+  /***
+    * 获取RDD的缓存位置，如果cacheLocs没有这个信息，那么首先进行获取
+    * @param rdd
+    * @return
+    */
   private[scheduler]
   def getCacheLocs(rdd: RDD[_]): IndexedSeq[Seq[TaskLocation]] = cacheLocs.synchronized {
     // Note: this doesn't use `getOrElse()` because this method is called O(num tasks) times
@@ -1746,6 +1751,9 @@ class DAGScheduler(
    * Gets the locality information associated with a partition of a particular RDD.
    *
    * This method is thread-safe and is called from both DAGScheduler and SparkContext.
+    *
+    *
+    * 获取指定RDD的某个partition的数据位置，返回TaskLocation的集合，返回集合的原因是，一个分区的数据可能分布在多个节点(比如HDFS的数据备份策略)
    *
    * @param rdd whose partitions are to be looked at
    * @param partition to lookup locality information for
@@ -1762,6 +1770,8 @@ class DAGScheduler(
    * This method is thread-safe because it only accesses DAGScheduler state through thread-safe
    * methods (getCacheLocs()); please be careful when modifying this method, because any new
    * DAGScheduler state accessed by it may require additional synchronization.
+    *
+    * 获取rdd的partition分区的数据位置
    */
   private def getPreferredLocsInternal(
       rdd: RDD[_],
@@ -1773,12 +1783,21 @@ class DAGScheduler(
       // Nil has already been returned for previously visited partitions.
       return Nil
     }
-    // If the partition is cached, return the cache locations
+
+    /***
+      * If the partition is cached, return the cache locations
+      * 1. 首先后去缓存数据的位置
+      */
     val cached = getCacheLocs(rdd)(partition)
     if (cached.nonEmpty) {
       return cached
     }
-    // If the RDD has some placement preferences (as is the case for input RDDs), get those
+
+    /***
+      * If the RDD has some placement preferences (as is the case for input RDDs), get those
+      * 调用RDD的preferredLocations，对于HadoopRDD是有定义的，那么MapPartitionsRDD呢？MapPartitionsRDD没有定义
+      * rddPrefs是一个字符串列表
+      */
     val rddPrefs = rdd.preferredLocations(rdd.partitions(partition)).toList
     if (rddPrefs.nonEmpty) {
       return rddPrefs.map(TaskLocation(_))
@@ -1787,10 +1806,22 @@ class DAGScheduler(
     // If the RDD has narrow dependencies, pick the first partition of the first narrow dependency
     // that has any placement preferences. Ideally we would choose based on transfer sizes,
     // but this will do for now.
+    /***
+      * 对于Narrow Dependency，比如map操作，在这里进行判断
+      */
     rdd.dependencies.foreach {
-      case n: NarrowDependency[_] =>
-        for (inPart <- n.getParents(partition)) {
-          val locs = getPreferredLocsInternal(n.rdd, inPart, visited)
+      case nd: NarrowDependency[_] =>
+
+        /***
+          * 获取该partition依赖的父partitions
+          */
+        val parentPartitions = nd.getParents(partition)
+
+        /**
+          * 获取父RDD对应分区的Preferred Locations
+          */
+        for (part <- parentPartitions) {
+          val locs = getPreferredLocsInternal(nd.rdd, part, visited)
           if (locs != Nil) {
             return locs
           }

@@ -122,6 +122,7 @@ private[spark] abstract class MemoryManager(
 
   /**
    * Release N bytes of storage memory.
+   * 从StorageMemoryPool中释放内存，如何高效的释放内存，让GC可以很快的回收掉
    */
   def releaseStorageMemory(numBytes: Long): Unit = synchronized {
     storageMemoryPool.releaseMemory(numBytes)

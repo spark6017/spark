@@ -90,6 +90,10 @@ private[memory] class StorageMemoryPool(lock: Object) extends MemoryPool(lock) w
     enoughMemory
   }
 
+  /** *
+    * 只是修改了_memoryUsed的值
+    * @param size
+    */
   def releaseMemory(size: Long): Unit = lock.synchronized {
     if (size > _memoryUsed) {
       logWarning(s"Attempted to release $size bytes of storage " +

@@ -807,9 +807,21 @@ private[spark] class BlockManager(
   /**
    * Put a new block of serialized bytes to the block manager.
    *
+   * 将二进制流写入BlockManager
+   * 问题：
+   * 1. 如果缓存到内存，而内存不够用，此时是什么策略？直接OOM还是剔除在内存中停留时间最长的RDD占用的Memory
+   * 2. 当副本数大于1时，选择哪台机器上进行复制
+   *
    * @return true if the block was stored or false if the block was already stored or an
    *         error occurred.
-   */
+    *
+    * @param blockId
+    * @param bytes
+    * @param level
+    * @param tellMaster tellMaster为true表示什么意思？
+    * @param effectiveStorageLevel 有效存储级别，什么是有效存储级别
+    * @return
+    */
   def putBytes(
       blockId: BlockId,
       bytes: ByteBuffer,
@@ -817,6 +829,10 @@ private[spark] class BlockManager(
       tellMaster: Boolean = true,
       effectiveStorageLevel: Option[StorageLevel] = None): Boolean = {
     require(bytes != null, "Bytes is null")
+
+    /** *
+      *
+      */
     doPut(blockId, ByteBufferValues(bytes), level, tellMaster, effectiveStorageLevel)
   }
 
@@ -828,9 +844,18 @@ private[spark] class BlockManager(
    * handled. This allows the caller to specify an alternate behavior of doPut while preserving
    * the original level specified by the user.
    *
+   * 此处解释了什么是有效存储级别。有效存储级别指得是
+   *
    * @return true if the block was stored or false if the block was already stored or an
    *         error occurred.
-   */
+    *
+    * @param blockId
+    * @param data
+    * @param level
+    * @param tellMaster
+    * @param effectiveStorageLevel
+    * @return
+    */
   private def doPut(
       blockId: BlockId,
       data: BlockValues,

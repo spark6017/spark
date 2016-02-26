@@ -110,6 +110,11 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
     memoryUsed - currentUnrollMemory
   }
 
+  /** *
+    * Block的大小记录在MemoryEntry的size变量中
+    * @param blockId
+    * @return
+    */
   override def getSize(blockId: BlockId): Long = {
     entries.synchronized {
       entries.get(blockId).size
@@ -129,15 +134,22 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
     bytes.rewind()
 
     /***
-      * 存储级别指定使用原始数据(未序列化)，那么首先需要进行反序列化，得到原始数据Iterator
-      * 否则
+      * 如果存储级别指定使用原始数据(未序列化)，那么首先需要进行反序列化，得到原始数据values iterator
+      * 调用putIterator写入到MemoryStore中
       */
     if (level.deserialized) {
       val values = blockManager.dataDeserialize(blockId, bytes)
-      putIterator(blockId, values, level, returnValues = true)
-    } else {
+      val result = putIterator(blockId, values, level, returnValues = true)
+      result
+    }
+
+    /** *
+      * 如果存储级别是使用序列化的二进制数据，那么调用tryToPut将二进制数据写入内存
+      */
+    else {
       tryToPut(blockId, bytes, bytes.limit, deserialized = false)
-      PutResult(bytes.limit(), Right(bytes.duplicate()))
+      val result = PutResult(bytes.limit(), Right(bytes.duplicate()))
+      result
     }
   }
 
@@ -236,34 +248,69 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
     }
     if (entry == null) {
       None
-    } else if (entry.deserialized) {
+    }
+
+    /** *
+      * 如果entry中的数据是未序列化的原始数据，那么首先序列化为二进制流
+      */
+    else if (entry.deserialized) {
       Some(blockManager.dataSerialize(blockId, entry.value.asInstanceOf[Array[Any]].iterator))
-    } else {
+    }
+
+    /**
+     * 如果entry中的数据已经是序列化的原始数据，那么直接返回
+     */
+    else {
       Some(entry.value.asInstanceOf[ByteBuffer].duplicate()) // Doesn't actually copy the data
     }
   }
 
   /***
-    * 返回一个Iterator
+    * 从内存中读取一个Block，返回一个Iterator
     * @param blockId
     * @return
     */
   override def getValues(blockId: BlockId): Option[Iterator[Any]] = {
+    /** *
+      * 缓存的数据存放在entries这个map中，它是BlockId和MemoryEntry的映射
+      */
     val entry = entries.synchronized {
       entries.get(blockId)
     }
+
+    /** *
+      * 不存在则返回None
+      */
     if (entry == null) {
       None
-    } else if (entry.deserialized) {
+    }
+
+    /** *
+      * 如果entry中的数据是未序列化化的，那么直接取出entry.value转换为Array的对象集合
+      */
+    else if (entry.deserialized) {
       Some(entry.value.asInstanceOf[Array[Any]].iterator)
-    } else {
+    }
+
+    /** *
+      * 如果entry的数据是序列化的，那么取出entry.value转换为ByteBuffer，然后再进行反序列化
+      */
+    else {
       val buffer = entry.value.asInstanceOf[ByteBuffer].duplicate() // Doesn't actually copy data
       Some(blockManager.dataDeserialize(blockId, buffer))
     }
   }
 
+  /** *
+    * 从MemoryStore中删除一个Block
+    * @param blockId the block to remove.
+    * @return True if the block was found and removed, False otherwise.
+    */
   override def remove(blockId: BlockId): Boolean = memoryManager.synchronized {
+    //从entries集合中找到blockId对应的MemoryEntry，并将它删除
     val entry = entries.synchronized { entries.remove(blockId) }
+
+    //如果村在且删除成功，那么释放entry所占用的存储内存
     if (entry != null) {
       memoryManager.releaseStorageMemory(entry.size)
       logDebug(s"Block $blockId of size ${entry.size} dropped " +
@@ -378,6 +425,14 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
     blockId.asRDDId.map(_.rddId)
   }
 
+  /** *
+    * 将value数据写入内存
+    * @param blockId
+    * @param value
+    * @param size
+    * @param deserialized
+    * @return
+    */
   private def tryToPut(
       blockId: BlockId,
       value: Any,

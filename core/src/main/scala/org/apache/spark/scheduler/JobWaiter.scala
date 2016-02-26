@@ -21,10 +21,17 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.concurrent.{Future, Promise}
 
-/**
- * An object that waits for a DAGScheduler job to complete. As tasks finish, it passes their
- * results to the given handler function.
- */
+
+/***
+  * An object that waits for a DAGScheduler job to complete. As tasks finish, it passes their
+  * results to the given handler function.
+  *
+  * @param dagScheduler
+  * @param jobId
+  * @param totalTasks
+  * @param resultHandler SparkContext用于计算结果的函数，比如对于RDD的count操作
+  * @tparam T
+  */
 private[spark] class JobWaiter[T](
     dagScheduler: DAGScheduler,
     val jobId: Int,

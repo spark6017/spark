@@ -1796,10 +1796,17 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     )
   }
 
-  /**
-   * Run a function on a given set of partitions in an RDD and pass the results to the given
-   * handler function. This is the main entry point for all actions in Spark.
-   */
+  /***
+    * Run a function on a given set of partitions in an RDD and pass the results to the given
+    * handler function. This is the main entry point for all actions in Spark.
+    *
+    * @param rdd
+    * @param func
+    * @param partitions
+    * @param resultHandler resultHandler是一个类型为(Int,U)=>Unit的函数，这个函数是什么意思？返回值是空
+    * @tparam T
+    * @tparam U
+    */
   def runJob[T, U: ClassTag](
       rdd: RDD[T],
       func: (TaskContext, Iterator[T]) => U,
@@ -1823,22 +1830,44 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     rdd.doCheckpoint()
   }
 
-  /**
-   * Run a function on a given set of partitions in an RDD and return the results as an array.
-   */
+  /***
+    * Run a function on a given set of partitions in an RDD and return the results as an array.
+    *
+    * 调用runJob的另一个版本的函数，传入的参数体是(index, res) => results(index) = res，将res写入result(index)中
+    *
+    * @param rdd
+    * @param func
+    * @param partitions
+    * @tparam T
+    * @tparam U
+    * @return
+    */
   def runJob[T, U: ClassTag](
       rdd: RDD[T],
       func: (TaskContext, Iterator[T]) => U,
       partitions: Seq[Int]): Array[U] = {
+
+    /***
+      * results数据用于接收数据，(index, res) => results(index) = res是DAGScheduler用到的resultHandler函数(Int,U)=>Unit
+      */
     val results = new Array[U](partitions.size)
     runJob[T, U](rdd, func, partitions, (index, res) => results(index) = res)
     results
   }
 
-  /**
-   * Run a job on a given set of partitions of an RDD, but take a function of type
-   * `Iterator[T] => U` instead of `(TaskContext, Iterator[T]) => U`.
-   */
+  /***
+    * Run a job on a given set of partitions of an RDD, but take a function of type
+    * `Iterator[T] => U` instead of `(TaskContext, Iterator[T]) => U`.
+    *
+    * 将函数类型转换为 (ctx: TaskContext, it: Iterator[T]) => func(it)再提交runJob
+    *
+    * @param rdd
+    * @param func 分区计算函数，对于RDD的count函数，这个func就是Utils.getIteratorSize
+    * @param partitions
+    * @tparam T
+    * @tparam U
+    * @return
+    */
   def runJob[T, U: ClassTag](
       rdd: RDD[T],
       func: Iterator[T] => U,
@@ -1856,7 +1885,13 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
 
   /**
    * Run a job on all partitions in an RDD and return the results in an array.
-   */
+    *
+    * @param rdd
+    * @param func 计算函数，将分区数据Iterator[T]转换为类型为U的函数
+    * @tparam T
+    * @tparam U
+    * @return 每个分区的计算结果类型U的数组
+    */
   def runJob[T, U: ClassTag](rdd: RDD[T], func: Iterator[T] => U): Array[U] = {
     runJob(rdd, func, 0 until rdd.partitions.length)
   }

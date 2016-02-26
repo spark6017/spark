@@ -1121,7 +1121,13 @@ abstract class RDD[T: ClassTag](
     *
    */
   def count(): Long = {
-    sc.runJob(this, Utils.getIteratorSize _).sum
+    /***
+      * runJob返回一个数组，表示每个分区的计算数据(分区的数据是调用Utils.getIteratorSize进行计算的)，调用数组的sum，对所有的数据进行求和
+      *
+      *
+      */
+    val arr = sc.runJob(this, Utils.getIteratorSize _)
+    arr.sum
   }
 
   /**

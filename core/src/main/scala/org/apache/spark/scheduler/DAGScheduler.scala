@@ -601,7 +601,8 @@ class DAGScheduler(
    * @param partitions set of partitions to run on; some jobs may not want to compute on all
    *   partitions of the target RDD, e.g. for operations like first()
    * @param callSite where in the user program this job was called
-   * @param resultHandler callback to pass each result to
+   * @param resultHandler callback to pass each result to 这个函数的类型是(Int,U)=>Unit，第一个参数表示分区的Id，U表示分区的计算结果，然后resultHandler是将分区计算结果写入
+    *                      到SparkContext定义的数组中，即ResultsArray(IndexOfPartition,ValueOfTypeU)
    * @param properties scheduler properties to attach to this job, e.g. fair scheduler pool name
    *
    * @return a JobWaiter object that can be used to block until the job finishes executing
@@ -631,6 +632,10 @@ class DAGScheduler(
     }
 
     assert(partitions.size > 0)
+
+    /**
+      * func2用于在Task中计算结果，resultHandler用于将结果汇总
+      */
     val func2 = func.asInstanceOf[(TaskContext, Iterator[_]) => _]
     val waiter = new JobWaiter(this, jobId, partitions.size, resultHandler)
     eventProcessLoop.post(JobSubmitted(
@@ -661,6 +666,10 @@ class DAGScheduler(
       resultHandler: (Int, U) => Unit,
       properties: Properties): Unit = {
     val start = System.nanoTime
+
+    /***
+      * waiter的类型是JobWaiter类型的变量
+      */
     val waiter = submitJob(rdd, func, partitions, callSite, resultHandler, properties)
     Await.ready(waiter.completionFuture, atMost = Duration.Inf)
     waiter.completionFuture.value.get match {
@@ -1283,6 +1292,12 @@ class DAGScheduler(
                   job.finished(rt.outputId) = true
                   job.numFinished += 1
                   // If the whole job has finished, remove it
+                  /***
+                    * ResultStage的所有任务执行完成表示整个Job执行完成
+                    * 1. 调用markStageAsFinished将resultStage从runningStages中删掉
+                    * 2. 发布SparkListenerJobEnd结束的事件
+                    * 3. SparkContext以及DAGScheduler在等待作业执行完成，如何通知它们
+                    */
                   if (job.numFinished == job.numPartitions) {
                     markStageAsFinished(resultStage)
                     cleanupStateForJobAndIndependentStages(job)
@@ -1292,6 +1307,12 @@ class DAGScheduler(
 
                   // taskSucceeded runs some user code that might throw an exception. Make sure
                   // we are resilient against that.
+
+                  /***
+                    * 关键代码，job.listener就是DAGScheduler提交作业的JobWaiter，调用JobWaiter的taskSucceeded方法
+                    * 会判断该Job是否是所有的任务都完成，如果所有的任务都完成，那么整个Job会执行完，
+                    * DAGScheduler等待Job的JobWaiter也会停止等待
+                    */
                   try {
                     job.listener.taskSucceeded(rt.outputId, event.result)
                   } catch {

@@ -177,6 +177,10 @@ abstract class RDD[T: ClassTag](
     // with the SparkContext for cleanups and accounting. Do this only once.
     if (storageLevel == StorageLevel.NONE) {
       sc.cleaner.foreach(_.registerRDDForCleanup(this))
+
+      /***
+        * 如果原来的存储级别是NONE，表示未曾缓存过，调用SparkContext的persistRDD方法，记录下这个RDD要进行缓存，并没有记录这个RDD的存储级别
+        */
       sc.persistRDD(this)
     }
     storageLevel = newLevel
@@ -306,7 +310,7 @@ abstract class RDD[T: ClassTag](
   final def iterator(split: Partition, context: TaskContext): Iterator[T] = {
 
     /***
-      * 如果存储级别不是NONE，表示RDD被标记为Cache(如果没有真正的cache那么首先计算再进行cache)
+      * 如果存储级别不是NONE，表示RDD被标记为Cache(如果已经实际缓存过那么读取缓存的数据；如果没有真正的cache过那么首先计算该RDD的数据再进行cache)
       */
     if (storageLevel != StorageLevel.NONE) {
       SparkEnv.get.cacheManager.getOrCompute(this, split, context, storageLevel)

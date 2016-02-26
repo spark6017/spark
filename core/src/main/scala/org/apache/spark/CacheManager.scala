@@ -34,9 +34,10 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
   /** Keys of RDD partitions that are being computed/loaded. */
   private val loading = new mutable.HashSet[RDDBlockId]
 
-  /** Gets or computes an RDD partition. Used by RDD.iterator() when an RDD is cached.
-    *
-    *
+  /**
+    * Gets or computes an RDD partition. Used by RDD.iterator() when an RDD is cached.
+    * Get： 读取缓存
+    * compute：如果缓存中没有则进行计算
     *
     * */
   def getOrCompute[T](
@@ -57,7 +58,8 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
     blockManager.get(key) match {
 
       /***
-        * 如果读到数据，则放到blockResult中，blockResult的类型是BlockResult
+        * 如果读到数据，则数据是包装为BlockResult对象，BlockResult的data是一个Iterator，元素类型跟RDD的元素类型相同
+        * 如果缓存的时候有序列化，那么反序列化是何时做的？
         */
       case Some(blockResult) =>
         // Partition is already materialized, so just return its values
@@ -86,11 +88,15 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
         // Acquire a lock for loading this partition
         // If another thread already holds the lock, wait for it to finish return its results
         /**
-          * 等待其它线程计算+缓存完，直接其它线程缓存的结果
+          * 等待其它线程计算+缓存完，直接获取其它线程缓存的结果
           *
-          * 如果返回值没有定义，那么会做加锁操作(对loading对象进行加锁)
+          *
           */
         val storedValues = acquireLockForPartition[T](key)
+
+        /***
+          * 表示本线程在等待过程中，其它线程已经loading完成
+          */
         if (storedValues.isDefined) {
           return new InterruptibleIterator[T](context, storedValues.get)
         }
@@ -130,14 +136,26 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
    * loading the partition, so we wait for it to finish and return the values loaded by the thread.
    */
   private def acquireLockForPartition[T](id: RDDBlockId): Option[Iterator[T]] = {
+
+    /***
+      * loading是一个HashSet，
+      */
     loading.synchronized {
-      if (!loading.contains(id)) {
+      if (!loading.contains(id)) { /**如果loading还没有这个key，那么加入到loading中，并返回None，此处表示没有其它线程在读取*/
         // If the partition is free, acquire its lock to compute its value
         loading.add(id)
         None
       } else {
-        // Otherwise, wait for another thread to finish and return its result
+
+        /****
+          * Otherwise, wait for another thread to finish and return its result
+          * 有线程将id加入到laoding集合中了，表示此时正在有线程读取
+          */
         logInfo(s"Another thread is loading $id, waiting for it to finish...")
+
+        /***
+          * 等待其它线程释放锁
+          */
         while (loading.contains(id)) {
           try {
             loading.wait()
@@ -147,6 +165,9 @@ private[spark] class CacheManager(blockManager: BlockManager) extends Logging {
           }
         }
         logInfo(s"Finished waiting for $id")
+        /***
+          * 从BlockManager中根据RDDBlockId获取数据，此处可能从local读取，也可能从remote读取
+          */
         val values = blockManager.get(id)
         if (!values.isDefined) {
           /* The block is not guaranteed to exist even after the other thread has finished.

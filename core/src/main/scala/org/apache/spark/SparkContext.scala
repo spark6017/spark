@@ -284,7 +284,10 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
   private[spark] val addedFiles = HashMap[String, Long]()
   private[spark] val addedJars = HashMap[String, Long]()
 
-  // Keeps track of all persisted RDDs
+  /***
+    * Keeps track of all persisted RDDs
+    * 跟踪缓存的RDD信息
+    */
   private[spark] val persistentRdds = {
     val map: ConcurrentMap[Int, RDD[_]] = new MapMaker().weakValues().makeMap[Int, RDD[_]]()
     map.asScala

@@ -622,10 +622,14 @@ private[spark] class BlockManager(
     None
   }
 
-  /**
-   * Get a block from the block manager (either local or remote).
-   */
+  /***
+    * Get a block from the block manager (either local or remote).
+    * @param blockId
+    * @return
+    */
   def get(blockId: BlockId): Option[BlockResult] = {
+
+    //从本地获取
     val local = getLocal(blockId)
     if (local.isDefined) {
       logInfo(s"Found block $blockId locally")

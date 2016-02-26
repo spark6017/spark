@@ -98,7 +98,16 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
     Array.tabulate[Partition](part.numPartitions)(i => new ShuffledRDDPartition(i))
   }
 
+  /***
+    * shuffle数据的数据本地性，假如Shuffle Map Stage的数据写到ABC三台机器，那么最后reduce任务运行在ABC机器上，
+    * 避免跨机器拉取数据
+    * @param partition
+    * @return
+    */
   override protected def getPreferredLocations(partition: Partition): Seq[String] = {
+    /***
+      * 获取MapOutputTrackerMaster
+      */
     val tracker = SparkEnv.get.mapOutputTracker.asInstanceOf[MapOutputTrackerMaster]
     val dep = dependencies.head.asInstanceOf[ShuffleDependency[K, V, C]]
     tracker.getPreferredLocationsForShuffle(dep, partition.index)

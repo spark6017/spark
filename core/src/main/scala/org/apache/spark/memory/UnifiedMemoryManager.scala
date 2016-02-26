@@ -53,11 +53,16 @@ private[spark] class UnifiedMemoryManager private[memory] (
     conf,
     numCores,
     storageRegionSize,
-    maxMemory - storageRegionSize) {
+    maxMemory - storageRegionSize) { /**MemoryManager的onHeapExecutionMemory=maxMemory - storageRegionSize*/
 
   // We always maintain this invariant:
   assert(onHeapExecutionMemoryPool.poolSize + storageMemoryPool.poolSize == maxMemory)
 
+  /** *
+    * 统一内存管理下，最大可用的存储内存是本Executor的最大可用内存-执行内存的使用量
+    * 也就是是说，存储内存可以无限制的借用存储内存
+    * @return
+    */
   override def maxStorageMemory: Long = synchronized {
     maxMemory - onHeapExecutionMemoryPool.memoryUsed
   }
@@ -131,22 +136,43 @@ private[spark] class UnifiedMemoryManager private[memory] (
     }
   }
 
+  /** *
+    *
+    * @param blockId 要放到内存的BlockId
+    * @param numBytes 要放到内存的字节数？还是要向StorageMemory借用的内存书？
+    * @return whether all N bytes were successfully granted.
+    */
   override def acquireStorageMemory(blockId: BlockId, numBytes: Long): Boolean = synchronized {
+    //保证堆上的Shuffle内存容量+RDD内存存储容量=maxMemory
     assert(onHeapExecutionMemoryPool.poolSize + storageMemoryPool.poolSize == maxMemory)
     assert(numBytes >= 0)
+
+    /**
+     * 如果要存放的内存大于最大存储内存，那么即使借光执行内存的空间也放不下，因此立即失败，
+     * 这是一种判断是否应该立即失败的策略，无需判断其它条件
+     * 问题：
+     * maxStorageMemory是怎么计算的？
+     */
     if (numBytes > maxStorageMemory) {
       // Fail fast if the block simply won't fit
       logInfo(s"Will not store $blockId as the required space ($numBytes bytes) exceeds our " +
         s"memory limit ($maxStorageMemory bytes)")
       return false
     }
+
+    /** *
+      * 如果需要的内存容量(numBytes)大于当前可用的存储内存量
+      */
     if (numBytes > storageMemoryPool.memoryFree) {
       // There is not enough free memory in the storage pool, so try to borrow free memory from
       // the execution pool.
+      //从执行内存池借的内存量是numBytes和堆上执行内存可用的最小之
       val memoryBorrowedFromExecution = Math.min(onHeapExecutionMemoryPool.memoryFree, numBytes)
       onHeapExecutionMemoryPool.decrementPoolSize(memoryBorrowedFromExecution)
       storageMemoryPool.incrementPoolSize(memoryBorrowedFromExecution)
     }
+
+
     storageMemoryPool.acquireMemory(blockId, numBytes)
   }
 

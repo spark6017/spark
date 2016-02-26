@@ -44,7 +44,7 @@ private case class MemoryEntry(value: Any, size: Long, deserialized: Boolean)
   *
   *
   * 将Block数据存储到从内存中，存储时存储格式可能是Java对象数组，也可能是序列化后的ByteBuffer
-  * MemoryStore关联一个BlockManager
+  * MemoryStore关联一个BlockManager和一个MemoryManager（MemoryManager）
   *
   *
   * 1. putIterator方法调用unrollSafely进行尝试
@@ -99,12 +99,22 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
 
   logInfo("MemoryStore started with capacity %s".format(Utils.bytesToString(maxMemory)))
 
-  /** Total storage memory used including unroll memory, in bytes. */
+  /**
+   * Total storage memory used including unroll memory, in bytes.
+    * 问题：
+   *  1. memoryManager.storageMemoryUsed记录的是本MemoryStore使用的内存还是所有MemoryStore使用的内存
+   *  2.
+    *
+    * */
   private def memoryUsed: Long = memoryManager.storageMemoryUsed
 
   /**
    * Amount of storage memory, in bytes, used for caching blocks.
    * This does not include memory used for unrolling.
+   * 问题：
+   *
+   * 1. 从变量的命名(blocks)以及注释中可以看到，似乎指的是所有blocks占用的内存
+   *
    */
   private def blocksMemoryUsed: Long = memoryManager.synchronized {
     memoryUsed - currentUnrollMemory

@@ -1353,11 +1353,17 @@ class DAGScheduler(
               /**
                *
                * ShuffleMapStage的所有任务都已经完成，那么需要登记该Shuffle的mapOutputs信息
-               *
                * 本Stage的所有MapTask都执行完成，那么需要向Master汇报Shuffle数据信息
+                *
+                * 本Stage执行完，需要调度依赖于此Stage的Stage，比如：
+                * reduceByKey分为两个Stage：Map Stage和Result Stage，Map Stage结束后，开始调度依赖于Map Stage的Result Stage
+                *
+                * handleTaskCompletion方法的最后调用submitWaitingStages方法重新提交等待的stage
                *
                */
             if (runningStages.contains(shuffleStage) && shuffleStage.pendingPartitions.isEmpty) {
+
+              //从runningStages中删除该shuffleStage
               markStageAsFinished(shuffleStage)
               logInfo("looking for newly runnable stages")
               logInfo("running: " + runningStages)

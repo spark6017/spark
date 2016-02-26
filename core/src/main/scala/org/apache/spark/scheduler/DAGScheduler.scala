@@ -975,7 +975,11 @@ class DAGScheduler(
     }
   }
 
-  /** Called when stage's parents are available and we can now do its task. */
+  /**
+    * Called when stage's parents are available and we can now do its task.
+    *
+    * 如果Stage是ShuffleMapStage任务，那么会从ShuffleMapStage中取出ShuffleDependency
+    * */
   private def submitMissingTasks(stage: Stage, jobId: Int) {
     logDebug("submitMissingTasks(" + stage + ")")
     // Get our pending tasks and remember them in our pendingTasks entry
@@ -1269,8 +1273,6 @@ class DAGScheduler(
               /**更新ShuffleMapStage的OutputLoc信息，这是针对一个partitionId的更新，
                 *
                 * 将一个partitionId和MapStatus添加，
-                *
-                *
                 * 接下来会判断该Stage是否已经全部执行完，如果全部执行完，那么就会将该Stage的Shuffle信息记录到mapOutputTracker中
                 *
                 */

@@ -17,16 +17,20 @@ object SparkSQLTestSeqToDF {
     val conf = new SparkConf().setAppName("SparkSQLTestCount").setMaster("local");
     val sc = new SparkContext(conf);
     val ssc = new SQLContext(sc);
-    //    import ssc.implicits.intRddToDataFrameHolder
+        import ssc.implicits.intRddToDataFrameHolder
     //    val df = sc.parallelize(Seq(1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10)).toDF
     //    df.show()
+//
+//        import ssc.implicits.intRddToDataFrameHolder
+//        val df = Seq((1,2),(3,4)).toDF()
+//        df.show()
 
-    sc.parallelize(Seq(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)).mapPartitions({
-
-      iter =>
-        val a = new MutableA(0)
-        iter.map(x => a.set(x + 100))
-    }).foreach(println)
+//    sc.parallelize(Seq(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)).mapPartitions({
+//
+//      iter =>
+//        val a = new MutableA(0)
+//        iter.map(x => a.set(x + 100))
+//    }).foreach(println)
 
     sc.stop
   }

@@ -106,10 +106,16 @@ class ShuffleDependency[K: ClassTag, V: ClassTag, C: ClassTag](
   private[spark] val combinerClassName: Option[String] =
     Option(reflect.classTag[C]).map(_.runtimeClass.getName)
 
+  /***
+    * ShuffleDependecy类唯一一个使用了SparkContext的newShuffleId方法
+    *
+    * 对于word count而言，包含两个stage，第一个是shuffle stage，第二个是result stage，也就是说，它们一共包含一个shuffle过程，也就是只有一个shuffle id,
+    * 这个shuffle id应该是在shuffle map stage中创建的？貌似不是。。。是在ShuffledRDD中创建的，ShuffledRDD属于入result stage
+    */
   val shuffleId: Int = _rdd.context.newShuffleId()
 
   /**
-   * Dependency有一个shuffleHandle对象
+   * ShuffleDependency有一个shuffleHandle对象,记录了shuffleId，ShuffleReader根据ShuffleId获取数据在MapOutputTracker
     *
     * 参数有ShuffleId, Mapper Task的数目（即本shuffle需要有多少个Task写数据）
    */

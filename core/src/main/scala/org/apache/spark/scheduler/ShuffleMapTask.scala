@@ -63,9 +63,14 @@ private[spark] class ShuffleMapTask(
 
   /**
     * ShuffleMapTask执行结果是一个MapStatus,
+    *
     * MapStatus包含两方面信息：
     *   1. BlockManagerId(BlockManager的唯一标识，BlockManagerId包括host、port、executorId)
     *   2. 数据大小(估算值)
+    *
+    * 问题：ShuffleMapTask的任务序列化数据(taskBinary.value)，得到的是RDD和ShuffleDependency，问题是ShuffleDependency使如何创建出来的？
+    *
+    *
     * @param context
     * @return
     */

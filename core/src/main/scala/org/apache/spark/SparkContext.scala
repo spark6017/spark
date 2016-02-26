@@ -2035,8 +2035,15 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
    */
   def defaultMinPartitions: Int = math.min(defaultParallelism, 2)
 
+  /***
+    * shuffleId是一个全局变量，即在整个application中，shuffleId是自动增长且不重复
+    */
   private val nextShuffleId = new AtomicInteger(0)
 
+  /***
+    * 获取下一个shuffleId
+    * @return
+    */
   private[spark] def newShuffleId(): Int = nextShuffleId.getAndIncrement()
 
   private val nextRddId = new AtomicInteger(0)

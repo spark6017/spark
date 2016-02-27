@@ -176,6 +176,8 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
       * 那么bytes将进行计算
       */
     lazy val bytes = _bytes().duplicate().rewind().asInstanceOf[ByteBuffer]
+
+    //调用tryToPut尝试将数据缓存到内存，如果成功则返回true，否则返回false
     val putSuccess = tryToPut(blockId, () => bytes, size, deserialized = false)
     val data =
       if (putSuccess) {
@@ -184,6 +186,10 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
       } else {
         null
       }
+
+    /***
+      * 如果写入内存失败，那么data为null
+      */
     PutResult(size, data)
   }
 
@@ -430,9 +436,15 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
 
   /**
    * Return the RDD ID that a given block ID is from, or None if it is not an RDD block.
+    *
+    * 根据blockId获取rddId
    */
   private def getRddId(blockId: BlockId): Option[Int] = {
-    blockId.asRDDId.map(_.rddId)
+    /**
+      * 如果blockId是RDDBlockId,那么返回Some，否则返回None
+      */
+    val blockRDD = blockId.asRDDId
+    blockRDD.map(_.rddId)
   }
 
   /** *
@@ -488,6 +500,10 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
       // happen atomically. This relies on the assumption that all memory acquisitions are
       // synchronized on the same lock.
       releasePendingUnrollMemoryForThisTask()
+
+      /***
+        * 根据size可能需要从Execution Memory借内存
+        */
       val enoughMemory = memoryManager.acquireStorageMemory(blockId, size)
 
       /***
@@ -525,10 +541,12 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
   }
 
   /**
-    * Try to evict blocks to free up a given amount of space to store a particular block.
+    * Try to evict blocks to free up a given amount of space(由space变量表示) to store a particular block.
     * Can fail if either the block is bigger than our memory or it would require replacing
     * another block from the same RDD (which leads to a wasteful cyclic replacement pattern for
     * RDDs that don't fit into memory that we want to avoid).
+    *
+    * 擦除操作不会擦除BlockId表示的同一个RDD的partition
     *
     * @param blockId the ID of the block we are freeing space for, if any
     * @param space the size of this block
@@ -538,36 +556,74 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
     assert(space > 0)
     memoryManager.synchronized {
       var freedMemory = 0L
+      //获得blockId对应的rddId
       val rddToAdd = blockId.flatMap(getRddId)
+
+      /***
+        * 选出可用evict的BlockId
+        */
       val selectedBlocks = new ArrayBuffer[BlockId]
       // This is synchronized to ensure that the set of entries is not changed
       // (because of getValue or getBytes) while traversing the iterator, as that
       // can lead to exceptions.
+      /***
+        * 遍历HashMap集合
+        */
       entries.synchronized {
         val iterator = entries.entrySet().iterator()
+
+        /**
+          * 循环的条件：
+          * 1. 可用内存仍然小于申请值
+          * 2. entries还有元素可供擦除
+          */
         while (freedMemory < space && iterator.hasNext) {
           val pair = iterator.next()
           val blockId = pair.getKey
+
+          /**
+            * rddToAdd.isEmpty表示不是blockId对应的不是RDD？
+            * rddToAdd != getRddId(blockId)表示当前遍历的blockId包含的RDD不是要进行申请内存的RDD
+            */
           if (rddToAdd.isEmpty || rddToAdd != getRddId(blockId)) {
+            //可用内存增加
             selectedBlocks += blockId
             freedMemory += pair.getValue.size
           }
         }
       }
 
+      /***
+        * 如果可以申请到足够的空间，那么执行实际的擦除操作
+        */
       if (freedMemory >= space) {
         logInfo(s"${selectedBlocks.size} blocks selected for dropping")
+
+        /***
+          * 遍历所有要从内存卸载的block
+          */
         for (blockId <- selectedBlocks) {
+
+          //读取一个entry
           val entry = entries.synchronized { entries.get(blockId) }
           // This should never be null as only one task should be dropping
           // blocks and removing entries. However the check is still here for
           // future safety.
           if (entry != null) {
+
+            //直接读取数据，可能是Array[Any]也可能是ByteBuffer，注意因为data不是lazy的，因此此处已经给data赋值了
+            //因为entry.value放在内存中，因此这里只是把data.value的内存地址赋值给data
             val data = if (entry.deserialized) {
               Left(entry.value.asInstanceOf[Array[Any]])
             } else {
               Right(entry.value.asInstanceOf[ByteBuffer].duplicate())
             }
+
+            /***
+              * 调用BlockManager的dropFromMemory将数据从内存中干掉
+              * 问题：为什么要调用BlockManager方法，为什么MemoryStore不直接提供drop内存的操作，
+              * 因为在drop memory时，需要disk store参与操作，而只有BlockManager同时持有DiskBlock和MemoryBlock
+              */
             blockManager.dropFromMemory(blockId, () => data)
           }
         }

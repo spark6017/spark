@@ -53,12 +53,25 @@ private[memory] class StorageMemoryPool(lock: Object) extends MemoryPool(lock) w
     _memoryStore = store
   }
 
-  /**
-   * Acquire N bytes of memory to cache the given block, evicting existing ones if necessary.
-   * @return whether all N bytes were successfully granted.
-   */
+  /***
+    * Acquire N bytes of memory to cache the given block, evicting existing ones if necessary.
+    *
+    * 代码运行到此处，该借的内存已经借了，但是可能依然不够
+    *
+    * @param blockId
+    * @param numBytes
+    * @return
+    */
   def acquireMemory(blockId: BlockId, numBytes: Long): Boolean = lock.synchronized {
+
+    /***
+      * 需要释放内存的字节数，如果numBytes - memoryFree > 0表示借完on heap execution的内存后storage memory依然不够存放numBytes
+      */
     val numBytesToFree = math.max(0, numBytes - memoryFree)
+
+    /***
+      * 需要memory storage释放numBytesToFree字节
+      */
     acquireMemory(blockId, numBytes, numBytesToFree)
   }
 
@@ -67,7 +80,7 @@ private[memory] class StorageMemoryPool(lock: Object) extends MemoryPool(lock) w
    *
    * @param blockId the ID of the block we are acquiring storage memory for
    * @param numBytesToAcquire the size of this block
-   * @param numBytesToFree the amount of space to be freed through evicting blocks
+   * @param numBytesToFree the amount of space to be freed through evicting blocks(需要storage memory释放numBytesToFree字节的内存)
    * @return whether all N bytes were successfully granted.
    */
   def acquireMemory(
@@ -77,16 +90,25 @@ private[memory] class StorageMemoryPool(lock: Object) extends MemoryPool(lock) w
     assert(numBytesToAcquire >= 0)
     assert(numBytesToFree >= 0)
     assert(memoryUsed <= poolSize)
+
+    /***
+      * 如果需要释放的内存字节数大于0，那么调用memoryStore.evictBlocksToFreeSpace执行实际的擦除操作,擦除操作执行后会更新_memoryUsed变量
+      */
     if (numBytesToFree > 0) {
       memoryStore.evictBlocksToFreeSpace(Some(blockId), numBytesToFree)
     }
     // NOTE: If the memory store evicts blocks, then those evictions will synchronously call
     // back into this StorageMemoryPool in order to free memory. Therefore, these variables
     // should have been updated.
+    //如果此时的可用内存(memoryFree)大于等于numBytesToAcquire，表示可以放下，返回true，否则返回false
     val enoughMemory = numBytesToAcquire <= memoryFree
+
+    //如果内存足够，表示要将numBytesToAcquire写入内存，更新_memoryUsed变量
     if (enoughMemory) {
       _memoryUsed += numBytesToAcquire
     }
+
+    //返回内存申请是否成功
     enoughMemory
   }
 

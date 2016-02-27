@@ -56,6 +56,10 @@ private[memory] abstract class MemoryPool(lock: Object) {
 
   /**
    * Shrinks the pool by `delta` bytes.
+    * Shrink表示减小
+    * 减少的容量需要满足：
+    * 1. delta不能比本内存池还大
+    * 2. delta不能大于_poolSize的可用容量(_poolSize - memoryUsed)
    */
   final def decrementPoolSize(delta: Long): Unit = lock.synchronized {
     require(delta >= 0)

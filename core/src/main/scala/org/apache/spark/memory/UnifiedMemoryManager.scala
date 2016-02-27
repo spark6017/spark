@@ -59,8 +59,9 @@ private[spark] class UnifiedMemoryManager private[memory] (
   assert(onHeapExecutionMemoryPool.poolSize + storageMemoryPool.poolSize == maxMemory)
 
   /** *
+    * 这是一个方法，每次调用都会进行计算
     * 统一内存管理下，最大可用的存储内存是本Executor的最大可用内存-执行内存的使用量
-    * 也就是是说，存储内存可以无限制的借用存储内存
+    * 也就是是说，最大存储内存是所有的内存减去execution memory
     * @return
     */
   override def maxStorageMemory: Long = synchronized {
@@ -139,7 +140,7 @@ private[spark] class UnifiedMemoryManager private[memory] (
   /** *
     *
     * @param blockId 要放到内存的BlockId
-    * @param numBytes 要放到内存的字节数？还是要向StorageMemory借用的内存书？
+    * @param numBytes 要放到内存的字节数？还是要向StorageMemory借用的内存数？是要存放到storage memory的字节数
     * @return whether all N bytes were successfully granted.
     */
   override def acquireStorageMemory(blockId: BlockId, numBytes: Long): Boolean = synchronized {
@@ -161,18 +162,34 @@ private[spark] class UnifiedMemoryManager private[memory] (
     }
 
     /** *
-      * 如果需要的内存容量(numBytes)大于当前可用的存储内存量
+      * 如果需要的内存容量(numBytes)大于当前可用的存储内存量，那么尝试从execution memory借用内存
+      * 问题：借用多少？
       */
     if (numBytes > storageMemoryPool.memoryFree) {
       // There is not enough free memory in the storage pool, so try to borrow free memory from
       // the execution pool.
-      //从执行内存池借的内存量是numBytes和堆上执行内存可用的最小之
+      // memoryBorrowedFromExecution记录了从on heap execution memory借用的内存量
+      // memoryBorrowedFromExecution的值是on heap execution memory和numBytes的最小值
+      // 如果on heap execution memory小，表示on heap execution memory全部被借完
+      // 如果numBytes小，那么从on heap execution memory借用numBytes字节，在这种情况下，storage memory原来剩下可用的可以不用(因为借用的就满足需求了)
+      //
       val memoryBorrowedFromExecution = Math.min(onHeapExecutionMemoryPool.memoryFree, numBytes)
+
+      /***
+        * onHeapExecutionMemoryPool被借走memoryBorrowedFromExecution字节
+        */
       onHeapExecutionMemoryPool.decrementPoolSize(memoryBorrowedFromExecution)
+
+      /***
+        * storageMemoryPool借来memoryBorrowedFromExecution字节
+        */
       storageMemoryPool.incrementPoolSize(memoryBorrowedFromExecution)
     }
 
 
+    /***
+      * 如果一开始storage memory的可用容量小于numBytes，那么storageMemoryPool此时增加了memoryBorrowedFromExecution字节
+      */
     storageMemoryPool.acquireMemory(blockId, numBytes)
   }
 

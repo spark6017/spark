@@ -66,9 +66,21 @@ private[spark] abstract class MemoryManager(
   }
 
   /**
-   * Acquire N bytes of memory to cache the given block, evicting existing ones if necessary.
-   * @return whether all N bytes were successfully granted.
+   *
+   * @return
    */
+
+  /***
+    * Acquire N bytes of memory to cache the given block, evicting existing ones if necessary.
+    *
+    * 尝试将numBytes字节的数据写入缓存，
+    * 1. 如果storage memory不够用则从execution memory借用
+    * 2. 如果借用过来的内存加上可用的storage memory仍然不能满足，那么尝试删除存在于storage memory上的RDD block
+    *
+    * @param blockId
+    * @param numBytes
+    * @return whether all N bytes were successfully granted.
+    */
   def acquireStorageMemory(blockId: BlockId, numBytes: Long): Boolean
 
   /**

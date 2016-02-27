@@ -127,7 +127,7 @@ final class UnsafeExternalRowSorter {
   }
 
   /**
-   * 是否会做内存数据和磁盘数据做merge
+   * 是否会做内存数据和磁盘数据做merge,会做归并排序
    * @return
    * @throws IOException
      */

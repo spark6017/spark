@@ -244,7 +244,8 @@ abstract class Expression extends TreeNode[Expression] {
 
 /**
  * An expression that cannot be evaluated. Some expressions don't live past analysis or optimization
- * time (e.g. Star). This trait is used by those expressions.
+ * time (e.g. Star)(问题： 何为live past？). This trait is used by those expressions
+  *
  *
  * 不支持表达式求值和代码生成的表达式
  */

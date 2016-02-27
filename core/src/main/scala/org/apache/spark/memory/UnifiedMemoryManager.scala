@@ -218,17 +218,40 @@ object UnifiedMemoryManager {
 
   /**
    * Return the total amount of memory shared between execution and storage, in bytes.
-   */
+    *
+    * 如果系统内存1G，那么预留300M，剩余724M，再取0.75 = 724M*0.75=543M
+    *
+    * Runtime.getRuntime.maxMemory表示executor这个JVM进程的内存容量，因为预留+取75%的原因，如果给executor分配512M，那么实际可用的是(512-300)*75%=109M
+    * 因此，在统一内存管理模式下，分配给executor的内存不能太小
+    *
+    *
+    * 问题：如果指定--execeutor-memory 1g,那么executor进程内部调用Runtime.getRuntime.maxMemory是否得到1024？
+    *
+    * @param conf
+    * @return storage memory 和 execution memory可用的最大内存
+    */
   private def getMaxMemory(conf: SparkConf): Long = {
+
+    //系统可用内存
     val systemMemory = conf.getLong("spark.testing.memory", Runtime.getRuntime.maxMemory)
+
+    //预留内存给Spark应用其它代码使用(除了storage和execution memory之外)，300M
     val reservedMemory = conf.getLong("spark.testing.reservedMemory",
       if (conf.contains("spark.testing")) 0 else RESERVED_SYSTEM_MEMORY_BYTES)
+
+    //操作系统的最小内存，300M*1.5=450M，这里有点坑，450M明显不够
     val minSystemMemory = reservedMemory * 1.5
+
+    //如果操作系统内存不够450M，那么报错
     if (systemMemory < minSystemMemory) {
       throw new IllegalArgumentException(s"System memory $systemMemory must " +
         s"be at least $minSystemMemory. Please use a larger heap size.")
     }
+
+    //可用内存是系统内存-保留内存
     val usableMemory = systemMemory - reservedMemory
+
+    //取75%给storage memory 和 execution memory使用
     val memoryFraction = conf.getDouble("spark.memory.fraction", 0.75)
     (usableMemory * memoryFraction).toLong
   }

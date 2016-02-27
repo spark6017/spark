@@ -160,6 +160,9 @@ abstract class QueryPlan[PlanType <: TreeNode[PlanType]] extends TreeNode[PlanTy
     }.toSeq
   }
 
+  /***
+    * 查询计划的schema，它是根据output方法得到的，output是Seq[Attribute]
+    */
   lazy val schema: StructType = StructType.fromAttributes(output)
 
   /** Returns the output schema in the tree format. */

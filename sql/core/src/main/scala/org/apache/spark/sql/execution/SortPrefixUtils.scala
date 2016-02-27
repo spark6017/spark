@@ -33,6 +33,11 @@ object SortPrefixUtils {
     override def compare(prefix1: Long, prefix2: Long): Int = 0
   }
 
+  /***
+    *
+    * @param sortOrder
+    * @return
+    */
   def getPrefixComparator(sortOrder: SortOrder): PrefixComparator = {
     sortOrder.dataType match {
       case StringType =>

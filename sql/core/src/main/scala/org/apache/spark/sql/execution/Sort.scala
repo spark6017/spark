@@ -70,6 +70,10 @@ case class Sort(
 //      println("------------------------------------------------------------")
 //    }
     val schema = child.schema
+
+    /***
+      * child物理计划的输出属性，类型是Seq[Attribute]
+      */
     val childOutput = child.output
 
     val dataSize = longMetric("dataSize")

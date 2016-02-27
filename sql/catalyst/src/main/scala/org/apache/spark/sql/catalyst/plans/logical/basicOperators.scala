@@ -25,6 +25,11 @@ import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateExpression
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.types._
 
+/***
+  * Project逻辑计划的output是将projectList转换为Attribute，此处调用NamedExpression的toAttribute方法进行转换
+  * @param projectList
+  * @param child
+  */
 case class Project(projectList: Seq[NamedExpression], child: LogicalPlan) extends UnaryNode {
   override def output: Seq[Attribute] = projectList.map(_.toAttribute)
 

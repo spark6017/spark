@@ -83,6 +83,10 @@ trait NamedExpression extends Expression {
    */
   def qualifiers: Seq[String]
 
+  /**
+    * 将NamedExpression转换为Attribute
+    * @return
+    */
   def toAttribute: Attribute
 
   /** Returns the metadata when an expression is a reference to another expression with metadata. */
@@ -114,6 +118,10 @@ abstract class Attribute extends LeafExpression with NamedExpression {
   def withQualifiers(newQualifiers: Seq[String]): Attribute
   def withName(newName: String): Attribute
 
+  /**
+    * 实现NamedExpression的toAttribute方法，Attribute本身是一个NamedExpression，因此返回this
+    * @return
+    */
   override def toAttribute: Attribute = this
   def newInstance(): Attribute
 

@@ -81,6 +81,14 @@ case class BoundReference(ordinal: Int, dataType: DataType, nullable: Boolean)
 
 object BindReferences extends Logging {
 
+  /***
+    * 绑定Reference，将AttributeReference转换为BoundReference
+    * @param expression
+    * @param input
+    * @param allowFailures
+    * @tparam A
+    * @return
+    */
   def bindReference[A <: Expression](
       expression: A,
       input: Seq[Attribute],

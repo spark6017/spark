@@ -103,12 +103,23 @@ private[sql] case class PhysicalRDD(
     override val outputPartitioning: Partitioning = UnknownPartitioning(0))
   extends LeafNode {
 
+  /***
+    * PhysicalRDD用于获取原始的Spark Core的RDD，
+    * 如果使用UnsafeRow，那么直接返回rdd；如果不是，那么首先将RDD转换为UnsafeRow
+    * @return
+    */
   protected override def doExecute(): RDD[InternalRow] = {
     if (isUnsafeRow) {
       rdd
     } else {
       rdd.mapPartitionsInternal { iter =>
-        val proj = UnsafeProjection.create(schema)
+
+        /***
+          * 创建UnsafeProjection对象，它是一个函数，将safe row转换为unsafe row
+          */
+      val proj = UnsafeProjection.create(schema)
+
+        //将iter的每个元素传给proj函数处理
         iter.map(proj)
       }
     }

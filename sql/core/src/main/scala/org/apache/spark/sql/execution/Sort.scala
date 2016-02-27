@@ -66,9 +66,9 @@ case class Sort(
 
   protected override def doExecute(): RDD[InternalRow] = {
 
-    for (i <-1 to 10) {
-      println("------------------------------------------------------------")
-    }
+//    for (i <-1 to 10) {
+//      println("------------------------------------------------------------")
+//    }
     val schema = child.schema
     val childOutput = child.output
 

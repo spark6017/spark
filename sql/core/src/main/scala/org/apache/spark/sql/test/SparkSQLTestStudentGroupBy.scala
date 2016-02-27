@@ -22,6 +22,8 @@ object SparkSQLTestStudentGroupBy {
     df.registerTempTable("TBL_STUDENT")
 
     val df2 = ssc.sql("select count(name) from TBL_STUDENT group by classId");
+//    println(df2.rdd.toDebugString)
+//    println(df2.rdd.partitions.length)
     println(df2.queryExecution)
     df2.show(20)
     readLine()

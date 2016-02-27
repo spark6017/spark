@@ -38,9 +38,9 @@ import org.apache.spark.sql.execution.metric.SQLMetrics
  */
 case class SortBasedAggregate(
     requiredChildDistributionExpressions: Option[Seq[Expression]],
-    groupingExpressions: Seq[NamedExpression],
-    aggregateExpressions: Seq[AggregateExpression],
-    aggregateAttributes: Seq[Attribute],
+    groupingExpressions: Seq[NamedExpression], /**对于select count(name) from dual group by classId, 那么groupingExpressions是AttributeReference的集合，AttributeReference的字符串表示是classId#3*/
+    aggregateExpressions: Seq[AggregateExpression], /**第一个进来的AggregateExpression是count(name#1), mode=Partial,isDistinct=false**/
+    aggregateAttributes: Seq[Attribute],/**count#6L,元素类型是AttributeReference*/
     initialInputBufferOffset: Int,
     resultExpressions: Seq[NamedExpression],
     child: SparkPlan)

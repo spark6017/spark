@@ -139,17 +139,24 @@ abstract class AggregationIterator(
       }
       i += 1
     }
-    positions.toArray
+    val a = positions.toArray
+    a
   }
 
   // The projection used to initialize buffer values for all expression-based aggregates.
   /////============================常量03============================
   protected[this] val expressionAggInitialProjection = {
     val initExpressions = aggregateFunctions.flatMap {
-      case ae: DeclarativeAggregate => ae.initialValues /**获取初值**/
+      case ae: DeclarativeAggregate => {
+        val a = ae.initialValues
+        a
+      }
       // For the positions corresponding to imperative aggregate functions, we'll use special
       // no-op expressions which are ignored during projection code-generation.
-      case i: ImperativeAggregate => Seq.fill(i.aggBufferAttributes.length)(NoOp)
+      case i: ImperativeAggregate => {
+        val a = Seq.fill(i.aggBufferAttributes.length)(NoOp)
+        a
+      }
     }
 
     /**
@@ -164,9 +171,10 @@ abstract class AggregationIterator(
   /////============================常量04============================
   protected[this] val allImperativeAggregateFunctions: Array[ImperativeAggregate] =
   {
-    allImperativeAggregateFunctionPositions
+    val a = allImperativeAggregateFunctionPositions
       .map(aggregateFunctions)
       .map(_.asInstanceOf[ImperativeAggregate])
+    a
   }
 
   /**
@@ -279,7 +287,8 @@ abstract class AggregationIterator(
   /////============================常量05============================
   protected val processRow: (MutableRow, InternalRow) => Unit =
   {
-    generateProcessRow(aggregateExpressions, aggregateFunctions, inputAttributes)
+    val a = generateProcessRow(aggregateExpressions, aggregateFunctions, inputAttributes)
+    a
   }
 
   /**
@@ -287,7 +296,10 @@ abstract class AggregationIterator(
     */
   /////============================常量06============================
   protected val groupingProjection: UnsafeProjection = {
-    UnsafeProjection.create(groupingExpressions, inputAttributes)
+    val a = groupingExpressions
+    val b = inputAttributes
+    val c = UnsafeProjection.create(a, b)
+    c
   }
 
   /**
@@ -295,7 +307,8 @@ abstract class AggregationIterator(
     */
   /////============================常量07============================
   protected val groupingAttributes = {
-    groupingExpressions.map(_.toAttribute)
+    val a = groupingExpressions.map(_.toAttribute)
+    a
   }
 
     /**
@@ -353,7 +366,8 @@ abstract class AggregationIterator(
   /////============================常量08============================
   protected val generateOutput: (UnsafeRow, MutableRow) => UnsafeRow =
   {
-    generateResultProjection()
+    val a = generateResultProjection()
+    a
   }
 
   /** Initializes buffer values for all aggregate functions. */

@@ -57,11 +57,21 @@ case class Project(projectList: Seq[NamedExpression], child: SparkPlan)
      """.stripMargin
   }
 
+  /**
+    * 对孩子物理计划进行投影
+    * @return
+    */
   protected override def doExecute(): RDD[InternalRow] = {
     val numRows = longMetric("numRows")
     child.execute().mapPartitionsInternal { iter =>
-      val project = UnsafeProjection.create(projectList, child.output,
+
+      /***
+        * 调用UnsafeProjection的另一个重载版本的create方法创建project，
+        */
+    val project = UnsafeProjection.create(projectList, child.output,
         subexpressionEliminationEnabled)
+
+      //将孩子物理计划对应RDD的分区数据(每个数据是一个row)交给project函数处理
       iter.map { row =>
         numRows += 1
         project(row)

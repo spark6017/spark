@@ -34,20 +34,28 @@ sealed trait Distribution
 
 /**
  * Represents a distribution where no promises are made about co-location of data.
+  *
+  * 数据没有执行分布策略
  */
 case object UnspecifiedDistribution extends Distribution
 
 /**
  * Represents a distribution that only has a single partition and all tuples of the dataset
  * are co-located.
+  *
+  * 数据集中分布，表示所有的数据都在一个分区内
  */
 case object AllTuples extends Distribution
 
 /**
  * Represents data where tuples that share the same values for the `clustering`
  * [[Expression Expressions]] will be co-located. Based on the context, this
- * can mean such tuples are either co-located in the same partition or they will be contiguous
+ * can mean such tuples are either co-located in the same partition or they will be contiguous（相邻的）
  * within a single partition.
+  *
+  * ClusteredDistribution是相对于AllTuples(单个分区)而言的，即数据分布式分布，它的特性是
+  * 'clustering'表达式的结果相同的tuples将放在一起
+  *
  */
 case class ClusteredDistribution(clustering: Seq[Expression]) extends Distribution {
   require(

@@ -84,17 +84,33 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ
     metrics(name).asInstanceOf[LongSQLMetric]
 
   // TODO: Move to `DistributedPlan`
-  /** Specifies how data is partitioned across different nodes in the cluster. */
+  /**
+    * Specifies how data is partitioned across different nodes in the cluster.
+    * 本物理计划输出的RDD的数据是什么样的分区策略
+    *
+    * */
   def outputPartitioning: Partitioning = UnknownPartitioning(0) // TODO: WRONG WIDTH!
 
-  /** Specifies any partition requirements on the input data for this operator. */
+  /**
+    * Specifies any partition requirements on the input data for this operator.
+    * 本物理计划要求孩子物理计划输入的RDD的数据分布性
+    *
+    * */
   def requiredChildDistribution: Seq[Distribution] =
     Seq.fill(children.size)(UnspecifiedDistribution)
 
-  /** Specifies how data is ordered in each partition. */
+  /**
+    * Specifies how data is ordered in each partition.
+    * 本物理计划输出的RDD的数据的排序性
+    *
+    * */
   def outputOrdering: Seq[SortOrder] = Nil
 
-  /** Specifies sort order for each partition requirements on the input data for this operator. */
+  /**
+    * Specifies sort order for each partition requirements on the input data for this operator.
+    * 本物理计划要求孩子物理计划输出的RDD的数据的排序性
+    *
+    * */
   def requiredChildOrdering: Seq[Seq[SortOrder]] = Seq.fill(children.size)(Nil)
 
   /**

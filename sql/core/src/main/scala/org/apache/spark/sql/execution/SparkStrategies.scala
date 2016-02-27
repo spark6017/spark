@@ -399,7 +399,8 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
         execution.Sort(sortExprs, global = false, child = planLater(child)) :: Nil
 
       /**
-        * global并没有显式的设置值，因此可能是全局排序，也可能是分区内排序
+        * global并没有显式的设置值，因此可能是全局排序，也可能是分区内排序，
+        * 1.6以前的版本分为Sort、ExternalSort以及TungstenSort，1.6版本统一改成TungstenSort
         */
       case logical.Sort(sortExprs, global, child) =>
         execution.Sort(sortExprs, global, planLater(child)) :: Nil

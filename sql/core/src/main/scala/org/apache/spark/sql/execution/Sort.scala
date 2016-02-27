@@ -75,10 +75,13 @@ case class Sort(
     val dataSize = longMetric("dataSize")
     val spillSize = longMetric("spillSize")
 
+    /***
+      * 对
+      */
     child.execute().mapPartitionsInternal { iter =>
 
         /**
-        * 创建对UnsafeRow进行排序的Ordering对象
+        * 创建对UnsafeRow进行排序的Ordering对象,childOutput是子物理计划的输出属性
         */
     val ordering = newOrdering(sortOrder, childOutput)
 
@@ -88,6 +91,7 @@ case class Sort(
 
       // The generator for prefix
       val prefixProjection = UnsafeProjection.create(Seq(SortPrefix(boundSortExpression)))
+
       val prefixComputer = new UnsafeExternalRowSorter.PrefixComputer {
         override def computePrefix(row: InternalRow): Long = {
           prefixProjection.apply(row).getLong(0)
@@ -97,7 +101,7 @@ case class Sort(
       val pageSize = SparkEnv.get.memoryManager.pageSizeBytes
 
       /***
-        * 创建UnsafeExternalRowSorter
+        * 创建UnsafeExternalRowSorter,对UnsafeRow进行排序
         */
       val sorter = new UnsafeExternalRowSorter(
         schema, ordering, prefixComparator, prefixComputer, pageSize)

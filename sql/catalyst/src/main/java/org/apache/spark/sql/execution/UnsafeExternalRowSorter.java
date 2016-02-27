@@ -96,13 +96,21 @@ final class UnsafeExternalRowSorter {
   }
 
   /**
-   * 插入记录，如果空间不够则进行Spill
+   * 插入记录，如果空间不够则进行Spill?testSpillFrequency大于0并且每插入testSpillFrequency个数的row才进行spill
+   * testSpillFrequency默认是0，只有在测试时才会使用sorter.spill
    * @param row
    * @throws IOException
      */
   @VisibleForTesting
   void insertRow(UnsafeRow row) throws IOException {
+    /***
+     * 计算unsafe row的prefix
+     */
     final long prefix = prefixComputer.computePrefix(row);
+
+      /***
+       * 向
+       */
     sorter.insertRecord(
       row.getBaseObject(),
       row.getBaseOffset(),
@@ -128,36 +136,61 @@ final class UnsafeExternalRowSorter {
 
   /**
    * 是否会做内存数据和磁盘数据做merge,会做归并排序
-   * @return
+   * @return 对孩子物理计划输出的数据(Iterator)进行Sort物理计划转换后得到的Iterator
    * @throws IOException
      */
   @VisibleForTesting
   Iterator<UnsafeRow> sort() throws IOException {
     try {
+
+        /***
+         * 调用UnsafeExternalSorter的getSortedIterator获得UnsafeSorterIterator
+         */
       final UnsafeSorterIterator sortedIterator = sorter.getSortedIterator();
       if (!sortedIterator.hasNext()) {
         // Since we won't ever call next() on an empty iterator, we need to clean up resources
         // here in order to prevent memory leaks.
         cleanupResources();
       }
+
+
       return new AbstractScalaRowIterator<UnsafeRow>() {
 
         private final int numFields = schema.length();
         private UnsafeRow row = new UnsafeRow(numFields);
 
+        /***
+         * 调用sortedIterator判断是否有数据
+         * @return
+           */
         @Override
         public boolean hasNext() {
           return sortedIterator.hasNext();
         }
 
+        /***
+         *
+         * @return
+           */
         @Override
         public UnsafeRow next() {
           try {
+            /***
+             * 首先加载
+             */
             sortedIterator.loadNext();
+
+              /***
+               * 更新row值
+               */
             row.pointTo(
               sortedIterator.getBaseObject(),
               sortedIterator.getBaseOffset(),
               sortedIterator.getRecordLength());
+
+            /**
+             * 如果是最后一个row，那么cleanup
+             */
             if (!hasNext()) {
               UnsafeRow copy = row.copy(); // so that we don't have dangling pointers to freed page
               row = null; // so that we don't keep references to the base object
@@ -183,14 +216,15 @@ final class UnsafeExternalRowSorter {
 
 
   /**
-   * 对UnsafeRow进行排序
+   * 对UnsafeRow进行排序,获取一个Iterator<UnsafeRow>
    * @param inputIterator
    * @return
    * @throws IOException
      */
   public Iterator<UnsafeRow> sort(Iterator<UnsafeRow> inputIterator) throws IOException {
     while (inputIterator.hasNext()) {
-      insertRow(inputIterator.next());
+      UnsafeRow row = inputIterator.next();
+      insertRow(row);
     }
     return sort();
   }

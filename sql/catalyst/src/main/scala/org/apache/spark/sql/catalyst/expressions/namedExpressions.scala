@@ -53,7 +53,12 @@ object ExprId {
  */
 trait NamedExpression extends Expression {
 
-  /** We should never fold named expressions in order to not remove the alias. */
+  /**
+    * We should never fold named expressions in order to not remove the alias.
+    * 命名表达式是不能折叠的，也就是说命名表达式不是常亮，
+    * Attribute可能是可折叠的，因为Literal
+    *
+    * */
   override def foldable: Boolean = false
 
   def name: String
@@ -97,6 +102,10 @@ trait NamedExpression extends Expression {
     }
 }
 
+/***
+  * Attribute是LeafExpression，并且是NamedExpression，因为NamedExpression是不可折叠的，
+  * 所以Attribute也是不可折叠的，没有常亮属性
+  */
 abstract class Attribute extends LeafExpression with NamedExpression {
 
   override def references: AttributeSet = AttributeSet(this)
@@ -188,6 +197,7 @@ case class Alias(child: Expression, name: String)(
 
 /**
  * A reference to an attribute produced by another operator in the tree.
+  * 问题： 这句话怎么理解？？什么是由抽象语法树的其它算子产生的？
  *
  * @param name The name of this attribute, should only be used during analysis or for debugging.
  * @param dataType The [[DataType]] of this attribute.
@@ -304,6 +314,8 @@ case class AttributeReference(
 /**
  * A place holder used when printing expressions without debugging information such as the
  * expression id or the unresolved indicator.
+  *
+  * PrettyAttribute也是不可计算的
  */
 case class PrettyAttribute(name: String, dataType: DataType = NullType)
   extends Attribute with Unevaluable {

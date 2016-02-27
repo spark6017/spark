@@ -49,6 +49,8 @@ case class UnresolvedRelation(
 
 /**
  * Holds the name of an attribute that has yet to be resolved.
+  *
+  * UnresolvedAttribute也是不可计算的
  */
 case class UnresolvedAttribute(nameParts: Seq[String]) extends Attribute with Unevaluable {
 

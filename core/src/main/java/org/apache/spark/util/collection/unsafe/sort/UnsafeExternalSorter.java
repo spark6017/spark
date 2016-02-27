@@ -346,9 +346,14 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
     }
   }
 
-  /**
+  /***
    * Write a record to the sorter.
-   */
+   * @param recordBase UnsafeRow的underlying object，一般是字节数组
+   * @param recordOffset row在recordBase中的偏移量
+   * @param length row的字节长度
+   * @param prefix 根据UnsafeRow计算出来的prefix，用于快速排序
+   * @throws IOException
+     */
   public void insertRecord(Object recordBase, long recordOffset, int length, long prefix)
     throws IOException {
 
@@ -364,6 +369,10 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
     Platform.copyMemory(recordBase, recordOffset, base, pageCursor, length);
     pageCursor += length;
     assert(inMemSorter != null);
+
+      /***
+       * 调用UnsafeInMemorySorter的insertRecord插入数据
+       */
     inMemSorter.insertRecord(recordAddress, prefix);
   }
 

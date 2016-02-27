@@ -113,9 +113,6 @@ abstract class SQLImplicits {
   implicit def intRddToDataFrameHolder(data: RDD[Int]): DataFrameHolder = {
     val dataType = IntegerType
 
-    /**
-      * 将RDD[Int]转换为RDD[InternalRow],为什么iter.map外面定义了一个row，然后iter.map循环对row进行操作
-      */
     val rows = data.mapPartitions { iter =>
       val row = new SpecificMutableRow(dataType :: Nil)
       iter.map { v =>

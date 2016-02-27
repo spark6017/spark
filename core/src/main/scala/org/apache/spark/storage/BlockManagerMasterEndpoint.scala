@@ -94,9 +94,13 @@ class BlockManagerMasterEndpoint(
       register(blockManagerId, maxMemSize, slaveEndpoint)
       context.reply(true)
 
+    /**
+      * 更新block info
+      */
     case _updateBlockInfo @
         UpdateBlockInfo(blockManagerId, blockId, storageLevel, deserializedSize, size) =>
-      context.reply(updateBlockInfo(blockManagerId, blockId, storageLevel, deserializedSize, size))
+      val updateBlockInfoResult = updateBlockInfo(blockManagerId, blockId, storageLevel, deserializedSize, size)
+      context.reply(updateBlockInfoResult)
       listenerBus.post(SparkListenerBlockUpdated(BlockUpdatedInfo(_updateBlockInfo)))
 
     /***
@@ -365,6 +369,15 @@ class BlockManagerMasterEndpoint(
     listenerBus.post(SparkListenerBlockManagerAdded(time, id, maxMemSize))
   }
 
+  /**
+    * 更新block info
+    * @param blockManagerId
+    * @param blockId
+    * @param storageLevel
+    * @param memSize
+    * @param diskSize
+    * @return
+    */
   private def updateBlockInfo(
       blockManagerId: BlockManagerId,
       blockId: BlockId,

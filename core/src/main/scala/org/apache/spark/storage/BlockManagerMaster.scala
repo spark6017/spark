@@ -59,6 +59,15 @@ class BlockManagerMaster(
     logInfo("Registered BlockManager")
   }
 
+  /***
+    * 调用blockManagerMasterEndpoint向BlockManagerMaster汇报block info
+    * @param blockManagerId
+    * @param blockId
+    * @param storageLevel
+    * @param memSize
+    * @param diskSize
+    * @return
+    */
   def updateBlockInfo(
       blockManagerId: BlockManagerId,
       blockId: BlockId,

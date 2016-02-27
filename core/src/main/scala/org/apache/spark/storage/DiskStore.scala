@@ -202,6 +202,11 @@ private[spark] class DiskStore(blockManager: BlockManager, diskManager: DiskBloc
     buffer.map(buffer => blockManager.dataDeserialize(blockId, buffer))
   }
 
+  /***
+    * 从磁盘删除一个block的逻辑是从磁盘删除文件
+    * @param blockId the block to remove.
+    * @return True if the block was found and removed, False otherwise.
+    */
   override def remove(blockId: BlockId): Boolean = {
     val file = diskManager.getFile(blockId.name)
     if (file.exists()) {
@@ -215,6 +220,12 @@ private[spark] class DiskStore(blockManager: BlockManager, diskManager: DiskBloc
     }
   }
 
+  /***
+    * 不同于MemoryStore的判断逻辑，MemoryStore的处理方式是检查entries这个HashMap
+    * DiskStore是检查文件是否存在
+    * @param blockId
+    * @return
+    */
   override def contains(blockId: BlockId): Boolean = {
     val file = diskManager.getFile(blockId.name)
     file.exists()

@@ -354,13 +354,23 @@ private[spark] class BlockManager(
    * droppedMemorySize exists to account for when the block is dropped from memory to disk (so
    * it is still valid). This ensures that update in master will compensate for the increase in
    * memory on slave.
-   */
+    *
+    * @param blockId
+    * @param info
+    * @param status
+    * @param droppedMemorySize
+    */
   private def reportBlockStatus(
       blockId: BlockId,
       info: BlockInfo,
       status: BlockStatus,
       droppedMemorySize: Long = 0L): Unit = {
-    val needReregister = !tryToReportBlockStatus(blockId, info, status, droppedMemorySize)
+    val successReportBlockStatus = tryToReportBlockStatus(blockId, info, status, droppedMemorySize)
+    val needReregister = !successReportBlockStatus
+
+    /**
+      * 如果需要重新，那么将汇报所有block的状态
+      */
     if (needReregister) {
       logInfo(s"Got told to re-register updating block $blockId")
       // Re-registering will report our new block for free.
@@ -373,6 +383,8 @@ private[spark] class BlockManager(
    * Actually send a UpdateBlockInfo message. Returns the master's response,
    * which will be true if the block was successfully recorded and false if
    * the slave needs to re-register.
+    *
+    * BlockManager调用blockManagerMaster将外界发布信息
    */
   private def tryToReportBlockStatus(
       blockId: BlockId,
@@ -395,21 +407,33 @@ private[spark] class BlockManager(
    * and the updated in-memory and on-disk sizes.
     *
     * 更新BlockStatus，包括存储级别以及内存和磁盘的使用量
-   */
+    *
+    * @param blockId
+    * @param info
+    * @return
+    */
   private def getCurrentBlockStatus(blockId: BlockId, info: BlockInfo): BlockStatus = {
     info.synchronized {
+
+      /***
+        * 1. 如果存储级别为memory only而block从内存擦除，如何更新？ StorageLevel为(false,false,false,1)
+        * 2. 如果存储级别为block + memory，而block从内存擦除，如何更新？ StorageLevel为(true,false,false,原来的存储级别)
+        *
+        * 以上两种情况都会将blockId从memoryStore中删除（通过 memoryStore.remove(blockId)）
+        */
       info.level match {
         case null =>
           BlockStatus(StorageLevel.NONE, memSize = 0L, diskSize = 0L)
         case level =>
           val inMem = level.useMemory && memoryStore.contains(blockId)
-          val onDisk = level.useDisk && diskStore.contains(blockId)
-          val deserialized = if (inMem) level.deserialized else false
+          val onDisk = level.useDisk && diskStore.contains(blockId) //diskStore.contains(blockId)是通过检查文件是否存在的方式
+          val deserialized = if (inMem) level.deserialized else false //如果是内存，则判断level是否保持原始数据；其它情况都是使用序列化数据(比如存放到磁盘)
           val replication = if (inMem  || onDisk) level.replication else 1
           val storageLevel =
             StorageLevel(onDisk, inMem, deserialized, replication)
           val memSize = if (inMem) memoryStore.getSize(blockId) else 0L
           val diskSize = if (onDisk) diskStore.getSize(blockId) else 0L
+
           BlockStatus(storageLevel, memSize, diskSize)
       }
     }
@@ -1163,12 +1187,20 @@ private[spark] class BlockManager(
    * store reaches its limit and needs to free up space.
    *
    * If `data` is not put on disk, it won't be created.
-   */
+    *
+    *
+    * @param blockId
+    * @param data 一个入参为空，返回值可以是Array[Any]或者ByteBuffer的Either，也就是说，对于两个不同的类型，可以使用Either表示
+    */
   def dropFromMemory(
       blockId: BlockId,
       data: () => Either[Array[Any], ByteBuffer]): Unit = {
 
     logInfo(s"Dropping block $blockId from memory")
+
+    /***
+      * 从blockInfo中取出BlockInfo变量
+      */
     val info = blockInfo.get(blockId)
 
     // If the block has not already been dropped
@@ -1189,17 +1221,25 @@ private[spark] class BlockManager(
 
         // Drop to disk, if storage level requires
         /***
-          * 如果该Block能够写到磁盘，那么此时调用data()进行计算然后完成写磁盘操作
+          * 如果该Block的持久化级别支持写到磁盘，而磁盘中尚无此Block，那么首先将该block落到磁盘
           */
         if (level.useDisk && !diskStore.contains(blockId)) {
           logInfo(s"Writing block $blockId to disk")
 
           /**
-            * data()是一个Either，有两个值Left和Right，这两个值怎么定义的？
+            * 调用data()方法返回要落地到磁盘的数据，data()返回的是一个Either，有两个值Left和Right，Left表示Array[Any],Right表示ByteBuffer
             */
-          data() match {
+          val dataToWriteToDisk = data()
+          dataToWriteToDisk match {
+            /**
+              * 写Array[Any]
+              */
             case Left(elements) =>
               diskStore.putArray(blockId, elements, level, returnValues = false)
+
+            /***
+              * 写ByteBuffer
+              */
             case Right(bytes) =>
               diskStore.putBytes(blockId, bytes, level)
           }
@@ -1207,11 +1247,14 @@ private[spark] class BlockManager(
         }
 
         // Actually drop from memory store
-        // 为什么会出现memoryStore.contains(blockId)为真的情况，下面还调用了memoryStore.remove(blockId)进行了删除操作
+        // 为什么会出现memoryStore.contains(blockId)为真的情况，下面还调用了memoryStore.remove(blockId)进行了删除操作？因为这时从MemoryStore中擦除blockId
+        // 所以memoryStore中应该包括它
         val droppedMemorySize =
           if (memoryStore.contains(blockId)) memoryStore.getSize(blockId) else 0L
 
-
+        /***
+          * 从memoryStore中删除，如果成功，返回true；否则返回false
+          */
         val blockIsRemoved = memoryStore.remove(blockId)
         if (blockIsRemoved) {
           blockIsUpdated = true
@@ -1219,8 +1262,13 @@ private[spark] class BlockManager(
           logWarning(s"Block $blockId could not be dropped from memory as it does not exist")
         }
 
+        /***
+          * 将数据drop掉后，需要更新该block的BlockStatus，
+          * 代码执行到此处，数据从Memory中删除，如果Block支持写磁盘，那么此时数据也在磁盘上
+          */
         val status = getCurrentBlockStatus(blockId, info)
         if (info.tellMaster) {
+          ///通知master，block status已经更新
           reportBlockStatus(blockId, info, status, droppedMemorySize)
         }
         if (!level.useDisk) {

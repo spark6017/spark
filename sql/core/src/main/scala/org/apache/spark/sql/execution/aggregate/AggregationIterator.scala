@@ -234,13 +234,15 @@ abstract class AggregationIterator(
           expressions(i).mode match {
 
             /**
-              * 如果是Partial或者Complete Mode，那么调用ImperativeAggregate的update方法
+              * 如果是Partial或者Complete Mode，那么updateFunction就是(buffer: MutableRow, row: InternalRow) => ae.update(buffer, row)
+              * 意思是以aggregateBuffer和InternalRow为参数，调用ImperativeAggregate的update方法
               */
             case Partial | Complete =>
               (buffer: MutableRow, row: InternalRow) => ae.update(buffer, row)
 
             /**
-              * 如果是PartialMerge或者Final Mode，那么调用ImperativeAggregate的merge方法
+              * 如果是PartialMerge或者Final Mode，那么updateFunction就是(buffer: MutableRow, row: InternalRow) => ae.merge(buffer, row)
+              *  意思是以aggregateBuffer和InternalRow为参数，调用ImperativeAggregate的merge方法
               */
             case PartialMerge | Final =>
               (buffer: MutableRow, row: InternalRow) => ae.merge(buffer, row)
@@ -252,7 +254,7 @@ abstract class AggregationIterator(
       val aggregationBufferSchema = functions.flatMap(_.aggBufferAttributes)
 
       /***
-        *
+        *mergeExpressions是Seq[Expression]
         */
       val updateProjection =
         newMutableProjection(mergeExpressions, aggregationBufferSchema ++ inputAttributes)()

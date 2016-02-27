@@ -28,9 +28,9 @@ import org.apache.spark.sql.execution.metric.SQLMetrics
 
 /**
  *
- * @param requiredChildDistributionExpressions
+ * @param requiredChildDistributionExpressions 该物理计划需要child数据分布的表达式
  * @param groupingExpressions 分组表达式，比如group by class_id
- * @param aggregateExpressions 聚合表达式，比如select count(id) from tbl_student group by class_id ---统计每个班的人数
+ * @param aggregateExpressions 聚合表达式，聚合表达式包含了聚合函数 比如select count(id) from tbl_student group by class_id ---统计每个班的人数
  * @param aggregateAttributes  聚合属性
  * @param initialInputBufferOffset
  * @param resultExpressions 结果表达式，resultExpressions是改写后的

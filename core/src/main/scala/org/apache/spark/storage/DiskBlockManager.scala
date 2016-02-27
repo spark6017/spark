@@ -146,9 +146,9 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon
     val blockFile = getFile(blockId)
     if (printFileLocation) {
          printFileLocation = false
-        println("=================================================================")
-        println("---------->" + blockFile.getAbsolutePath)
-        println("=================================================================")
+//        println("=================================================================")
+//        println("---------->" + blockFile.getAbsolutePath)
+//        println("=================================================================")
     }
     (blockId, blockFile)
   }

@@ -23,22 +23,26 @@ import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback
 import org.apache.spark.sql.catalyst.util.sequenceOption
 import org.apache.spark.sql.types._
 
-/** The mode of an [[AggregateFunction]]. */
+/**
+  * The mode of an [[AggregateFunction]].
+  * AggregateFunction的聚合模式
+  *
+  * */
 private[sql] sealed trait AggregateMode
 
 /**
  * An [[AggregateFunction]] with [[Partial]] mode is used for partial aggregation.
- * This function updates the given aggregation buffer with the original input of this
- * function. When it has processed all input rows, the aggregation buffer is returned.
- *
- * aggregation buffer是什么概念？
+ * This function updates the given aggregation buffer（问题3：aggregation buffer就是指的接收聚合结果的Row吧） with the original input of this
+ * function（问题1：original input指的是什么）. When it has processed all input rows（问题2：all input rows指的是什么）, the aggregation buffer is returned.
+  *
  */
 private[sql] case object Partial extends AggregateMode
 
 /**
  * An [[AggregateFunction]] with [[PartialMerge]] mode is used to merge aggregation buffers
- * containing intermediate results for this function.
- * This function updates the given aggregation buffer by merging multiple aggregation buffers.
+ * containing intermediate results(问题：此处的中间结果指的是什么？) for this function.
+ * This function updates the given aggregation buffer by merging multiple aggregation buffers.（多个aggregation buffer进行合并）
+  *
  * When it has processed all input rows, the aggregation buffer is returned.
  */
 private[sql] case object PartialMerge extends AggregateMode
@@ -74,9 +78,13 @@ private[sql] case object NoOp extends Expression with Unevaluable {
 }
 
 /**
- * A container for an [[AggregateFunction]] with its [[AggregateMode]] and a field
- * (`isDistinct`) indicating if DISTINCT keyword is specified for this function.
- */
+  * A container for an [[AggregateFunction]] with its [[AggregateMode]] and a field
+  * (`isDistinct`) indicating if DISTINCT keyword is specified for this function.
+  *
+  * @param aggregateFunction
+  * @param mode
+  * @param isDistinct
+  */
 private[sql] case class AggregateExpression(
     aggregateFunction: AggregateFunction,
     mode: AggregateMode,
@@ -124,10 +132,15 @@ private[sql] case class AggregateExpression(
  */
 sealed abstract class AggregateFunction extends Expression with ImplicitCastInputTypes {
 
-  /** An aggregate function is not foldable. */
+  /** An aggregate function is not foldable.
+    * 问题：聚合函数为什么不是可折叠的，原因是聚合函数不是常亮，所以不能在解析阶段进行计算
+    * */
   final override def foldable: Boolean = false
 
-  /** The schema of the aggregation buffer. */
+  /**
+    * The schema of the aggregation buffer，它是根据aggBufferAttributes计算来的
+    *
+    * */
   def aggBufferSchema: StructType
 
   /**
@@ -151,7 +164,7 @@ sealed abstract class AggregateFunction extends Expression with ImplicitCastInpu
    * Indicates if this function supports partial aggregation.
    * Currently Hive UDAF is the only one that doesn't support partial aggregation.
    *
-   * 何谓partial aggregation？
+   * 何谓partial aggregation？支持局部聚合的意思是说可以按照先在分区内进行聚合，再进行分区间合并，最后再进行final的evaluate
    */
   def supportsPartial: Boolean = true
 
@@ -167,6 +180,8 @@ sealed abstract class AggregateFunction extends Expression with ImplicitCastInpu
    * and the flag indicating if this aggregation is distinct aggregation or not.
    * An [[AggregateFunction]] should not be used without being wrapped in
    * an [[AggregateExpression]].
+    *
+    * AggregateFunction虽然没有继承自AggregateExpression，但是AggregateFunction可以转换为AggregateExpression
    */
   def toAggregateExpression(): AggregateExpression = toAggregateExpression(isDistinct = false)
 
@@ -178,7 +193,8 @@ sealed abstract class AggregateFunction extends Expression with ImplicitCastInpu
    * An [[AggregateFunction]] should not be used without being wrapped in
    * an [[AggregateExpression]].
    *
-   * Aggregate Mode是什么概念？
+    * 问题： 在将AggregateFunction转换为AggregateExpression时，为什么AggregateMode是Complete的？
+   * AggregateMode是什么概念？
    */
   def toAggregateExpression(isDistinct: Boolean): AggregateExpression = {
     AggregateExpression(aggregateFunction = this, mode = Complete, isDistinct = isDistinct)
@@ -314,7 +330,8 @@ abstract class ImperativeAggregate extends AggregateFunction with CodegenFallbac
  * those fields `lazy val`s.
  *
  *
- * 何为声明式Aggregate? 基于表达式的Aggregate
+ * 何为声明式Aggregate? 基于表达式的Aggregate,它继承自AggregateFunction，而AggregateFunction继承自Expression
+  * 常见的聚合函数，如Count、Max、Min、Average、Sum都是继承自DeclarativeAggregate
  *
  * 跟map-side combine的思路差不多
  *        initialize
@@ -329,14 +346,14 @@ abstract class DeclarativeAggregate
   /**
    * Expressions for initializing empty aggregation buffers.
    *
-   * 初始化Aggregation Buffer
+   * 1. 初始化一个Aggregation Buffer用于聚合操作
    */
   val initialValues: Seq[Expression]
 
   /**
    * Expressions for updating the mutable aggregation buffer based on an input row.
    *
-   * 给定Input Row，更新Aggregation Buffer
+   * 2. 分区内聚合: 给定Input Row，更新Aggregation Buffer
    */
   val updateExpressions: Seq[Expression]
 
@@ -346,7 +363,7 @@ abstract class DeclarativeAggregate
    * to the attributes corresponding to each of the buffers being merged (this magic is enabled
    * by the [[RichAttribute]] implicit class).
    *
-   * merge两个Aggregation Buffer
+   * 3. 分区间进行聚合： 给定两个Aggregation Buffer，将两个Aggregation Buffer的结果进行聚合
    */
   val mergeExpressions: Seq[Expression]
 
@@ -354,11 +371,16 @@ abstract class DeclarativeAggregate
    * An expression which returns the final value for this aggregate function. Its data type should
    * match this expression's [[dataType]].
    *
-   * 计算表达式的值
+   * 4. 最终完成聚合表达式的计算，各个分区的结果聚合到一起
    */
   val evaluateExpression: Expression
 
-  /** An expression-based aggregate's bufferSchema is derived from bufferAttributes. */
+  /**
+    * An expression-based aggregate's bufferSchema is derived from bufferAttributes.
+    *
+    * 基于表达式的聚合，它的aggregation buffer的schema信息是从aggBufferAttributes获取的
+    *
+    * */
   final override def aggBufferSchema: StructType = StructType.fromAttributes(aggBufferAttributes)
 
   /**

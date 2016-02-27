@@ -35,14 +35,14 @@ import org.apache.spark.sql.execution.metric.LongSQLMetric
   *
   *
   *
-  * @param groupingExpressions
-  * @param valueAttributes
-  * @param inputIterator  /**分区内的数据**/
-  * @param aggregateExpressions
-  * @param aggregateAttributes
-  * @param initialInputBufferOffset
+  * @param groupingExpressions 分组表达式
+  * @param valueAttributes 孩子物理计划的attributes
+  * @param inputIterator  分区内的数据,是InternalRow的Iterator
+  * @param aggregateExpressions 封装了aggregate function的expression
+  * @param aggregateAttributes aggregate function对应的attribute。对于select count（1） as total_count from dual，那么attribute
+  * @param initialInputBufferOffset 这个offset是干啥的？
   * @param resultExpressions
-  * @param newMutableProjection
+  * @param newMutableProjection 一个函数，入参是Seq[Expression]和Seq[Attribute]，返回值一个函数，这个函数的入参是空，返回值是MutableProjection
   * @param numInputRows
   * @param numOutputRows
   */
@@ -54,10 +54,6 @@ class SortBasedAggregationIterator(
     aggregateAttributes: Seq[Attribute],
     initialInputBufferOffset: Int,
     resultExpressions: Seq[NamedExpression],
-
-    /***
-      * newMutableProjection是一个函数，入参是 (Seq[Expression], Seq[Attribute])，结果是一个函数，函数的入参是()，返回值是MutableProjection
-      */
     newMutableProjection: (Seq[Expression], Seq[Attribute]) => (() => MutableProjection),
     numInputRows: LongSQLMetric,
     numOutputRows: LongSQLMetric)

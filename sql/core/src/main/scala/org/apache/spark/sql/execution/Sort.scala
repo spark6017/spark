@@ -80,12 +80,13 @@ case class Sort(
     val spillSize = longMetric("spillSize")
 
     /***
-      * 对
+      *
       */
     child.execute().mapPartitionsInternal { iter =>
 
         /**
-        * 创建对UnsafeRow进行排序的Ordering对象,childOutput是子物理计划的输出属性
+        * 创建对UnsafeRow进行排序的Ordering对象,childOutput是子物理计划的输出属性,
+          newOrdering是Ordering[InternalRow]类型的对象，它有compare方法
         */
     val ordering = newOrdering(sortOrder, childOutput)
 
@@ -96,9 +97,13 @@ case class Sort(
       // The generator for prefix
       val prefixProjection = UnsafeProjection.create(Seq(SortPrefix(boundSortExpression)))
 
+      /***
+        * 实现UnsafeExternalRowSorter.PrefixComputer接口
+        */
       val prefixComputer = new UnsafeExternalRowSorter.PrefixComputer {
         override def computePrefix(row: InternalRow): Long = {
-          prefixProjection.apply(row).getLong(0)
+          val prefix = prefixProjection.apply(row)
+          prefix.getLong(0)
         }
       }
 

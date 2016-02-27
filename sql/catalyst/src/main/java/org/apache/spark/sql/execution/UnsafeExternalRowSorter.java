@@ -61,6 +61,9 @@ final class UnsafeExternalRowSorter {
    */
   private final UnsafeExternalSorter sorter;
 
+  /***
+   * 静态内部类，用于计算UnsafeRow的prefix
+   */
   public abstract static class PrefixComputer {
     abstract long computePrefix(InternalRow row);
   }

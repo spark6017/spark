@@ -263,7 +263,7 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ
     * 通过代码生成的方式创建 Ordering[InternalRow]
     * @param order
     * @param inputSchema
-    * @return
+    * @return 返回针对InternalRow进行排序的Ordering对象
     */
   protected def newOrdering(
       order: Seq[SortOrder], inputSchema: Seq[Attribute]): Ordering[InternalRow] = {

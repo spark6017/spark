@@ -64,6 +64,7 @@ abstract class AggregationIterator(
     * TODO: AggregateMode should have only two modes: Update and Merge, AggregateExpression
     * could have a flag to tell it's final or not.
     */
+  /////============================初始化块01============================
   {
     val modes = aggregateExpressions.map(_.mode).distinct.toSet
     require(modes.size <= 2,
@@ -117,6 +118,7 @@ abstract class AggregationIterator(
     functions
   }
 
+  /////============================常量01============================
   protected val aggregateFunctions: Array[AggregateFunction] =
   {
     initializeAggregateFunctions(aggregateExpressions, initialInputBufferOffset)
@@ -126,6 +128,7 @@ abstract class AggregationIterator(
   // For example, we have func1, func2, func3, func4 in aggregateFunctions, and
   // func2 and func3 are imperative aggregate functions.
   // ImperativeAggregateFunctionPositions will be [1, 2].
+  /////============================常量02============================
   protected[this] val allImperativeAggregateFunctionPositions: Array[Int] = {
     val positions = new ArrayBuffer[Int]()
     var i = 0
@@ -140,6 +143,7 @@ abstract class AggregationIterator(
   }
 
   // The projection used to initialize buffer values for all expression-based aggregates.
+  /////============================常量03============================
   protected[this] val expressionAggInitialProjection = {
     val initExpressions = aggregateFunctions.flatMap {
       case ae: DeclarativeAggregate => ae.initialValues /**获取初值**/
@@ -157,6 +161,7 @@ abstract class AggregationIterator(
   }
 
   // All imperative AggregateFunctions.
+  /////============================常量04============================
   protected[this] val allImperativeAggregateFunctions: Array[ImperativeAggregate] =
   {
     allImperativeAggregateFunctionPositions
@@ -271,6 +276,7 @@ abstract class AggregationIterator(
     *
     * MutableRow是要update的，而InternalRow是原始数据？
    */
+  /////============================常量05============================
   protected val processRow: (MutableRow, InternalRow) => Unit =
   {
     generateProcessRow(aggregateExpressions, aggregateFunctions, inputAttributes)
@@ -279,6 +285,7 @@ abstract class AggregationIterator(
   /**
     * 分组投影
     */
+  /////============================常量06============================
   protected val groupingProjection: UnsafeProjection = {
     UnsafeProjection.create(groupingExpressions, inputAttributes)
   }
@@ -286,6 +293,7 @@ abstract class AggregationIterator(
   /**
     * 将分组表达式转换为Attributes
     */
+  /////============================常量07============================
   protected val groupingAttributes = {
     groupingExpressions.map(_.toAttribute)
   }
@@ -342,6 +350,7 @@ abstract class AggregationIterator(
   /**
    * 返回值是一个函数
    */
+  /////============================常量08============================
   protected val generateOutput: (UnsafeRow, MutableRow) => UnsafeRow =
   {
     generateResultProjection()

@@ -95,7 +95,8 @@ case class Sort(
       val prefixComparator = SortPrefixUtils.getPrefixComparator(boundSortExpression)
 
       // The generator for prefix
-      val prefixProjection = UnsafeProjection.create(Seq(SortPrefix(boundSortExpression)))
+      val sortPrefixes = Seq(SortPrefix(boundSortExpression))
+      val prefixProjection = UnsafeProjection.create(sortPrefixes)
 
       /***
         * 实现UnsafeExternalRowSorter.PrefixComputer接口
@@ -125,7 +126,7 @@ case class Sort(
 
 
       /**
-        * 调用UnsafeExternalRowSorter的sort方法
+        *根本上是调用UnsafeExternalRowSorter的sort方法
         */
       val sortedIterator = sorter.sort(iter.asInstanceOf[Iterator[UnsafeRow]])
 

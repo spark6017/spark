@@ -67,7 +67,11 @@ case class SortOrder(child: Expression, direction: SortDirection)
 
 /**
  * An expression to generate a 64-bit long prefix used in sorting.
- */
+  *
+  * 表达式，用于排序用的prefix
+  *
+  * @param child
+  */
 case class SortPrefix(child: SortOrder) extends UnaryExpression {
 
   override def eval(input: InternalRow): Any = throw new UnsupportedOperationException

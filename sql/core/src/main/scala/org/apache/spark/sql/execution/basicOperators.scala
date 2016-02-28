@@ -74,7 +74,8 @@ case class Project(projectList: Seq[NamedExpression], child: SparkPlan)
       //将孩子物理计划对应RDD的分区数据(每个数据是一个row)交给project函数处理
       iter.map { row =>
         numRows += 1
-        project(row)
+        val unsafeRow = project(row)
+        unsafeRow
       }
     }
   }

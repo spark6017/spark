@@ -78,6 +78,10 @@ final class UnsafeExternalRowSorter {
     this.prefixComputer = prefixComputer;
     final SparkEnv sparkEnv = SparkEnv.get();
     final TaskContext taskContext = TaskContext.get();
+
+      /***
+       * 创建UnsafeExternalSorter
+       */
     sorter = UnsafeExternalSorter.create(
       taskContext.taskMemoryManager(),
       sparkEnv.blockManager(),

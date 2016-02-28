@@ -629,13 +629,61 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
     }
   }
 
-  // This is for debugging
-  @Override
-  public String toString() {
+  public static byte[] toBytes(long data)
+  {
+    byte[] bytes = new byte[8];
+    bytes[0] = (byte) (data & 0xff);
+    bytes[1] = (byte) ((data >> 8) & 0xff);
+    bytes[2] = (byte) ((data >> 16) & 0xff);
+    bytes[3] = (byte) ((data >> 24) & 0xff);
+    bytes[4] = (byte) ((data >> 32) & 0xff);
+    bytes[5] = (byte) ((data >> 40) & 0xff);
+    bytes[6] = (byte) ((data >> 48) & 0xff);
+    bytes[7] = (byte) ((data >> 56) & 0xff);
+    return bytes;
+  }
+
+
+  public String toStringSleep() {
     StringBuilder build = new StringBuilder("[");
     for (int i = 0; i < sizeInBytes; i += 8) {
       if (i != 0) build.append(',');
       build.append(java.lang.Long.toHexString(Platform.getLong(baseObject, baseOffset + i)));
+    }
+    build.append(']');
+    return build.toString();
+  }
+
+  // This is for debugging
+  @Override
+  public String toString() {
+    StringBuilder build = new StringBuilder("[");
+
+
+    for (int i = 0; i < sizeInBytes; i += 8) {
+      if (i != 0) build.append(',');
+      build.append(java.lang.Long.toHexString(Platform.getLong(baseObject, baseOffset + i)));
+    }
+
+    build.append("||");
+    boolean x = false;
+    for (int i = 0; i < sizeInBytes; i += 8) {
+      long data = Platform.getLong(baseObject, baseOffset + i);
+      String str = new String(toBytes(data));
+      if (str != null) {
+        str = str.trim();
+        if (str.length() > 0) {
+          if (x) {
+            build.append(",");
+          }
+          build.append(str);
+          if (!x) {
+            x = true;
+          }
+        }
+
+      }
+
     }
     build.append(']');
     return build.toString();

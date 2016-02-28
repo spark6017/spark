@@ -133,9 +133,9 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR
         }
       }"""
 
-//    println("=================================================================")
-//    println(code)
-//    println("=================================================================")
+    println("=================================================================")
+    println(code)
+    println("=================================================================")
 
     logDebug(s"Generated Ordering: ${CodeFormatter.format(code)}")
 

@@ -1,5 +1,7 @@
 package org.apache.spark.sql.test
 
+import java.io.File
+
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -14,7 +16,8 @@ object SparkSQLTestStudentGroupBy {
       if (!OS.linux) {
         "D:\\opensourceprojects\\spark20160202\\sql\\core\\src\\main\\scala\\org\\apache\\spark\\sql\\test\\students.txt"
       } else {
-        "/home/yuzt/development/openprojects/spark-2.0.0-snapshot/sql/core/src/main/scala/org/apache/spark/sql/test/students.txt"
+        val projectHome = new File("").getAbsolutePath
+        projectHome + "/sql/core/src/main/scala/org/apache/spark/sql/test/students.txt";
       }
     import ssc.implicits._
 

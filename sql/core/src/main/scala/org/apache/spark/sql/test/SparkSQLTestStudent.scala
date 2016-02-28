@@ -21,9 +21,11 @@ object SparkSQLTestStudent {
     val df = sc.textFile(path).map(x => x.split(" ")).map(x => Student(x(0), x(1), x(2).toInt, x(3))).toDF()
     df.registerTempTable("TBL_STUDENT")
 
-    val df2 = ssc.sql("select classId, count(id) from TBL_STUDENT group by classId");
+//    val df2 = ssc.sql("select classId, count(id) from TBL_STUDENT group by classId");
 //val df2 = ssc.sql("select classId, avg(age) from TBL_STUDENT group by classId");
 //val df2 = ssc.sql("select classId, avg(age) as avg from TBL_STUDENT group by classId order by avg");
+
+    val df2 = ssc.sql("select classId,name,age from TBL_STUDENT");
     println(df2.queryExecution)
     df2.show(20)
     readLine()

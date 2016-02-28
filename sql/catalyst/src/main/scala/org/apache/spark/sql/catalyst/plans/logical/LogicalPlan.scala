@@ -99,7 +99,7 @@ abstract class LogicalPlan extends QueryPlan[LogicalPlan] with Logging {
    */
   lazy val resolved: Boolean = expressions.forall(_.resolved) && childrenResolved
 
-  override protected def statePrefix = if (!resolved) "'" else super.statePrefix
+  override protected def statePrefix = if (!resolved) "(--unresolved--)" else super.statePrefix
 
   /**
    * Returns true if all its children of this query plan have been resolved.

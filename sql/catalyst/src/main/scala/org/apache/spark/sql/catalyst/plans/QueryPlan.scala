@@ -178,7 +178,7 @@ abstract class QueryPlan[PlanType <: TreeNode[PlanType]] extends TreeNode[PlanTy
    *
    * We use "!" to indicate an invalid plan, and "'" to indicate an unresolved plan.
    */
-  protected def statePrefix = if (missingInput.nonEmpty && children.nonEmpty) "!" else ""
+  protected def statePrefix = if (missingInput.nonEmpty && children.nonEmpty) "(--invalid--)" else ""
 
   override def simpleString: String = statePrefix + super.simpleString
 }

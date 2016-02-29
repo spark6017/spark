@@ -30,7 +30,13 @@ public abstract class RecordComparator {
    *
    * @return a negative integer, zero, or a positive integer as the first record is less than,
    *         equal to, or greater than the second.
-   */
+   *
+   * @param leftBaseObject record1的baseObject
+   * @param leftBaseOffset record1的baseOffset
+   * @param rightBaseObject record2的baseObject
+   * @param rightBaseOffset record2的baseOffset
+     * @return
+     */
   public abstract int compare(
     Object leftBaseObject,
     long leftBaseOffset,

@@ -288,11 +288,13 @@ public class TaskMemoryManager {
    * Given a memory page and offset within that page, encode this address into a 64-bit long.
    * This address will remain valid as long as the corresponding page has not been freed.
    *
+   *
+   *
    * @param page a data page allocated by {@link TaskMemoryManager#allocatePage}/
    * @param offsetInPage an offset in this page which incorporates the base offset. In other words,
    *                     this should be the value that you would pass as the base offset into an
    *                     UNSAFE call (e.g. page.baseOffset() + something).
-   * @return an encoded page address.
+   * @return an encoded page address. 返回的是page address还是record address？
    */
   public long encodePageNumberAndOffset(MemoryBlock page, long offsetInPage) {
     if (tungstenMemoryMode == MemoryMode.OFF_HEAP) {

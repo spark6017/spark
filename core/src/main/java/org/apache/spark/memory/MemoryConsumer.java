@@ -68,6 +68,10 @@ public abstract class MemoryConsumer {
    *
    * Note: today, this only frees Tungsten-managed pages.
    *
+   *
+   * MemoryConsumer提供了spill抽象方法，也就是说，MemoryConsumer需要控制在内存不够时的spill到磁盘的逻辑
+   *
+   *
    * @param size the amount of memory should be released
    * @param trigger the MemoryConsumer that trigger this spilling
    * @return the amount of released memory in bytes
@@ -77,9 +81,12 @@ public abstract class MemoryConsumer {
 
   /**
    * Allocates a LongArray of `size`.
+   *
+   * LongArray的构造函数是MemoryBlock
    */
   public LongArray allocateArray(long size) {
     long required = size * 8L;
+    //申请MemoryBlock
     MemoryBlock page = taskMemoryManager.allocatePage(required, this);
     if (page == null || page.size() < required) {
       long got = 0;

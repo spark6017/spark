@@ -42,6 +42,27 @@ import org.apache.spark.util.Utils;
  * External sorter based on {@link UnsafeInMemorySorter}.
  *
  * 构造方法为私有，必须通过静态工厂方法create进行创建
+ *
+ * 说明0：
+ * UnsafeExternalSorter包装了UnsafeInMemorySorter
+ *
+ * 说明1：
+ * The actual sorting is implemented by UnsafeInMemorySorter. Most consumers will not use this directly, but instead will use UnsafeExternalSorter,
+ * UnsafeExternalSorter is a class which implements a sort that can spill to disk in response to memory pressure.
+ *
+ * 说明2：
+ * UnsafeExternalSorter creates UnsafeInMemorySorters to perform sorting
+ * and uses UnsafeSortSpillReader/Writer to spill and read back runs of sorted records
+ * and UnsafeSortSpillMerger to merge multiple sorted spills into a single sorted iterator.
+ * This external sorter integrates with Spark's existing ShuffleMemoryManager for controlling spilling
+ *
+ * 说明3：
+ * For now, UnsafeExternalSorter is only used by Spark SQL, which uses it to implement a new sort operator, UnsafeExternalSort.
+ * This sort operator uses a SQL-specific class called UnsafeExternalRowSorter that configures an UnsafeExternalSorter to use prefix generators and comparators that operate on rows encoded in the UnsafeRow format that was designed for Project Tungsten.
+ * a. 上面的意思是说，UnsafeExternalSorter是在UnsafeExternalRowSorter使用的？是的
+ * b. prefix comparator和record comparator是在哪里创建的？
+ * c. UnsafeExternalSorter用于实现一个Spark SQL的称为UnsafeExternalSort的sort operator？ 其实UnsafeExternalSort已经改名成Sort了
+ *
  */
 public final class UnsafeExternalSorter extends MemoryConsumer {
 
@@ -95,7 +116,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
   }
 
   /**
-   * 创建UnsafeExternalSorter实例
+   * 创建UnsafeExternalSorter实例，调用UnsafeExternalSorter构造函数的重载版本，传入的UnsafeInMemorySorter为null
    * @param taskMemoryManager
    * @param blockManager
    * @param taskContext
@@ -103,8 +124,8 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
    * @param prefixComparator
    * @param initialSize
    * @param pageSizeBytes
-     * @return
-     */
+   * @return
+   */
   public static UnsafeExternalSorter create(
       TaskMemoryManager taskMemoryManager,
       BlockManager blockManager,
@@ -117,6 +138,17 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
       taskContext, recordComparator, prefixComparator, initialSize, pageSizeBytes, null);
   }
 
+  /***
+   *
+   * @param taskMemoryManager
+   * @param blockManager
+   * @param taskContext
+   * @param recordComparator
+   * @param prefixComparator
+   * @param initialSize
+   * @param pageSizeBytes
+     * @param existingInMemorySorter existingInMemorySorter为null，则新建UnsafeInMemorySorter，否则就服用
+     */
   private UnsafeExternalSorter(
       TaskMemoryManager taskMemoryManager,
       BlockManager blockManager,
@@ -138,7 +170,8 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
     this.writeMetrics = taskContext.taskMetrics().registerShuffleWriteMetrics();
 
     /**
-     * UnsafeInMemorySorter
+     * 创建UnsafeInMemorySorter，传入UnsafeExternalSorter,RecordComparator,PrefixComparator
+     * 问题： 内存内排序器和UnsafeExternalSorter的向磁盘spill操作如何协同工作
      */
     if (existingInMemorySorter == null) {
       this.inMemSorter = new UnsafeInMemorySorter(
@@ -174,7 +207,12 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
 
   /**
    * Sort and spill the current records in response to memory pressure.
-   */
+   *
+   * @param size the amount of memory should be released
+   * @param trigger the MemoryConsumer that trigger this spilling
+   * @return
+   * @throws IOException
+     */
   @Override
   public long spill(long size, MemoryConsumer trigger) throws IOException {
     if (trigger != this) {
@@ -348,6 +386,8 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
 
   /***
    * Write a record to the sorter.
+   *
+   * 在调用UnsafeInMemorySorter插入前，首先计算出record address和record的key prefix
    * @param recordBase UnsafeRow的underlying object，一般是字节数组
    * @param recordOffset row在recordBase中的偏移量
    * @param length row的字节长度
@@ -432,8 +472,11 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
    */
   public UnsafeSorterIterator getSortedIterator() throws IOException {
     assert(recordComparator != null);
+
+    //如果没有spill，那么调用
     if (spillWriters.isEmpty()) {
       assert(inMemSorter != null);
+      /**UnsafeInMemorySorter的getSortedIterator会完成实际的排序**/
       readingIterator = new SpillableIterator(inMemSorter.getSortedIterator());
       return readingIterator;
     } else {

@@ -19,6 +19,9 @@ package org.apache.spark.util.collection.unsafe.sort;
 
 import org.apache.spark.memory.TaskMemoryManager;
 
+/***
+ * Record的pointer和key prefix对
+ */
 final class RecordPointerAndKeyPrefix {
   /**
    * A pointer to a record; see {@link TaskMemoryManager} for a

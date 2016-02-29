@@ -33,16 +33,38 @@ import org.apache.spark.util.collection.Sorter;
  * compares records, it will first compare the stored key prefixes; if the prefixes are not equal,
  * then we do not need to traverse the record pointers to compare the actual records. Avoiding these
  * random memory accesses improves cache hit rates.
+ *
+ * 说明0：
+ * UnsafeInMemorySorter封装了RecordComparator和PrefixComparator
+ * 说明1：
+ * UnsafeInMemorySorter实现了基于RecordPointerAndKeyPrefix进行排序的SortComparator
+ *
+ *
+ * 如下内容来自：
+ * The actual sorting is implemented by UnsafeInMemorySorter.
+ * Most consumers will not use this directly, but instead will use UnsafeExternalSorter,a class which implements a sort that can spill to disk in response to memory pressure.
+ * Internally, UnsafeExternalSorter creates UnsafeInMemorySorters to perform sorting and uses UnsafeSortSpillReader/Writer to spill and read back runs of sorted records and UnsafeSortSpillMerger to merge multiple sorted spills into a single sorted iterator.
+ * This external sorter integrates with Spark's existing ShuffleMemoryManager for controlling spillin
+ *
  */
 public final class UnsafeInMemorySorter {
 
+  /***
+   * 排序算法的实现，基于KeyPrefix和RecordPointer的排序算法
+   */
   private static final class SortComparator implements Comparator<RecordPointerAndKeyPrefix> {
 
     private final RecordComparator recordComparator;
     private final PrefixComparator prefixComparator;
     private final TaskMemoryManager memoryManager;
 
-    SortComparator(
+    /***
+     * SortComparator的构造函数
+     * @param recordComparator Record排序器
+     * @param prefixComparator KeyPrefix排序器
+     * @param memoryManager
+       */
+    public SortComparator(
         RecordComparator recordComparator,
         PrefixComparator prefixComparator,
         TaskMemoryManager memoryManager) {
@@ -51,18 +73,36 @@ public final class UnsafeInMemorySorter {
       this.memoryManager = memoryManager;
     }
 
+    /**
+     * 首先进行key prefix的排序，然后进行record的排序
+     * @param r1
+     * @param r2
+       * @return
+       */
     @Override
     public int compare(RecordPointerAndKeyPrefix r1, RecordPointerAndKeyPrefix r2) {
+
+      //基于key prefix排序
       final int prefixComparisonResult = prefixComparator.compare(r1.keyPrefix, r2.keyPrefix);
-      if (prefixComparisonResult == 0) {
-        final Object baseObject1 = memoryManager.getPage(r1.recordPointer);
-        final long baseOffset1 = memoryManager.getOffsetInPage(r1.recordPointer) + 4; // skip length
-        final Object baseObject2 = memoryManager.getPage(r2.recordPointer);
-        final long baseOffset2 = memoryManager.getOffsetInPage(r2.recordPointer) + 4; // skip length
-        return recordComparator.compare(baseObject1, baseOffset1, baseObject2, baseOffset2);
-      } else {
+
+      //如果prefix比较结果不相等，那么无需进行record数据自身的比较
+      if (prefixComparisonResult != 0) {
         return prefixComparisonResult;
       }
+
+      //根据record pointer取出base object的地址
+      final Object baseObject1 = memoryManager.getPage(r1.recordPointer);
+      final Object baseObject2 = memoryManager.getPage(r2.recordPointer);
+
+      //取出每个record的offset地址
+      final long baseOffset1 = memoryManager.getOffsetInPage(r1.recordPointer) + 4; // skip length
+      final long baseOffset2 = memoryManager.getOffsetInPage(r2.recordPointer) + 4; // skip length
+
+      //问题：record的长度是多少？在哪里记录着？通过baseObject和baseOffset，可以得到存放数据的地址，那么数据本身占用多少字节，在哪里获取？
+
+      //调用RecordComparator进行compare
+      return recordComparator.compare(baseObject1, baseOffset1, baseObject2, baseOffset2);
+
     }
   }
 
@@ -76,6 +116,9 @@ public final class UnsafeInMemorySorter {
   /**
    * Within this buffer, position {@code 2 * i} holds a pointer pointer to the record at
    * index {@code i}, while position {@code 2 * i + 1} in the array holds an 8-byte key prefix.
+   *
+   *
+   * 偶数位置放record指针，奇数位置放record的key prefix值
    */
   private LongArray array;
 
@@ -84,16 +127,36 @@ public final class UnsafeInMemorySorter {
    */
   private int pos = 0;
 
+  /***
+   * 对于UnsafeInMemorySorter而言，它的第一个参数是MemoryConsumer，也就是说，它构造时需要的是Memory Consumer对象，不管外围的consumer究竟是什么
+   * 也就是说，要使用UnsafeInMemorySorter，需要消费者实现MemoryConsumer抽象类
+   * UnsafeExternalSorter实现了MemoryConsumer，在UnsafeExternalSorter创建UnsafeInMemorySorter时，传入了this(UnsafeExternalSorter本身)
+   *
+   *
+   * 这个构造函数使用默认的排序数组LongArray(调用consumer.allocateArray(initialSize * 2), allocateArray是在MemoryConsumer类中创建的)
+   * @param consumer
+   * @param memoryManager
+   * @param recordComparator
+   * @param prefixComparator
+   * @param initialSize
+     */
   public UnsafeInMemorySorter(
     final MemoryConsumer consumer,
     final TaskMemoryManager memoryManager,
     final RecordComparator recordComparator,
     final PrefixComparator prefixComparator,
     int initialSize) {
-    this(consumer, memoryManager, recordComparator, prefixComparator,
-      consumer.allocateArray(initialSize * 2));
+    this(consumer, memoryManager, recordComparator, prefixComparator,consumer.allocateArray(initialSize * 2));
   }
 
+  /***
+   *
+   * @param consumer
+   * @param memoryManager
+   * @param recordComparator
+   * @param prefixComparator
+     * @param array 内存LongArray
+     */
   public UnsafeInMemorySorter(
     final MemoryConsumer consumer,
       final TaskMemoryManager memoryManager,
@@ -102,6 +165,9 @@ public final class UnsafeInMemorySorter {
       LongArray array) {
     this.consumer = consumer;
     this.memoryManager = memoryManager;
+    /**
+     * 如果recordComparator不为null，则创建SortComparator
+     */
     if (recordComparator != null) {
       this.sorter = new Sorter<>(UnsafeSortDataFormat.INSTANCE);
       this.sortComparator = new SortComparator(recordComparator, prefixComparator, memoryManager);
@@ -176,6 +242,9 @@ public final class UnsafeInMemorySorter {
     pos++;
   }
 
+  /***
+   * 在UnsafeInMemorySorter中实现SortedIterator
+   */
   public final class SortedIterator extends UnsafeSorterIterator {
 
     private final int numRecords;

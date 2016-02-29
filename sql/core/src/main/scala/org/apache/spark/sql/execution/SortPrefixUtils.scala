@@ -34,6 +34,13 @@ object SortPrefixUtils {
   }
 
   /***
+    * 根据sortOrder的dataType获取内置的PrefixComparator，目前支持的类型有
+    * 1. String
+    * 2. Binary
+    * 3. Boolean、Byte、Short、Integer、Long、Date、Timestamp
+    * 4. Decimal
+    * 5. Float
+    * 6. Double
     *
     * @param sortOrder
     * @return

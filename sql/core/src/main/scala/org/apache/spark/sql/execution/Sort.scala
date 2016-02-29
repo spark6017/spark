@@ -97,10 +97,10 @@ case class Sort(
         */
     val ordering = newOrdering(sortOrder, childOutput)
 
-      // The comparator for comparing prefix
+      // The comparator for comparing prefix,为什么只取sortOrder的第一个元素？
       val boundSortExpression : SortOrder = BindReferences.bindReference(sortOrder.head, childOutput)
 
-      // 获取prefix comparator
+      // 创建prefix comparator
       val prefixComparator = SortPrefixUtils.getPrefixComparator(boundSortExpression)
 
       // The generator for prefix
@@ -121,10 +121,12 @@ case class Sort(
       val pageSize = SparkEnv.get.memoryManager.pageSizeBytes
 
       /***
-        * 创建UnsafeExternalRowSorter,对UnsafeRow进行排序
+        * 对于SparkSQL而眼，创建UnsafeExternalRowSorter对UnsafeRow进行排序，
+        * UnsafeExternalRowSorter包装了UnsafeExternalSorter
         */
       val sorter = new UnsafeExternalRowSorter(
         schema, ordering, prefixComparator, prefixComputer, pageSize)
+
       if (testSpillFrequency > 0) {
         sorter.setTestSpillFrequency(testSpillFrequency)
       }
@@ -136,7 +138,10 @@ case class Sort(
 
 
       /**
-        *根本上是调用UnsafeExternalRowSorter的sort方法
+        * 调用UnsafeExternalRowSorter的sort方法完成排序
+        * 问题：
+        * 1. 当内存空间不足时，spill到磁盘的逻辑是在哪里执行的？
+        *
         */
       val sortedIterator = sorter.sort(iter.asInstanceOf[Iterator[UnsafeRow]])
 

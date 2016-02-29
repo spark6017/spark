@@ -39,7 +39,13 @@ import org.apache.spark.util.collection.unsafe.sort.UnsafeSorterIterator;
 /**
  * final class,既没有继承其它类，也没有被其它类继承
  *
- * 内部使用UnsafeExternalSorter进行排序
+ * UnsafeExternalRowSorter封装了
+ * 1. UnsafeExternalSorter
+ * 2. PrefixComputer
+ *
+ * UnsafeExternalSorter内部封装了PrefixComputer和RowComparator
+ * 1. PrefixComputer是UnsafeExternalRowSorter封装的PrefixComputer
+ * 2. RowComparator是UnsafeExternalRowSorter创建UnsafeExternalSorter时先构造出来的
  */
 final class UnsafeExternalRowSorter {
 
@@ -68,6 +74,18 @@ final class UnsafeExternalRowSorter {
     abstract long computePrefix(InternalRow row);
   }
 
+  /**
+   * UnsafeExternalRowSorter构造函数，
+   *
+   * 调用UnsafeExternalSorter的create方法创建UnsafeExternalSorter
+   *
+   * @param schema
+   * @param ordering
+   * @param prefixComparator
+   * @param prefixComputer
+   * @param pageSizeBytes
+     * @throws IOException
+     */
   public UnsafeExternalRowSorter(
       StructType schema,
       Ordering<InternalRow> ordering,
@@ -81,6 +99,9 @@ final class UnsafeExternalRowSorter {
 
       /***
        * 创建UnsafeExternalSorter
+       * 创建RowComparator，传给UnsafeExternalSorter。
+       * 因为UnsafeExternalRowSorter是与Spark SQL相关的(有row的概念)，因此在UnsafeExternalRowSorter中负责创建RowComparator
+       * 对于UnsafeExternalSorter而言不是与Spark SQL绑定的（也就是说不是绑定到Row上的)，因此需要实际的使用者提供这个RecordComparator的实现
        */
     sorter = UnsafeExternalSorter.create(
       taskContext.taskMemoryManager(),
@@ -111,12 +132,17 @@ final class UnsafeExternalRowSorter {
   @VisibleForTesting
   void insertRow(UnsafeRow row) throws IOException {
     /***
-     * 首先计算unsafe row的prefix以便进行基于prefix的排序
+     * 在UnsafeExternalRowSorter中计算出要插入的unsafe row的prefix以便进行基于prefix的排序
      */
     final long prefix = prefixComputer.computePrefix(row);
 
       /***
-       * 向sorter中插入record，有一个引用指向这个record，prefix和这个record引用放到一起，从而在进行row比较时，尽量避免获取record数据本书(record指针和record数据本身可能没有放到一起)
+       * 调用UnsafeExternalSorter的insertRecord方法向sorter中插入record
+       * 插入的数据包含两部分：
+       * 1. 指向这个record数据的record address
+       * 2. 这个record的key prefix
+       *
+       * prefix和这个record引用放到一起，从而在进行row比较时，尽量避免获取record数据本身(record指针和record数据本身可能没有放到一起)
        *
        */
     sorter.insertRecord(
@@ -126,6 +152,8 @@ final class UnsafeExternalRowSorter {
       prefix
     );
     numRowsInserted++;
+
+    //在生产环境，不支持spill
     if (testSpillFrequency > 0 && (numRowsInserted % testSpillFrequency) == 0) {
       sorter.spill();
     }
@@ -153,6 +181,7 @@ final class UnsafeExternalRowSorter {
 
         /***
          * 调用UnsafeExternalSorter的getSortedIterator获得UnsafeSorterIterator
+         * sortedIterator是SpillableIterator，SpillableIterator封装了UnsafeInMemorySorter排序后的iterator
          */
       final UnsafeSorterIterator sortedIterator = sorter.getSortedIterator();
       if (!sortedIterator.hasNext()) {
@@ -162,6 +191,9 @@ final class UnsafeExternalRowSorter {
       }
 
 
+      /***
+       * 进行一个封装
+       */
       return new AbstractScalaRowIterator<UnsafeRow>() {
 
         private final int numFields = schema.length();
@@ -224,19 +256,28 @@ final class UnsafeExternalRowSorter {
 
 
   /**
-   * 对UnsafeRow进行排序,获取一个Iterator<UnsafeRow>
+   * 对UnsafeRow集合进行排序,返回排序后的Iterator<UnsafeRow>
    * @param inputIterator
    * @return
    * @throws IOException
      */
   public Iterator<UnsafeRow> sort(Iterator<UnsafeRow> inputIterator) throws IOException {
+
+    //第一步： 将数据插入到sorter中，可能需要spill到磁盘,
+    //在这一步没有进行排序，只是插入数据
     while (inputIterator.hasNext()) {
       UnsafeRow row = inputIterator.next();
       insertRow(row);
     }
+
+    //第二步：调用sort方法完成merge操作
     return sort();
   }
 
+  /***
+   * RecordComparator的Record的含义在这里有一定的体现，Record是广泛意义上的数据记录，而不仅仅单指Row
+   * Row只是Record的一种情况
+   */
   private static final class RowComparator extends RecordComparator {
     private final Ordering<InternalRow> ordering;
     private final int numFields;
@@ -251,8 +292,9 @@ final class UnsafeExternalRowSorter {
     }
 
     /***
-     * 基于Ordering[InternalRow]进行排序，注意排序的元素类型是InternalRow，
-     * 也就是说，需要把UnsafeRow转换为InternalRow? 不需要，因为UnsafeRow是InternalRow的子类
+     * 基于Ordering[InternalRow]进行排序，注意排序的Ordering的元素类型是Ordering[InternalRow]
+     * 而row1和row2是UnsafeRow类型的，
+     * 也就是说，需要把UnsafeRow转换为InternalRow? 不需要，因为UnsafeRow本身是InternalRow的子类
      *
      *
      * @param baseObj1

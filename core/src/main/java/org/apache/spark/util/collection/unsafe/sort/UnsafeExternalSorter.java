@@ -363,6 +363,10 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
     acquireNewPageIfNecessary(required);
 
     final Object base = currentPage.getBaseObject();
+
+      /***
+       * 记录record内存地址，它应该和record的prefix放到一起
+       */
     final long recordAddress = taskMemoryManager.encodePageNumberAndOffset(currentPage, pageCursor);
     Platform.putInt(base, pageCursor, length);
     pageCursor += 4;

@@ -111,12 +111,13 @@ final class UnsafeExternalRowSorter {
   @VisibleForTesting
   void insertRow(UnsafeRow row) throws IOException {
     /***
-     * 计算unsafe row的prefix
+     * 首先计算unsafe row的prefix以便进行基于prefix的排序
      */
     final long prefix = prefixComputer.computePrefix(row);
 
       /***
-       * 向
+       * 向sorter中插入record，有一个引用指向这个record，prefix和这个record引用放到一起，从而在进行row比较时，尽量避免获取record数据本书(record指针和record数据本身可能没有放到一起)
+       *
        */
     sorter.insertRecord(
       row.getBaseObject(),

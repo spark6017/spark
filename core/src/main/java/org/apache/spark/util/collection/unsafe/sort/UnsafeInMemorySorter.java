@@ -159,6 +159,10 @@ public final class UnsafeInMemorySorter {
    * Inserts a record to be sorted. Assumes that the record pointer points to a record length
    * stored as a 4-byte integer, followed by the record's bytes.
    *
+   * record pointer指向的地址是存放length长度的4个字节，再这4个字节之后的length个字节是record数据的二进制表示
+   *
+   * 将record指针和record的key prefix放到一起（连续的内存地址）
+   *
    * @param recordPointer pointer to a record in a data page, encoded by {@link TaskMemoryManager}.
    * @param keyPrefix a user-defined key prefix
    */

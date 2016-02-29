@@ -31,7 +31,7 @@ import org.apache.spark.sql.types._
 case class BoundReference(ordinal: Int, dataType: DataType, nullable: Boolean)
   extends LeafExpression {
 
-  override def toString: String = s"input[$ordinal, ${dataType.simpleString}]"
+  override def toString: String = s"BoundReference,input[ordinal: <$ordinal>, dataType:<${dataType.simpleString}>]"
 
   // Use special getter for primitive types (for UnsafeRow)
   override def eval(input: InternalRow): Any = {
@@ -83,8 +83,8 @@ object BindReferences extends Logging {
 
   /***
     * 绑定Reference，将AttributeReference转换为BoundReference
-    * @param expression
-    * @param input
+    * @param expression 要进行绑定的表达式，A是Expression的子类
+    * @param input 输入的属性集合
     * @param allowFailures
     * @tparam A
     * @return
@@ -93,9 +93,14 @@ object BindReferences extends Logging {
       expression: A,
       input: Seq[Attribute],
       allowFailures: Boolean = false): A = {
+
+    /**
+      * 递归遍历表达式树，遇到AttributeReference就转换为BoundReference
+      */
     expression.transform { case a: AttributeReference =>
       attachTree(a, "Binding attribute") {
         val ordinal = input.indexWhere(_.exprId == a.exprId)
+        val attribute = input(ordinal)
         if (ordinal == -1) {
           if (allowFailures) {
             a
@@ -103,7 +108,7 @@ object BindReferences extends Logging {
             sys.error(s"Couldn't find $a in ${input.mkString("[", ",", "]")}")
           }
         } else {
-          BoundReference(ordinal, a.dataType, input(ordinal).nullable)
+          BoundReference(ordinal, a.dataType, attribute.nullable)
         }
       }
     }.asInstanceOf[A] // Kind of a hack, but safe.  TODO: Tighten return type when possible.

@@ -39,7 +39,8 @@ object SortPrefixUtils {
     * @return
     */
   def getPrefixComparator(sortOrder: SortOrder): PrefixComparator = {
-    sortOrder.dataType match {
+    val dataType = sortOrder.dataType
+    dataType match {
       case StringType =>
         if (sortOrder.isAscending) PrefixComparators.STRING else PrefixComparators.STRING_DESC
       case BinaryType =>

@@ -48,13 +48,14 @@ case class Sort(
   override def output: Seq[Attribute] = child.output
 
   /**
-   *  这个算子执行结果(Output)要求排序，即本算子的输出是要求排序的
+   *  这个算子执行结果(Output)分区数据的排序性，即本算子的输出是带有排序特性的
    * @return
    */
   override def outputOrdering: Seq[SortOrder] = sortOrder
 
   /**
    *  Child Distribution,如果是全量排序，那么要求孩子节点的Distribution是OrderedDistribution[SortOrders]
+    *  如果是局部排序，那么对孩子物理计划的输出不要特定的分布
    * @return
    */
   override def requiredChildDistribution: Seq[Distribution] =
@@ -64,6 +65,10 @@ case class Sort(
     "dataSize" -> SQLMetrics.createSizeMetric(sparkContext, "data size"),
     "spillSize" -> SQLMetrics.createSizeMetric(sparkContext, "spill size"))
 
+  /***
+    *
+    * @return
+    */
   protected override def doExecute(): RDD[InternalRow] = {
 
 //    for (i <-1 to 10) {
@@ -86,12 +91,16 @@ case class Sort(
 
         /**
         * 创建对UnsafeRow进行排序的Ordering对象,childOutput是子物理计划的输出属性,
-          newOrdering是Ordering[InternalRow]类型的对象，它有compare方法
+        * newOrdering是Ordering[InternalRow]类型的对象，它有compare方法,用于对InternalRow进行排序
+          * 问题： 对UnsafeRow如何排序？
+          *
         */
     val ordering = newOrdering(sortOrder, childOutput)
 
       // The comparator for comparing prefix
-      val boundSortExpression = BindReferences.bindReference(sortOrder.head, childOutput)
+      val boundSortExpression : SortOrder = BindReferences.bindReference(sortOrder.head, childOutput)
+
+      // 获取prefix comparator
       val prefixComparator = SortPrefixUtils.getPrefixComparator(boundSortExpression)
 
       // The generator for prefix
@@ -104,7 +113,8 @@ case class Sort(
       val prefixComputer = new UnsafeExternalRowSorter.PrefixComputer {
         override def computePrefix(row: InternalRow): Long = {
           val prefix = prefixProjection.apply(row)
-          prefix.getLong(0)
+          val ret = prefix.getLong(0)
+          ret
         }
       }
 

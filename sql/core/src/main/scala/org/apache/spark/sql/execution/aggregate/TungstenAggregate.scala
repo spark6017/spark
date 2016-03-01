@@ -79,6 +79,7 @@ case class TungstenAggregate(
 
   // This is for testing. We force TungstenAggregationIterator to fall back to sort-based
   // aggregation once it has processed a given number of input rows.
+  // testFallbackStartsAt是一个整型数字Option,默认是Null，如果配置了这个选项，那么就取配置值
   private val testFallbackStartsAt: Option[Int] = {
     sqlContext.getConf("spark.sql.TungstenAggregate.testFallbackStartsAt", null) match {
       case null | "" => None

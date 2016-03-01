@@ -17,8 +17,6 @@
 
 package org.apache.spark.sql.execution;
 
-import java.io.IOException;
-
 import org.apache.spark.SparkEnv;
 import org.apache.spark.memory.TaskMemoryManager;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -31,6 +29,8 @@ import org.apache.spark.unsafe.KVIterator;
 import org.apache.spark.unsafe.Platform;
 import org.apache.spark.unsafe.map.BytesToBytesMap;
 import org.apache.spark.unsafe.memory.MemoryLocation;
+
+import java.io.IOException;
 
 /**
  * Unsafe-based HashMap for performing aggregations where the aggregated values are fixed-width.
@@ -128,6 +128,11 @@ public final class UnsafeFixedWidthAggregationMap {
     return getAggregationBufferFromUnsafeRow(unsafeGroupingKeyRow);
   }
 
+    /***
+     * 从Unsafe Grouping Key Row到UnsafeRow
+     * @param unsafeGroupingKeyRow
+     * @return
+     */
   public UnsafeRow getAggregationBufferFromUnsafeRow(UnsafeRow unsafeGroupingKeyRow) {
     // Probe our map using the serialized key
     final BytesToBytesMap.Location loc = map.lookup(

@@ -75,7 +75,7 @@ import org.apache.spark.unsafe.KVIterator
  *   the function used to create mutable projections.
  * @param originalInputAttributes
  *   attributes of representing input rows from `inputIter`.
- * @param inputIter
+ * @param inputIter 输入数据(UnsafeRow的迭代集合)
  *   the iterator containing input [[UnsafeRow]]s.
  */
 class TungstenAggregationIterator(
@@ -126,13 +126,21 @@ class TungstenAggregationIterator(
     // Initialize declarative aggregates' buffer values
     expressionAggInitialProjection.target(buffer)(EmptyRow)
     // Initialize imperative aggregates' buffer values
+
+    //收集imperativeAggregate function,然后调用ImperativeAggregate的initialize方法，
+    //注意是收集ImperativeAggregate，而不是DeclarativeAggregate
     aggregateFunctions.collect { case f: ImperativeAggregate => f }.foreach(_.initialize(buffer))
     buffer
   }
 
-  // Creates a function used to generate output rows.
+  /** *
+    * Creates a function used to generate output rows.
+    * @return 返回结果是一个(UnsafeRow,MutableRow)=>UnsafeRow的函数
+    */
   override protected def generateResultProjection(): (UnsafeRow, MutableRow) => UnsafeRow = {
     val modes = aggregateExpressions.map(_.mode).distinct
+
+    //如果是partial aggregation
     if (modes.nonEmpty && !modes.contains(Final) && !modes.contains(Complete)) {
       // Fast path for partial aggregation, UnsafeRowJoiner is usually faster than projection
       val groupingAttributes = groupingExpressions.map(_.toAttribute)
@@ -141,10 +149,16 @@ class TungstenAggregationIterator(
       val bufferSchema = StructType.fromAttributes(bufferAttributes)
       val unsafeRowJoiner = GenerateUnsafeRowJoiner.create(groupingKeySchema, bufferSchema)
 
+      /**
+       * 当前的UnsafeRow与currentBuffer进行join?
+       */
       (currentGroupingKey: UnsafeRow, currentBuffer: MutableRow) => {
         unsafeRowJoiner.join(currentGroupingKey, currentBuffer.asInstanceOf[UnsafeRow])
       }
-    } else {
+    }
+
+    //如果是final aggregation，则调用super的generateResultProjection
+    else {
       super.generateResultProjection()
     }
   }
@@ -177,12 +191,20 @@ class TungstenAggregationIterator(
   // hashMap. If there is not enough memory, it will multiple hash-maps, spilling
   // after each becomes full then using sort to merge these spills, finally do sort
   // based aggregation.
+  // fallbackStartsAt默认值是Integer.MAX_VALUE
   private def processInputs(fallbackStartsAt: Int): Unit = {
+    ///没有分组表达式，比如select count(name) from TBL_STUDENT,如果没有分区表达式，只需要一个分组
     if (groupingExpressions.isEmpty) {
       // If there is no grouping expressions, we can just reuse the same buffer over and over again.
       // Note that it would be better to eliminate the hash map entirely in the future.
       val groupingKey = groupingProjection.apply(null)
+
+      //hashMap是谁和谁之间的map?
       val buffer: UnsafeRow = hashMap.getAggregationBufferFromUnsafeRow(groupingKey)
+
+      /** *
+        * 遍历所有的元素，调用processRow进行聚合
+        */
       while (inputIter.hasNext) {
         val newInput = inputIter.next()
         numInputRows += 1
@@ -190,22 +212,31 @@ class TungstenAggregationIterator(
       }
     } else {
       var i = 0
+      //遍历每个元素
       while (inputIter.hasNext) {
         val newInput = inputIter.next()
         numInputRows += 1
+
+        //获取分组的Key
         val groupingKey = groupingProjection.apply(newInput)
         var buffer: UnsafeRow = null
+
+        //如果i小于fallbackStartsAt，表示继续使用hashMap进行聚合
         if (i < fallbackStartsAt) {
           buffer = hashMap.getAggregationBufferFromUnsafeRow(groupingKey)
         }
+
+        //如果buffer为null，表示什么情况？使用ExternalSorter，即外排序？
         if (buffer == null) {
           val sorter = hashMap.destructAndCreateExternalSorter()
           if (externalSorter == null) {
             externalSorter = sorter
           } else {
+            //UnsafeKVExternalSorter进行merge
             externalSorter.merge(sorter)
           }
           i = 0
+          //重新构造hash based aggregation buffer
           buffer = hashMap.getAggregationBufferFromUnsafeRow(groupingKey)
           if (buffer == null) {
             // failed to allocate the first page
@@ -243,6 +274,8 @@ class TungstenAggregationIterator(
 
   /**
    * Switch to sort-based aggregation when the hash-based approach is unable to acquire memory.
+   *
+   * hash-based需要的内存比sort-based需要的大
    */
   private def switchToSortBasedAggregation(): Unit = {
     logInfo("falling back to sort based aggregation.")

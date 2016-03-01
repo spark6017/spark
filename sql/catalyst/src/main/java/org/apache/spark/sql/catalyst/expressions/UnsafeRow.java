@@ -409,12 +409,22 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
     return Platform.getShort(baseObject, getFieldOffset(ordinal));
   }
 
+  /***
+   * 直接取相应位置上的整数值
+   * @param ordinal
+   * @return
+     */
   @Override
   public int getInt(int ordinal) {
     assertIndexIsValid(ordinal);
     return Platform.getInt(baseObject, getFieldOffset(ordinal));
   }
 
+  /***
+   * 取第ordinal列的数据,对于定长数据，这里存放的是原始数据；如果是不定长数据，比如UTF8String，那么存放的是数据的偏移量和长度
+   * @param ordinal
+   * @return
+     */
   @Override
   public long getLong(int ordinal) {
     assertIndexIsValid(ordinal);
@@ -465,21 +475,40 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
   @Override
   public UTF8String getUTF8String(int ordinal) {
     if (isNullAt(ordinal)) return null;
+
+    //先取出相应位置上的offset和size
     final long offsetAndSize = getLong(ordinal);
+
+    //取低四位的整数值作为offset
     final int offset = (int) (offsetAndSize >> 32);
+
+    //取高四位的整数值作为size
     final int size = (int) offsetAndSize;
     return UTF8String.fromAddress(baseObject, baseOffset + offset, size);
   }
 
+  /***
+   * 第ordinal是binary类型的数据，首先取出offset和size，然后再取出数据
+   * @param ordinal
+   * @return
+     */
   @Override
   public byte[] getBinary(int ordinal) {
     if (isNullAt(ordinal)) {
       return null;
     } else {
+      /***
+       * 取出该列的long类型的值，包含offset和size，offset位于低四位，size位于高四位
+       */
       final long offsetAndSize = getLong(ordinal);
       final int offset = (int) (offsetAndSize >> 32);
       final int size = (int) offsetAndSize;
       final byte[] bytes = new byte[size];
+
+        /***
+         * 从baseObject复制size个字节的数据到bytes数组中，
+         * baseOffset和Platform.BYTE_ARRAY_OFFSET是字节数组的固有偏移量
+         */
       Platform.copyMemory(
         baseObject,
         baseOffset + offset,
@@ -636,13 +665,18 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
 
   /**
    * Returns the underlying bytes for this UnsafeRow.
+   *
+   * 如果baseObject是字节数组，并且存放的数据完全是整个数据本身，那么直接返回baseObject
    */
   public byte[] getBytes() {
     if (baseObject instanceof byte[] && baseOffset == Platform.BYTE_ARRAY_OFFSET
       && (((byte[]) baseObject).length == sizeInBytes)) {
       return (byte[]) baseObject;
     } else {
+      //bytes数组中存放要获取的字节数组
       byte[] bytes = new byte[sizeInBytes];
+
+      //复制sizeInBytes个字节的数据，从baseObject+baseOffset开始copy，
       Platform.copyMemory(baseObject, baseOffset, bytes, Platform.BYTE_ARRAY_OFFSET, sizeInBytes);
       return bytes;
     }
@@ -722,11 +756,21 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
     Platform.copyMemory(baseObject, baseOffset, target, targetOffset, sizeInBytes);
   }
 
+  /***
+   * 向数据写入到ByteBuffer中
+   * @param buffer
+     */
   public void writeTo(ByteBuffer buffer) {
+
+    //ByteBuffer的的底层数据存储结构是数组
     assert (buffer.hasArray());
+
+    //因为ByteBuffer的底层数据存储结构是数组，因此可以调用buffer的array()方法
     byte[] target = buffer.array();
     int offset = buffer.arrayOffset();
     int pos = buffer.position();
+
+
     writeToMemory(target, Platform.BYTE_ARRAY_OFFSET + offset + pos);
     buffer.position(pos + sizeInBytes);
   }

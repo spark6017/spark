@@ -132,6 +132,8 @@ public final class Platform {
     Object src, long srcOffset, Object dst, long dstOffset, long length) {
     // Check if dstOffset is before or after srcOffset to determine if we should copy
     // forward or backwards. This is necessary in case src and dst overlap.
+
+    //如果dstOffset小于srcOffset，那么应该
     if (dstOffset < srcOffset) {
       while (length > 0) {
         long size = Math.min(length, UNSAFE_COPY_THRESHOLD);

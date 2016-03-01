@@ -376,8 +376,11 @@ class TungstenAggregationIterator(
   // Part 7: Iterator's public methods.
   ///////////////////////////////////////////////////////////////////////////
 
+  //是否还有元素
   override final def hasNext: Boolean = {
-    (sortBased && sortedInputHasNewGroup) || (!sortBased && mapIteratorHasNext)
+    val a = sortBased && sortedInputHasNewGroup
+    val b = !sortBased && mapIteratorHasNext
+    a || b
   }
 
   override final def next(): UnsafeRow = {

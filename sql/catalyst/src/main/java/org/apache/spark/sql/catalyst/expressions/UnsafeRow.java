@@ -111,6 +111,11 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
     }
   }
 
+  /***
+   * 是否是可变的数据类型
+   * @param dt DecimalType是可变的，基本数据类型也是可变的
+   * @return
+     */
   public static boolean isMutable(DataType dt) {
     return mutableFieldTypes.contains(dt) || dt instanceof DecimalType;
   }

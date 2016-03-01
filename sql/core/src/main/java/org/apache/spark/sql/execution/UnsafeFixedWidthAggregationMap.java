@@ -24,6 +24,7 @@ import org.apache.spark.memory.TaskMemoryManager;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
+import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.KVIterator;
@@ -70,8 +71,14 @@ public final class UnsafeFixedWidthAggregationMap {
    *         schema, false otherwise.
    */
   public static boolean supportsAggregationBufferSchema(StructType schema) {
-    for (StructField field: schema.fields()) {
-      if (!UnsafeRow.isMutable(field.dataType())) {
+
+    StructField[] fields = schema.fields();
+    for (StructField field: fields) {
+      DataType dataType = field.dataType();
+
+      //如果有一个DataType使得UnsafeRow.isMutable返回false，那么就不支持
+      boolean isMutable = UnsafeRow.isMutable(dataType);
+      if (!isMutable) {
         return false;
       }
     }

@@ -469,9 +469,14 @@ case class TungstenAggregate(
 }
 
 object TungstenAggregate {
+  /***
+    * 是否支持TungstenAggregate
+    * @param aggregateBufferAttributes aggregateBuffer这个row对应的attribute
+    * @return
+    */
   def supportsAggregate(aggregateBufferAttributes: Seq[Attribute]): Boolean = {
     val aggregationBufferSchema = StructType.fromAttributes(aggregateBufferAttributes)
     UnsafeFixedWidthAggregationMap.supportsAggregationBufferSchema(aggregationBufferSchema)
-    false
+//    false
   }
 }

@@ -71,6 +71,8 @@ object Utils {
       child: SparkPlan): SparkPlan = {
     val usesTungstenAggregate = TungstenAggregate.supportsAggregate(
       aggregateExpressions.flatMap(_.aggregateFunction.aggBufferAttributes))
+
+    //如果支持TungstenAggregate，那么返回TungstenAggregate物理计划
     if (usesTungstenAggregate) {
       TungstenAggregate(
         requiredChildDistributionExpressions = requiredChildDistributionExpressions,
@@ -117,7 +119,8 @@ object Utils {
     val groupingAttributes = groupingExpressions.map(_.toAttribute)
 
     /**
-     * 根据分组表达式创建部分分组表达式
+     * 根据分组表达式创建部分分组表达式, 第一个物理计划是Partial Aggregate
+      *
      */
     val partialAggregateExpressions = aggregateExpressions.map(_.copy(mode = Partial))
 
@@ -155,6 +158,7 @@ object Utils {
         child = child) /**Aggregate的child作为partialAggregate物理计划的child**/
 
     // 2. Create an Aggregate Operator for final aggregations.
+      // 第二个物理计划是final aggregate，这个物理计划的child是partial aggregate
     val finalAggregateExpressions = aggregateExpressions.map(_.copy(mode = Final))
     // The attributes of the final aggregation buffer, which is presented as input to the result
     // projection:
@@ -181,7 +185,7 @@ object Utils {
         aggregateAttributes = finalAggregateAttributes,
         initialInputBufferOffset = groupingExpressions.length,
         resultExpressions = resultExpressions,
-        child = partialAggregate)
+        child = partialAggregate) //final aggregate的child是partial aggregate
 
     /**
      * 最后返回的是finalAggregate这个SparkPlan

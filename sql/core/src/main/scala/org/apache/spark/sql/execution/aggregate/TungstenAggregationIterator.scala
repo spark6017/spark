@@ -107,6 +107,7 @@ class TungstenAggregationIterator(
 
   // Remember spill data size of this task before execute this operator so that we can
   // figure out how many bytes we spilled for this operator.
+  //成员变量01
   private val spillSizeBefore = TaskContext.get().taskMetrics().memoryBytesSpilled
 
   ///////////////////////////////////////////////////////////////////////////
@@ -150,6 +151,7 @@ class TungstenAggregationIterator(
 
   // An aggregation buffer containing initial buffer values. It is used to
   // initialize other aggregation buffers.
+  // 成员变量02，所以在新建TungstenAggregationIterator是会调用createNewAggregationBuffer创建AggregateBuffer
   private[this] val initialAggregationBuffer: UnsafeRow = createNewAggregationBuffer()
 
   ///////////////////////////////////////////////////////////////////////////
@@ -159,6 +161,7 @@ class TungstenAggregationIterator(
   // This is the hash map used for hash-based aggregation. It is backed by an
   // UnsafeFixedWidthAggregationMap and it is used to store
   // all groups and their corresponding aggregation buffers for hash-based aggregation.
+  //
   private[this] val hashMap = new UnsafeFixedWidthAggregationMap(
     initialAggregationBuffer,
     StructType.fromAttributes(aggregateFunctions.flatMap(_.aggBufferAttributes)),
@@ -355,7 +358,7 @@ class TungstenAggregationIterator(
   ///////////////////////////////////////////////////////////////////////////
 
   /**
-   * Start processing input rows.
+   * Start processing input rows, processInputs是在TungstenAggregationIterator构造函数中调用的
    */
   processInputs(testFallbackStartsAt.getOrElse(Int.MaxValue))
 

@@ -411,7 +411,7 @@ abstract class TreeNode[BaseType <: TreeNode[BaseType]] extends Product {
     case tn: TreeNode[_] if containsChild(tn) => Nil
     case tn: TreeNode[_] => s"${tn.simpleString}" :: Nil
     case seq: Seq[BaseType] if seq.toSet.subsetOf(children.toSet) => Nil
-    case seq: Seq[_] => seq.mkString("[", ",", "]") :: Nil
+    case seq: Seq[_] => seq.mkString("[", ",", "]") + (if (seq.length > 0) "<" + seq(0).getClass.getSimpleName + ">") :: Nil
     case set: Set[_] => set.mkString("{", ",", "}") :: Nil
     case other => other :: Nil
   }.mkString(", ")

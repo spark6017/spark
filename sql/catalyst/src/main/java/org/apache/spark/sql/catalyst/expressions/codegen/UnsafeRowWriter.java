@@ -107,9 +107,19 @@ public class UnsafeRowWriter {
     setOffsetAndSize(ordinal, holder.cursor, size);
   }
 
+  /***
+   * 更新offset和size
+   * @param ordinal
+   * @param currentCursor
+   * @param size 数据长度
+     */
   public void setOffsetAndSize(int ordinal, long currentCursor, long size) {
+
+    //offset值
     final long relativeOffset = currentCursor - startingOffset;
     final long fieldOffset = getFieldOffset(ordinal);
+
+    //relativeOffset左移动32位，表示数据从低四位移动到高四位，然后与size取或操作
     final long offsetAndSize = (relativeOffset << 32) | size;
 
     Platform.putLong(holder.buffer, fieldOffset, offsetAndSize);
@@ -213,8 +223,15 @@ public class UnsafeRowWriter {
     }
   }
 
+  /***
+   * 写入UTF8String字符串
+   * @param ordinal
+   * @param input
+     */
   public void write(int ordinal, UTF8String input) {
     final int numBytes = input.numBytes();
+
+    //求不小于numBytes且是8的倍数的最小值
     final int roundedSize = ByteArrayMethods.roundNumberOfBytesToNearestWord(numBytes);
 
     // grow the global buffer before writing data.
@@ -223,8 +240,10 @@ public class UnsafeRowWriter {
     zeroOutPaddingBytes(numBytes);
 
     // Write the bytes to the variable length portion.
+    //写入内存
     input.writeToMemory(holder.buffer, holder.cursor);
 
+    //更新offset和size
     setOffsetAndSize(ordinal, numBytes);
 
     // move the cursor forward.

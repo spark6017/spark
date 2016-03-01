@@ -32,10 +32,14 @@ public class ByteArrayMethods {
   }
 
   public static int roundNumberOfBytesToNearestWord(int numBytes) {
+    //对8取摸
     int remainder = numBytes & 0x07;  // This is equivalent to `numBytes % 8`
+    //如果numByte正好是8的倍数，那么直接返回
     if (remainder == 0) {
       return numBytes;
-    } else {
+    }
+    //如果numBytes不是8的倍数，那么numBytes + (8 - remainder)表示给numBytes补齐以是它等于8的倍数
+    else {
       return numBytes + (8 - remainder);
     }
   }

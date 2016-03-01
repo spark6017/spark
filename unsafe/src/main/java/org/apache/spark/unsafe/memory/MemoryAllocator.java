@@ -27,7 +27,13 @@ public interface MemoryAllocator {
 
   void free(MemoryBlock memory);
 
+  /***
+   * 堆外内存Allocator，使用Unsafe进行管理，申请和释放
+   */
   MemoryAllocator UNSAFE = new UnsafeMemoryAllocator();
 
+  /***
+   * 堆内存Allocator
+   */
   MemoryAllocator HEAP = new HeapMemoryAllocator();
 }

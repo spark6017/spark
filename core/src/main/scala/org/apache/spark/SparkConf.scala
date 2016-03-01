@@ -680,6 +680,8 @@ private[spark] object SparkConf extends Logging {
 
   /**
    * Information about an alternate configuration key that has been deprecated.
+    *
+    * AlternateConfig表示key在spark的version版本被deprecated
    *
    * @param key The deprecated config key.
    * @param version The Spark version in which the key was deprecated.

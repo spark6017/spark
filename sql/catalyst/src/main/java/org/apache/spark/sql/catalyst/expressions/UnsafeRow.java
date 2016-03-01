@@ -66,6 +66,7 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
 
 
   /***
+   * 用于track row中null列的bitset的字节数，它的长度是8的整数倍
    * 1-64列是8个字节
    * 65-127列是16个字节
    * @param numFields
@@ -221,6 +222,10 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
     // To preserve row equality, zero out the value when setting the column to null.
     // Since this row does does not currently support updates to variable-length values, we don't
     // have to worry about zeroing out that data.
+
+      /***
+       * 所谓的zero out是指当把一列置为空是，将相应数据位置的数据置为long类型的0
+       */
     Platform.putLong(baseObject, getFieldOffset(i), 0);
   }
 
@@ -443,6 +448,20 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
     }
   }
 
+  /**
+   * 读取第ordinal列的值，这里是读取字符串的值。逻辑是：
+   *
+   * 1. 首先判断是否是null，如果是null，则返回null
+   * 2. 调用getLong获得该列的offset和size(offset指的是字符串在baseObject中是从哪个offset开始的字节算起，size是字符串的字节串占用的字节数)
+   *
+   * 也就是说，getLong(ordinal)位置存放的不是实际的数据值，而是字符串在baseObject对应的字节数组中的偏移量以及该字符串占用的字节数
+   *
+   * 3. 调用 UTF8String.fromAddress将数据转换为UTF8String字符串
+   *
+   *
+   * @param ordinal
+   * @return
+     */
   @Override
   public UTF8String getUTF8String(int ordinal) {
     if (isNullAt(ordinal)) return null;

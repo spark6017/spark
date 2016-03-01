@@ -120,6 +120,14 @@ public final class Platform {
     _UNSAFE.setMemory(address, size, value);
   }
 
+  /**
+   * 复制内存
+   * @param src
+   * @param srcOffset
+   * @param dst
+   * @param dstOffset
+     * @param length
+     */
   public static void copyMemory(
     Object src, long srcOffset, Object dst, long dstOffset, long length) {
     // Check if dstOffset is before or after srcOffset to determine if we should copy

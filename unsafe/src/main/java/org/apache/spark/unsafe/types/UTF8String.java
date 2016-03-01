@@ -95,8 +95,17 @@ public final class UTF8String implements Comparable<UTF8String>, Externalizable,
 
   /**
    * Creates an UTF8String from given address (base and offset) and length.
-   */
+   *
+   * @param base baseObject,通常是字节数组
+   * @param offset 字符串的第一个字节在字节数组中的位置(它是针对字节数组的首位置的偏移量)
+   * @param numBytes 字符串占用的字节数
+     * @return
+     */
   public static UTF8String fromAddress(Object base, long offset, int numBytes) {
+
+      /***
+       * 构造UTF8String,构造参数是base、offset、numBytes
+       */
     return new UTF8String(base, offset, numBytes);
   }
 
@@ -124,6 +133,12 @@ public final class UTF8String implements Comparable<UTF8String>, Externalizable,
     return fromBytes(spaces);
   }
 
+  /***
+   * UTF8String的构造方法，是protected的，它有三个构造参数
+   * @param base 字符串的backing up字节数组
+   * @param offset 字符串数据在字节数组中的偏移量
+   * @param numBytes 字符串占用的字节长度
+     */
   protected UTF8String(Object base, long offset, int numBytes) {
     this.base = base;
     this.offset = offset;
@@ -225,14 +240,25 @@ public final class UTF8String implements Comparable<UTF8String>, Externalizable,
 
   /**
    * Returns the underline bytes, will be a copy of it if it's part of another array.
+   * UTF8String字符串对应的字节数组
    */
   public byte[] getBytes() {
     // avoid copy if `base` is `byte[]`
+    //如果整个base数组就只有这一个字符串，那么直接将该base数组返回
+    //base是否有BYTE_ARRAY_OFFSET的字节数浪费了？
     if (offset == BYTE_ARRAY_OFFSET && base instanceof byte[]
       && ((byte[]) base).length == numBytes) {
       return (byte[]) base;
-    } else {
+    }
+
+    //复制长度为bytes的内存区域
+    else {
       byte[] bytes = new byte[numBytes];
+
+      /**
+       * 从base数组的offset位置复制长度为numBytes字节到byte中？bytes从BYTE_ARRAY_OFFSET位置开始copy？
+       *
+       */
       copyMemory(base, offset, bytes, BYTE_ARRAY_OFFSET, numBytes);
       return bytes;
     }

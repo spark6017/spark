@@ -27,6 +27,8 @@ import org.apache.spark.unsafe.Platform;
 
 /**
  * A simple {@link MemoryAllocator} that can allocate up to 16GB using a JVM long primitive array.
+ *
+ * In on-heap mode, memory addresses are identified by the combination of a base Object and an offset within that object
  */
 public class HeapMemoryAllocator implements MemoryAllocator {
 

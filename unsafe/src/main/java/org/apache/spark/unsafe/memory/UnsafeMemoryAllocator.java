@@ -21,6 +21,8 @@ import org.apache.spark.unsafe.Platform;
 
 /**
  * A simple {@link MemoryAllocator} that uses {@code Unsafe} to allocate off-heap memory.
+ *
+ * In off-heap mode, memory is addressed directly with 64-bit long addresses.
  */
 public class UnsafeMemoryAllocator implements MemoryAllocator {
 

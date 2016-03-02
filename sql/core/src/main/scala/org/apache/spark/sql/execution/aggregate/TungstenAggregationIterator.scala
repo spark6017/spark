@@ -107,7 +107,7 @@ class TungstenAggregationIterator(
 
   // Remember spill data size of this task before execute this operator so that we can
   // figure out how many bytes we spilled for this operator.
-  //成员变量01
+  //=================================常量01=================================
   private val spillSizeBefore = TaskContext.get().taskMetrics().memoryBytesSpilled
 
   ///////////////////////////////////////////////////////////////////////////
@@ -165,7 +165,8 @@ class TungstenAggregationIterator(
 
   // An aggregation buffer containing initial buffer values. It is used to
   // initialize other aggregation buffers.
-  // 成员变量02，所以在新建TungstenAggregationIterator是会调用createNewAggregationBuffer创建AggregateBuffer
+
+  //=================================常量02=================================
   private[this] val initialAggregationBuffer: UnsafeRow = createNewAggregationBuffer()
 
   ///////////////////////////////////////////////////////////////////////////
@@ -175,7 +176,8 @@ class TungstenAggregationIterator(
   // This is the hash map used for hash-based aggregation. It is backed by an
   // UnsafeFixedWidthAggregationMap and it is used to store
   // all groups and their corresponding aggregation buffers for hash-based aggregation.
-  //
+
+  //=================================常量03=================================
   private[this] val hashMap = new UnsafeFixedWidthAggregationMap(
     initialAggregationBuffer,
     StructType.fromAttributes(aggregateFunctions.flatMap(_.aggBufferAttributes)),
@@ -238,7 +240,7 @@ class TungstenAggregationIterator(
           i = 0
           //重新构造hash based aggregation buffer
           buffer = hashMap.getAggregationBufferFromUnsafeRow(groupingKey)
-          if (buffer == null) {
+          if (buffer == null) { /**内存不足**/
             // failed to allocate the first page
             throw new OutOfMemoryError("No enough memory for aggregation")
           }
@@ -259,9 +261,13 @@ class TungstenAggregationIterator(
 
   // The iterator created from hashMap. It is used to generate output rows when we
   // are using hash-based aggregation.
+
+  //=================================变量04=================================
   private[this] var aggregationBufferMapIterator: KVIterator[UnsafeRow, UnsafeRow] = null
 
   // Indicates if aggregationBufferMapIterator still has key-value pairs.
+
+  //=================================变量05=================================
   private[this] var mapIteratorHasNext: Boolean = false
 
   ///////////////////////////////////////////////////////////////////////////
@@ -270,6 +276,8 @@ class TungstenAggregationIterator(
 
   // This sorter is used for sort-based aggregation. It is initialized as soon as
   // we switch from hash-based to sort-based aggregation. Otherwise, it is not used.
+
+  //=================================变量06=================================
   private[this] var externalSorter: UnsafeKVExternalSorter = null
 
   /**

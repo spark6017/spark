@@ -121,7 +121,8 @@ abstract class AggregationIterator(
   /////============================常量01============================
   protected val aggregateFunctions: Array[AggregateFunction] =
   {
-    initializeAggregateFunctions(aggregateExpressions, initialInputBufferOffset)
+    val a = initializeAggregateFunctions(aggregateExpressions, initialInputBufferOffset)
+    a
   }
 
   // Positions of those imperative aggregate functions in allAggregateFunctions.

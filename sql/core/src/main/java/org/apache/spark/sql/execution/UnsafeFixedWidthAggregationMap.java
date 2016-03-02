@@ -135,21 +135,15 @@ public final class UnsafeFixedWidthAggregationMap {
      */
   public UnsafeRow getAggregationBufferFromUnsafeRow(UnsafeRow unsafeGroupingKeyRow) {
     // Probe our map using the serialized key
-    final BytesToBytesMap.Location loc = map.lookup(
-      unsafeGroupingKeyRow.getBaseObject(),
-      unsafeGroupingKeyRow.getBaseOffset(),
-      unsafeGroupingKeyRow.getSizeInBytes());
+
+    Object baseObject =  unsafeGroupingKeyRow.getBaseObject();
+    long baseOffset = unsafeGroupingKeyRow.getBaseOffset();
+    int sizeInBytes = unsafeGroupingKeyRow.getSizeInBytes();
+    final BytesToBytesMap.Location loc = map.lookup(baseObject,baseOffset, sizeInBytes);
     if (!loc.isDefined()) {
       // This is the first time that we've seen this grouping key, so we'll insert a copy of the
       // empty aggregation buffer into the map:
-      boolean putSucceeded = loc.putNewKey(
-        unsafeGroupingKeyRow.getBaseObject(),
-        unsafeGroupingKeyRow.getBaseOffset(),
-        unsafeGroupingKeyRow.getSizeInBytes(),
-        emptyAggregationBuffer,
-        Platform.BYTE_ARRAY_OFFSET,
-        emptyAggregationBuffer.length
-      );
+      boolean putSucceeded = loc.putNewKey(baseObject, baseOffset, sizeInBytes, emptyAggregationBuffer, Platform.BYTE_ARRAY_OFFSET, emptyAggregationBuffer.length);
       if (!putSucceeded) {
         return null;
       }
@@ -157,11 +151,10 @@ public final class UnsafeFixedWidthAggregationMap {
 
     // Reset the pointer to point to the value that we just stored or looked up:
     final MemoryLocation address = loc.getValueAddress();
-    currentAggregationBuffer.pointTo(
-      address.getBaseObject(),
-      address.getBaseOffset(),
-      loc.getValueLength()
-    );
+    baseObject = address.getBaseObject();
+    baseOffset = address.getBaseOffset();
+    int valueLength = loc.getValueLength();
+    currentAggregationBuffer.pointTo(baseObject, baseOffset, valueLength);
     return currentAggregationBuffer;
   }
 
@@ -249,6 +242,10 @@ public final class UnsafeFixedWidthAggregationMap {
    *
    * Note that the map will be reset for inserting new records, and the returned sorter can NOT be used
    * to insert records.
+   *
+   * 两件事：
+   * 1. map被destroy/reset，用于插入新的records
+   * 2. 返回的UnsafeKVExternalSorter不能用于插入数据
    */
   public UnsafeKVExternalSorter destructAndCreateExternalSorter() throws IOException {
     return new UnsafeKVExternalSorter(

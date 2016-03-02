@@ -133,6 +133,8 @@ public final class UnsafeKVExternalSorter {
    * Inserts a key-value record into the sorter. If the sorter no longer has enough memory to hold
    * the record, the sorter sorts the existing records in-memory, writes them out as partially
    * sorted runs, and then reallocates memory to hold the new record.
+   *
+   * 插入KV
    */
   public void insertKV(UnsafeRow key, UnsafeRow value) throws IOException {
     final long prefix = prefixComputer.computePrefix(key);

@@ -228,7 +228,7 @@ class TungstenAggregationIterator(
           buffer = hashMap.getAggregationBufferFromUnsafeRow(groupingKey)
         }
 
-        //如果buffer为null，表示什么情况？使用ExternalSorter，即外排序？
+        //如果buffer为null，表示什么情况？
         if (buffer == null) {
           val sorter = hashMap.destructAndCreateExternalSorter()
           if (externalSorter == null) {
@@ -249,6 +249,8 @@ class TungstenAggregationIterator(
         i += 1
       }
 
+      //如果externalSorter不为空，则switch到sort based aggregation，
+      //问题：externalSorter在什么地方初始化的？
       if (externalSorter != null) {
         val sorter = hashMap.destructAndCreateExternalSorter()
         externalSorter.merge(sorter)
@@ -284,6 +286,8 @@ class TungstenAggregationIterator(
    * Switch to sort-based aggregation when the hash-based approach is unable to acquire memory.
    *
    * hash-based需要的内存比sort-based需要的大
+    *
+    * switchToSortBasedAggregation调用时，externalSorter不为null
    */
   private def switchToSortBasedAggregation(): Unit = {
     logInfo("falling back to sort based aggregation.")
@@ -400,6 +404,8 @@ class TungstenAggregationIterator(
 
   /**
    * Start processing input rows, processInputs是在TungstenAggregationIterator构造函数中调用的
+    *
+    * sortBased会在processInputs进行处理，处理过程中如果切换到sort based aggregation,那么会将sortBased置为true
    */
   processInputs(testFallbackStartsAt.getOrElse(Int.MaxValue))
 

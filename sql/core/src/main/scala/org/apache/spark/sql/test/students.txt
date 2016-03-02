@@ -4,4 +4,6 @@
 4 Jared 30 b
 5 Kevin 22 a
 6 Jonathan 25 a
+5 Parker 22 a
+6 Alex 25 a
 7 Tom 24 c

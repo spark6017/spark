@@ -646,6 +646,7 @@ public final class BytesToBytesMap extends MemoryConsumer {
       assert(longArray != null);
 
 
+      //如果元素个数大于MAX_CAPACITY则putNewKey返回false
       if (numElements == MAX_CAPACITY
         // The map could be reused from last spill (because of no enough memory to grow),
         // then we don't try to grow again if hit the `growthThreshold`.
@@ -659,6 +660,7 @@ public final class BytesToBytesMap extends MemoryConsumer {
       // (8 byte key length) (key) (value)
       final long recordLength = 8 + keyLength + valueLength;
       if (currentPage == null || currentPage.size() - pageCursor < recordLength) {
+        //如果不能获取新的page，那么也返回false
         if (!acquireNewPage(recordLength + 4L)) {
           return false;
         }

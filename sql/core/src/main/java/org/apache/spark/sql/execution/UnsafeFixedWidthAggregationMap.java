@@ -144,6 +144,7 @@ public final class UnsafeFixedWidthAggregationMap {
       // This is the first time that we've seen this grouping key, so we'll insert a copy of the
       // empty aggregation buffer into the map:
       boolean putSucceeded = loc.putNewKey(baseObject, baseOffset, sizeInBytes, emptyAggregationBuffer, Platform.BYTE_ARRAY_OFFSET, emptyAggregationBuffer.length);
+      //如果插入失败，表示没有足够的内存了
       if (!putSucceeded) {
         return null;
       }

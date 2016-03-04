@@ -32,20 +32,35 @@ import org.apache.spark.util.Utils;
 
 /**
  * Manages the memory allocated by an individual task.
+ *
+ *  用于管理分配给单个任务的内存
+ *
  * <p>
  * Most of the complexity in this class deals with encoding of off-heap addresses into 64-bit longs.
  * In off-heap mode, memory can be directly addressed with 64-bit longs. In on-heap mode, memory is
  * addressed by the combination of a base Object reference and a 64-bit offset within that object.
+ *
+ *  在off-heap模式下，内存由64位的long值直接进行寻址；在on-heap模式下，内存由对象+对象内offset进行寻址
+ *
  * This is a problem when we want to store pointers to data structures inside of other structures,
  * such as record pointers inside hashmaps or sorting buffers. Even if we decided to use 128 bits
  * to address memory, we can't just store the address of the base object since it's not guaranteed
  * to remain stable as the heap gets reorganized due to GC.
+ *
+ * 这个问题说的是啥？何为record pointer?
  * <p>
  * Instead, we use the following approach to encode record pointers in 64-bit longs: for off-heap
  * mode, just store the raw address, and for on-heap mode use the upper 13 bits of the address to
  * store a "page number" and the lower 51 bits to store an offset within this page. These page
  * numbers are used to index into a "page table" array inside of the MemoryManager in order to
  * retrieve the base object.
+ *
+ * 对于on heap，
+ * 1. 使用高13位记录page number，一共可以有2^13=8k=8*1024=8192页
+ * 2. 使用低51位记录页面内的偏移量
+ * 3.
+ *
+ * page size是由long[] 的最大值决定
  * <p>
  * This allows us to address 8192 pages. In on-heap mode, the maximum page size is limited by the
  * maximum size of a long[] array, allowing us to address 8192 * 2^32 * 8 bytes, which is
@@ -62,7 +77,7 @@ public class TaskMemoryManager {
   @VisibleForTesting
   static final int OFFSET_BITS = 64 - PAGE_NUMBER_BITS;  // 51
 
-  /** The number of entries in the page table. */
+  /** The number of entries in the page table.，为2^13=8192 */
   private static final int PAGE_TABLE_SIZE = 1 << PAGE_NUMBER_BITS;
 
   /**
@@ -70,10 +85,15 @@ public class TaskMemoryManager {
    * (1L &lt;&lt; OFFSET_BITS) bytes, which is 2+ petabytes. However, the on-heap allocator's maximum page
    * size is limited by the maximum amount of data that can be stored in a  long[] array, which is
    * (2^32 - 1) * 8 bytes (or 16 gigabytes). Therefore, we cap this at 16 gigabytes.
+   *
+   * 堆上每页最大的字节数由long数组决定，因为数组下标为整数，因此long数组的最大长度是2^32 - 1，long数组占用的字节数是
+   *  (2^32 - 1)*8
+   *
    */
   public static final long MAXIMUM_PAGE_SIZE_BYTES = ((1L << 31) - 1) * 8L;
 
-  /** Bit mask for the lower 51 bits of a long. */
+  /** Bit mask for the lower 51 bits of a long. ,低51位
+   * */
   private static final long MASK_LONG_LOWER_51_BITS = 0x7FFFFFFFFFFFFL;
 
   /** Bit mask for the upper 13 bits of a long */
@@ -86,35 +106,62 @@ public class TaskMemoryManager {
    * off-heap addresses. When using an off-heap allocator, every entry in this map will be `null`.
    * When using an in-heap allocator, the entries in this map will point to pages' base objects.
    * Entries are added to this map as new data pages are allocated.
+   *
+   * 因为page number是13bit，那么PAGE_TABLE_SIZE也就是2^13 = 8192
+   *
+   * 也就是说，每个TaskMemoryManager持有的MemoryBlock是8192个
    */
   private final MemoryBlock[] pageTable = new MemoryBlock[PAGE_TABLE_SIZE];
 
   /**
    * Bitmap for tracking free pages.
+   *
+   * Java的BitSet的用法什么？构造参数是什么含义？
+   *
    */
   private final BitSet allocatedPages = new BitSet(PAGE_TABLE_SIZE);
 
+  /***
+   * TaskMemoryManager持有一个MemoryManager
+   */
   private final MemoryManager memoryManager;
 
+  /***
+   * 因为TaskMemoryManager是与Task相关的内存管理器，因此TaskMemoryManager持有一个TaskAttemptID
+   */
   private final long taskAttemptId;
 
   /**
    * Tracks whether we're in-heap or off-heap. For off-heap, we short-circuit most of these methods
    * without doing any masking or lookups. Since this branching should be well-predicted by the JIT,
    * this extra layer of indirection / abstraction hopefully shouldn't be too expensive.
+   *
+   * tungstenMemoryMode用于标识MemoryMode，目前共有两种Mode，ON_HEAP和OFF_HEAP，
+   * 注意：这是一个final的变量，也就是构造完成后不能再修改
    */
   final MemoryMode tungstenMemoryMode;
 
   /**
    * Tracks spillable memory consumers.
+   *
+   * TaskMemoryManager持有一个MemoryConsumer集合，MemoryConsumer的实现类有：
+   * UnsafeExternalSort
+   * ShuffleExternalSort
+   * BytesToBytesMap
    */
   @GuardedBy("this")
   private final HashSet<MemoryConsumer> consumers;
 
   /**
-   * Construct a new TaskMemoryManager.
+   * TaskMemoryManager的构造函数
+   *
+   * @param memoryManager
+   * @param taskAttemptId
    */
   public TaskMemoryManager(MemoryManager memoryManager, long taskAttemptId) {
+    /***
+     * 从MemoryManager得到MemoryMode
+     */
     this.tungstenMemoryMode = memoryManager.tungstenMemoryMode();
     this.memoryManager = memoryManager;
     this.taskAttemptId = taskAttemptId;
@@ -122,10 +169,20 @@ public class TaskMemoryManager {
   }
 
   /**
+   *
+   * 为memory consumer申请required字节的内存，如果没有足够的内存，它将调用consumer的spill方法将数据转储到磁盘
+   * 问题：为什么把spill动作交给TaskMemoryManager来执行？TaskMemoryManager仅仅负责内存管理，并且在内存申请不到时是否spill应该
+   * 由consumer自行决定
+   *
    * Acquire N bytes of memory for a consumer. If there is no enough memory, it will call
    * spill() of consumers to release more memory.
    *
    * @return number of bytes successfully granted (<= N).
+   *
+   * @param required 申请的字节数，实际申请到的字节数(返回值)可能小于required
+   * @param mode
+   * @param consumer
+   * @return
    */
   public long acquireExecutionMemory(
       long required,
@@ -229,19 +286,40 @@ public class TaskMemoryManager {
   }
 
   /**
+   *  分配一个page的内存
+   *
    * Allocate a block of memory that will be tracked in the MemoryManager's page table; this is
    * intended for allocating large blocks of Tungsten memory that will be shared between operators.
    *
+   *  分配一整块内存空间，由TaskMemoryManager的pageTable进行跟踪和追溯。一下子分配一块大内存的目的是为了在多个operator之间共用
+   *
    * Returns `null` if there was not enough memory to allocate the page. May return a page that
    * contains fewer bytes than requested, so callers should verify the size of returned pages.
+   *
+   *  如果没有足够的内存进行分配，那么将返回null；返回的page的大小可能比申请的字节数(size)小
+   *
+   * @param size
+   * @param consumer
+   * @return
    */
   public MemoryBlock allocatePage(long size, MemoryConsumer consumer) {
+
+    /***
+     * 如果申请的内存大于一个page代表的内存空间，那么将报错；一个page能代表的内存空间是16G字节
+     */
     if (size > MAXIMUM_PAGE_SIZE_BYTES) {
       throw new IllegalArgumentException(
         "Cannot allocate a page with more than " + MAXIMUM_PAGE_SIZE_BYTES + " bytes");
     }
 
+    /***
+     * 调用acquireExecutionMemory申请内存，返回申请的字节数
+     */
     long acquired = acquireExecutionMemory(size, tungstenMemoryMode, consumer);
+
+    /***
+     * 如果申请到的字节数小于等于0，那么将返回null
+     */
     if (acquired <= 0) {
       return null;
     }
@@ -267,6 +345,10 @@ public class TaskMemoryManager {
 
   /**
    * Free a block of memory allocated via {@link TaskMemoryManager#allocatePage}.
+    *
+   * 释放一个page
+   * @param page
+   * @param consumer
    */
   public void freePage(MemoryBlock page, MemoryConsumer consumer) {
     assert (page.pageNumber != -1) :
@@ -360,10 +442,19 @@ public class TaskMemoryManager {
   /**
    * Clean up all allocated memory and pages. Returns the number of bytes freed. A non-zero return
    * value can be used to detect memory leaks.
+   *
+   * 释放为该Task分配的所有内存
    */
   public long cleanUpAllAllocatedMemory() {
     synchronized (this) {
+      /***
+       * 将pageTable的所有元素置为null
+       */
       Arrays.fill(pageTable, null);
+
+      /***
+       * 遍历所有的consumers
+       */
       for (MemoryConsumer c: consumers) {
         if (c != null && c.getUsed() > 0) {
           // In case of failed task, it's normal to see leaked memory
@@ -373,6 +464,9 @@ public class TaskMemoryManager {
       consumers.clear();
     }
 
+    /***
+     * 为什么会有不为null的page
+     */
     for (MemoryBlock page : pageTable) {
       if (page != null) {
         memoryManager.tungstenMemoryAllocator().free(page);
@@ -385,6 +479,7 @@ public class TaskMemoryManager {
 
   /**
    * Returns the memory consumption, in bytes, for the current task.
+   * 获取当前任务已经申请到的内存
    */
   public long getMemoryConsumptionForThisTask() {
     return memoryManager.getExecutionMemoryUsageForTask(taskAttemptId);

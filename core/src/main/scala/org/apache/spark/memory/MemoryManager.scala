@@ -181,6 +181,8 @@ private[spark] abstract class MemoryManager(
 
   /**
    * Returns the execution memory consumption, in bytes, for the given task.
+   * on heap和off heap一共使用的内存
+   * 问题：一个Task可能同时使用on heap memory和off heap memory
    */
   private[memory] def getExecutionMemoryUsageForTask(taskAttemptId: Long): Long = synchronized {
     onHeapExecutionMemoryPool.getMemoryUsageForTask(taskAttemptId) +
@@ -198,6 +200,12 @@ private[spark] abstract class MemoryManager(
    * 如果是Off Heap，那么需要设置Off Heap的容量
    */
   final val tungstenMemoryMode: MemoryMode = {
+    /** *
+      * 配置参数spark.memory.offHeap.enabled用于标识TungstenMemory使用on heap模式还是off heap模式，默认是on heap模式
+      * 如果开启了off heap模式，那么需要设置spark.memory.offHeap.size用于设置off heap的内存大小
+      *
+      * 问题：JVM启动时，堆外内存有多少是如何设置的？如果spark.memory.offHeap.size设置的值超过了物理内存，会发生什么情况？
+      */
     if (conf.getBoolean("spark.memory.offHeap.enabled", false)) {
       require(conf.getSizeAsBytes("spark.memory.offHeap.size", 0) > 0,
         "spark.memory.offHeap.size must be > 0 when spark.memory.offHeap.enabled == true")

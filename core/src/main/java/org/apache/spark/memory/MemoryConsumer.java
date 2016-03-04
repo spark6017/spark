@@ -71,10 +71,9 @@ public abstract class MemoryConsumer {
    *
    * MemoryConsumer提供了spill抽象方法，也就是说，MemoryConsumer需要控制在内存不够时的spill到磁盘的逻辑
    *
-   *
-   * @param size the amount of memory should be released
-   * @param trigger the MemoryConsumer that trigger this spilling
-   * @return the amount of released memory in bytes
+   * @param size the amount of memory should be released          TaskMemoryManager请求当前MemoryConsumer(this对象)为trigger释放size字节的内存空间
+   * @param trigger the MemoryConsumer that trigger this spilling    TaskMemoryManager请求当前MemoryConsumer释放size的内存空间给trigger这个MemoryConsumer使用
+   * @return the amount of released memory in bytes 实际释放的内存字节数
    * @throws IOException
    */
   public abstract long spill(long size, MemoryConsumer trigger) throws IOException;

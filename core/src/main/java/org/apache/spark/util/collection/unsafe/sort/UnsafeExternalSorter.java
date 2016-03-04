@@ -208,6 +208,8 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
   /**
    * Sort and spill the current records in response to memory pressure.
    *
+   * 首先排序然后进行spill
+   *
    * @param size the amount of memory should be released
    * @param trigger the MemoryConsumer that trigger this spilling
    * @return

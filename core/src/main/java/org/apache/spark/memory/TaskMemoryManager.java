@@ -193,22 +193,56 @@ public class TaskMemoryManager {
     // memory here, then it may not make sense to spill since that would only end up freeing
     // off-heap memory. This is subject to change, though, so it may be risky to make this
     // optimization now in case we forget to undo it late when making changes.
+    /***
+     *  根据不同的MemoryMode执行不同的分配策略，是如何体现的？
+     *  调用MemoryManager的acquireExecutionMemory时，会根据不同的mode进行判断
+     *  如果是on heap模式，execution可能想storage借用内存；如果是off heap模式，那么内存不会向storage借用内存(也就是说，在off heap模式下，
+     *  execution和storage是绝缘的)
+     */
     synchronized (this) {
-      long got = memoryManager.acquireExecutionMemory(required, taskAttemptId, mode);
 
-      // Try to release memory from other consumers first, then we can reduce the frequency of
-      // spilling, avoid to have too many spilled files.
-      if (got < required) {
+      /***
+       * 申请到了acquired字节的内存
+       */
+      long acquired = memoryManager.acquireExecutionMemory(required, taskAttemptId, mode);
+
+      /***
+       * Try to release memory from other consumers first, then we can reduce the frequency of
+       * spilling, avoid to have too many spilled files.
+       *
+       * 在调用自身(MemoryConsumer)的spill方法之前，首先尝试release其它consumer的内存
+       */
+      if (acquired < required) {
         // Call spill() on other consumers to release memory
         for (MemoryConsumer c: consumers) {
+
+          /***
+           * 遍历consumers,如果当前遍历到的consumer
+           */
           if (c != consumer && c.getUsed() > 0) {
             try {
-              long released = c.spill(required - got, consumer);
+
+              /**
+               * 为consumer释放required - acquired字节的内存空间,交还给MemoryManager
+               */
+              long released = c.spill(required - acquired, consumer);
+
+              /***
+               *  如果consumer释放了内存空间且当前mode是tungstenMemoryMode
+               */
               if (released > 0 && mode == tungstenMemoryMode) {
                 logger.debug("Task {} released {} from {} for {}", taskAttemptId,
                   Utils.bytesToString(released), c, consumer);
-                got += memoryManager.acquireExecutionMemory(required - got, taskAttemptId, mode);
-                if (got >= required) {
+
+                /***
+                 * 再次调用memoryManager的acquireExecutionMemory方法申请内存，将它累加到acquired上
+                 */
+                acquired += memoryManager.acquireExecutionMemory(required - acquired, taskAttemptId, mode);
+
+                /***
+                 * 如果所需的内存都已经申请到，那么就跳出循环
+                 */
+                if (acquired >= required) {
                   break;
                 }
               }
@@ -221,14 +255,24 @@ public class TaskMemoryManager {
         }
       }
 
-      // call spill() on itself
-      if (got < required && consumer != null) {
+      /***
+       *  call spill() on itself
+       * 遍历完所有的其它consumers，还没有满足申请到的内存，那么调用自身的spill操作进行转储磁盘的操作
+       */
+      if (acquired < required && consumer != null) {
         try {
-          long released = consumer.spill(required - got, consumer);
+          /***
+           *  释放released字节的内存
+           */
+          long released = consumer.spill(required - acquired, consumer);
+
+          /***
+           * 如果consumer释放了一些空间，那么调用memoryManager.acquireExecutionMemory再次申请内存并将申请到内存空间累加到acquired上
+           */
           if (released > 0 && mode == tungstenMemoryMode) {
             logger.debug("Task {} released {} from itself ({})", taskAttemptId,
               Utils.bytesToString(released), consumer);
-            got += memoryManager.acquireExecutionMemory(required - got, taskAttemptId, mode);
+            acquired += memoryManager.acquireExecutionMemory(required - acquired, taskAttemptId, mode);
           }
         } catch (IOException e) {
           logger.error("error while calling spill() on " + consumer, e);
@@ -237,11 +281,14 @@ public class TaskMemoryManager {
         }
       }
 
+      /***
+       * 这个地方是否会有重复操作，如果consumers已经持有了consumer了呢？虽然代码没错(因为consumers是个HashSet)
+       */
       if (consumer != null) {
         consumers.add(consumer);
       }
-      logger.debug("Task {} acquire {} for {}", taskAttemptId, Utils.bytesToString(got), consumer);
-      return got;
+      logger.debug("Task {} acquire {} for {}", taskAttemptId, Utils.bytesToString(acquired), consumer);
+      return acquired;
     }
   }
 
@@ -255,6 +302,8 @@ public class TaskMemoryManager {
 
   /**
    * Dump the memory usage of all consumers.
+   *
+   * 列出所有consumer的内存使用情况
    */
   public void showMemoryUsage() {
     logger.info("Memory used in task " + taskAttemptId);

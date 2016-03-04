@@ -25,6 +25,10 @@ public interface MemoryAllocator {
    */
   MemoryBlock allocate(long size) throws OutOfMemoryError;
 
+  /***
+   * off heap和on heap内存的释放由子类完成
+   * @param memory
+   */
   void free(MemoryBlock memory);
 
   /***

@@ -64,7 +64,10 @@ final class UnsafeSorterSpillMerger {
   }
 
   /**
-   * Add an UnsafeSorterIterator to this merger
+   * Add an UnsafeSorterIterator to this merger,记录在优先级队列中，那么队列中的元素UnsafeSorterIterator是可以排序的
+   *
+   * @param spillReader
+   * @throws IOException
    */
   public void addSpillIfNotEmpty(UnsafeSorterIterator spillReader) throws IOException {
     if (spillReader.hasNext()) {

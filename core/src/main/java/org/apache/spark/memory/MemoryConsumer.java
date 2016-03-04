@@ -130,7 +130,14 @@ public abstract class MemoryConsumer {
   }
 
   /**
+   *
+   */
+
+  /***
    * Free a memory block.
+   *
+   *  释放一个内存page
+   * @param page
    */
   protected void freePage(MemoryBlock page) {
     used -= page.size();

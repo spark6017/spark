@@ -38,7 +38,14 @@ public final class LongArray {
 
   private final long length;
 
+  /***
+   * LongArray的底层依然是一个MemoryBlock
+   * @param memory
+   */
   public LongArray(MemoryBlock memory) {
+    /***
+     * 每个MemoryBlock的大小是long数组所能占据的最大内存空间，为 Integer.MAX_VALUE * 8(2^32-1) * 8
+     */
     assert memory.size() < (long) Integer.MAX_VALUE * 8: "Array size > 4 billion elements";
     this.memory = memory;
     this.baseObj = memory.getBaseObject();

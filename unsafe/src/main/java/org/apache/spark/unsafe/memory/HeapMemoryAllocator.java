@@ -33,6 +33,10 @@ import org.apache.spark.unsafe.Platform;
 public class HeapMemoryAllocator implements MemoryAllocator {
 
   @GuardedBy("this")
+
+  /***
+   * 内存size和MemoryBlock之间的映射关系，为什么会有这种设计？如果size非常零散，那么bufferPoolsBySize将会非常大
+   */
   private final Map<Long, LinkedList<WeakReference<MemoryBlock>>> bufferPoolsBySize =
     new HashMap<>();
 
@@ -69,16 +73,33 @@ public class HeapMemoryAllocator implements MemoryAllocator {
     return new MemoryBlock(array, Platform.LONG_ARRAY_OFFSET, size);
   }
 
+  /***
+   * 释放on heap占用的内存，如果要释放的内存大于1M则将它归还到pool里；否则什么也不干，为什么？
+   *
+   * @param memory
+   */
   @Override
   public void free(MemoryBlock memory) {
+    //
     final long size = memory.size();
+
+    /***
+     * 需要加到pool中，只有大于1M的内存块才加入到pool中
+     */
     if (shouldPool(size)) {
       synchronized (this) {
         LinkedList<WeakReference<MemoryBlock>> pool = bufferPoolsBySize.get(size);
+        /***
+         * 如果还没有size大小的memory block加入到pool中，那么首先创建pool并加入到bufferPoolsBySize中
+         */
         if (pool == null) {
           pool = new LinkedList<>();
           bufferPoolsBySize.put(size, pool);
         }
+
+        /***
+         * 将memory加入到pool中
+         */
         pool.add(new WeakReference<>(memory));
       }
     } else {

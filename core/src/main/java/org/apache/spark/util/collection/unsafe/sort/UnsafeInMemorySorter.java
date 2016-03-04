@@ -259,6 +259,10 @@ public final class UnsafeInMemorySorter {
       this.position = 0;
     }
 
+    /***
+     * SortedIterator的clone操作
+     * @return
+     */
     public SortedIterator clone() {
       SortedIterator iter = new SortedIterator(numRecords);
       iter.position = position;

@@ -122,7 +122,14 @@ private[spark] abstract class MemoryManager(
 
   /**
    * Release numBytes of execution memory belonging to the given task.
-   */
+   *
+   *  是否numBytes字节的内存，根据不同的memory mode，调用不同的方法(其实是同一个类的相同方法)
+    *
+   *  这里只是清除记录task使用内存情况的数据结构，并不是具体的物理内存释放操作
+    * @param numBytes
+    * @param taskAttemptId 使用内存的ID
+    * @param memoryMode
+    */
   private[memory]
   def releaseExecutionMemory(
       numBytes: Long,

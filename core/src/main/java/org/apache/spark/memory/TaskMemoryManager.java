@@ -292,8 +292,14 @@ public class TaskMemoryManager {
     }
   }
 
-  /**
+  /***
    * Release N bytes of execution memory for a MemoryConsumer.
+   *
+   * 释放consumer使用的size字节的内存
+   *
+   * @param size
+   * @param mode
+   * @param consumer
    */
   public void releaseExecutionMemory(long size, MemoryMode mode, MemoryConsumer consumer) {
     logger.debug("Task {} release {} from {}", taskAttemptId, Utils.bytesToString(size), consumer);
@@ -395,14 +401,24 @@ public class TaskMemoryManager {
   /**
    * Free a block of memory allocated via {@link TaskMemoryManager#allocatePage}.
     *
-   * 释放一个page
+   * 释放一个内存page
    * @param page
    * @param consumer
    */
   public void freePage(MemoryBlock page, MemoryConsumer consumer) {
+
+    /***
+     * page的pageNumber不能为-1，-1表示该page不是由allocatePage分配的(-1是pageNumber在MemoryBlock中的默认值)
+     */
     assert (page.pageNumber != -1) :
       "Called freePage() on memory that wasn't allocated with allocatePage()";
+
+
     assert(allocatedPages.get(page.pageNumber));
+
+    /***
+     * 向pageTable数组下标为page.pageNumber的元素置为null
+     */
     pageTable[page.pageNumber] = null;
     synchronized (this) {
       allocatedPages.clear(page.pageNumber);
@@ -410,8 +426,20 @@ public class TaskMemoryManager {
     if (logger.isTraceEnabled()) {
       logger.trace("Freed page number {} ({} bytes)", page.pageNumber, page.size());
     }
+
+    /***
+     * 该page对应的内存的实际大小
+     */
     long pageSize = page.size();
+
+    /***
+     * 释放page占用的内存，这个是物理释放
+     */
     memoryManager.tungstenMemoryAllocator().free(page);
+
+    /***
+     * 释放consumer使用的内存
+     */
     releaseExecutionMemory(pageSize, tungstenMemoryMode, consumer);
   }
 

@@ -32,6 +32,10 @@ public class UnsafeMemoryAllocator implements MemoryAllocator {
     return new MemoryBlock(null, address, size);
   }
 
+  /***
+   * r如果是off heap模式，那么调用Platform的freeMemory方法，参数是内存的绝对地址(memory的offset变量记录了绝对地址)
+   * @param memory
+   */
   @Override
   public void free(MemoryBlock memory) {
     assert (memory.obj == null) :

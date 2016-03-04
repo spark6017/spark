@@ -101,10 +101,21 @@ public final class Platform {
     _UNSAFE.putObjectVolatile(object, offset, value);
   }
 
+  /***
+   * 由_UNSAFE分配长度为size字节的内存，返回内存的物理地址
+   * 此时_UNSAFE会记录下该内存地址分配了多少内存，在调用freeMemory时，只需要提供内存的物理地址，UNSAFE就可以完成内存的释放
+   * @param size
+   * @return
+   */
   public static long allocateMemory(long size) {
     return _UNSAFE.allocateMemory(size);
   }
 
+  /***
+   * 问题：给定一个绝对地址，_UNSAFE怎么知道要释放多少字节的内存？
+   * _UNSAFE在allocate内存时应该是有记录的
+   * @param address
+   */
   public static void freeMemory(long address) {
     _UNSAFE.freeMemory(address);
   }

@@ -83,7 +83,12 @@ public final class UnsafeSorterSpillWriter {
     writeBuffer[offset + 7] = (byte)(v >>>  0);
   }
 
-  // Based on DataOutputStream.writeInt.
+  /***
+   * Based on DataOutputStream.writeInt.
+   * @param v
+   * @param offset
+   * @throws IOException
+   */
   private void writeIntToBuffer(int v, int offset) throws IOException {
     writeBuffer[offset + 0] = (byte)(v >>> 24);
     writeBuffer[offset + 1] = (byte)(v >>> 16);

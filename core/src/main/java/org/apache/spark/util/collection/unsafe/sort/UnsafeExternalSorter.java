@@ -210,6 +210,9 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
    *
    * 首先排序然后进行spill
    *
+   * trigger和this可能是同一个对象也可能不是同一个对象，参见TaskMemoryManager#acquireExecutionMemory
+   *
+   *
    * @param size the amount of memory should be released
    * @param trigger the MemoryConsumer that trigger this spilling
    * @return
@@ -217,13 +220,25 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
      */
   @Override
   public long spill(long size, MemoryConsumer trigger) throws IOException {
+
+    /***
+     * 如果trigger和this不是同一个对象，也就是说，是其它的MemoryConsumer触发了本MemoryConsumer的spill操作
+     */
     if (trigger != this) {
+      /***
+       * 调用readingIterator的spill操作，readingIterator是SpillableIterator类型的对象，SpillableIterator是UnsafeExternalSorter的子类，
+       * SpillableIterator重写了UnsafeExternalSorter的spill方法
+       */
       if (readingIterator != null) {
         return readingIterator.spill();
       }
       return 0L; // this should throw exception
     }
 
+    /***
+     * 如果trigger和this是同一个对象，那么如果inMemSorter为空或者inMemSorter的记录数是0，表示该UnsafeExternalSorter还没有
+     * 使用内存，因此也就不用spill
+     */
     if (inMemSorter == null || inMemSorter.numRecords() <= 0) {
       return 0L;
     }
@@ -478,7 +493,10 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
     //如果没有spill，那么调用
     if (spillWriters.isEmpty()) {
       assert(inMemSorter != null);
-      /**UnsafeInMemorySorter的getSortedIterator会完成实际的排序**/
+      /**
+       * UnsafeInMemorySorter的getSortedIterator会完成实际的排序
+       *  将inMemSorter的records包装到SpillableIterator中
+       * **/
       readingIterator = new SpillableIterator(inMemSorter.getSortedIterator());
       return readingIterator;
     } else {
@@ -488,6 +506,9 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
         spillMerger.addSpillIfNotEmpty(spillWriter.getReader(blockManager));
       }
       if (inMemSorter != null) {
+        /***
+         * 将inMemSorter的records包装到SpillableIterator中，那么spill到磁盘时，只要调用readingIterator
+         */
         readingIterator = new SpillableIterator(inMemSorter.getSortedIterator());
         spillMerger.addSpillIfNotEmpty(readingIterator);
       }
@@ -505,6 +526,11 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
     private boolean loaded = false;
     private int numRecords = 0;
 
+    /***
+     * 上游的SortedIterator
+     *
+     * @param inMemIterator
+     */
     public SpillableIterator(UnsafeInMemorySorter.SortedIterator inMemIterator) {
       this.upstream = inMemIterator;
       this.numRecords = inMemIterator.getNumRecords();
@@ -514,6 +540,11 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
       return numRecords;
     }
 
+    /***
+     *
+     * @return 返回spill的字节数
+     * @throws IOException
+     */
     public long spill() throws IOException {
       synchronized (this) {
         if (!(upstream instanceof UnsafeInMemorySorter.SortedIterator && nextUpstream == null
@@ -521,12 +552,10 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
           return 0L;
         }
 
-        UnsafeInMemorySorter.SortedIterator inMemIterator =
-          ((UnsafeInMemorySorter.SortedIterator) upstream).clone();
+        UnsafeInMemorySorter.SortedIterator inMemIterator =   ((UnsafeInMemorySorter.SortedIterator) upstream).clone();
 
         // Iterate over the records that have not been returned and spill them.
-        final UnsafeSorterSpillWriter spillWriter =
-          new UnsafeSorterSpillWriter(blockManager, fileBufferSizeBytes, writeMetrics, numRecords);
+        final UnsafeSorterSpillWriter spillWriter =  new UnsafeSorterSpillWriter(blockManager, fileBufferSizeBytes, writeMetrics, numRecords);
         while (inMemIterator.hasNext()) {
           inMemIterator.loadNext();
           final Object baseObject = inMemIterator.getBaseObject();
@@ -536,6 +565,10 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
         }
         spillWriter.close();
         spillWriters.add(spillWriter);
+
+        /**
+         * 读取下一个upstream？返回UnsafeSorterSpillReader
+         */
         nextUpstream = spillWriter.getReader(blockManager);
 
         long released = 0L;

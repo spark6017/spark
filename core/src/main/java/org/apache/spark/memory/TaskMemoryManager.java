@@ -65,6 +65,9 @@ import org.apache.spark.util.Utils;
  * This allows us to address 8192 pages. In on-heap mode, the maximum page size is limited by the
  * maximum size of a long[] array, allowing us to address 8192 * 2^32 * 8 bytes, which is
  * approximately 35 terabytes of memory.
+ *
+ *
+ * 问题：在TaskMemoryManager中，高13位记录page number，低51位记录offset，那么内存的size怎么判断的？
  */
 public class TaskMemoryManager {
 
@@ -465,17 +468,46 @@ public class TaskMemoryManager {
     return encodePageNumberAndOffset(page.pageNumber, offsetInPage);
   }
 
+  /**
+   * 重点看：
+   * 1. 将pageNumber提到高13位，通过向左移动51位
+   * 2. 将offsetInPage固定在低51位内
+   *
+   *   |-----------13位------------|-----------51位------------|
+   *   |pageNumber                  |offsetInPage                    |
+   *
+   *
+   * @param pageNumber
+   * @param offsetInPage
+   * @return
+   */
   @VisibleForTesting
   public static long encodePageNumberAndOffset(int pageNumber, long offsetInPage) {
     assert (pageNumber != -1) : "encodePageNumberAndOffset called with invalid page";
     return (((long) pageNumber) << OFFSET_BITS) | (offsetInPage & MASK_LONG_LOWER_51_BITS);
   }
 
+  /***
+   *给定一个page+offset构成的long值，解析出page
+   *
+   * 向右移动51位
+   *
+   * 它此处的做法是：首先与高13位进行按位与，将低51位的bit全部清零，然后再向右移动51位
+   * @param pagePlusOffsetAddress
+   * @return
+   */
   @VisibleForTesting
   public static int decodePageNumber(long pagePlusOffsetAddress) {
     return (int) ((pagePlusOffsetAddress & MASK_LONG_UPPER_13_BITS) >>> OFFSET_BITS);
   }
 
+  /***
+   *给定一个page+offset构成的long值，解析出offset in page
+   *
+   * 与低51位的MASK做按位与运算就可以算出pagePlusOffsetAddress的高51位的值
+   * @param pagePlusOffsetAddress
+   * @return
+   */
   private static long decodeOffset(long pagePlusOffsetAddress) {
     return (pagePlusOffsetAddress & MASK_LONG_LOWER_51_BITS);
   }

@@ -126,11 +126,18 @@ private[spark] class UnifiedMemoryManager private[memory] (
       case MemoryMode.ON_HEAP =>
 
         /**
+         *  Execution Memory Pool进行扩容，extraMemoryNeeded就是Execution Memory Pool进行扩容的内存数量
+         *  发生在execution memory不够用的情况下(比如当前剩余100K，而task需要200K，那么就需要进行executor memory的扩容)
+         *
+         *  所谓的库容就是向storage memory借内存
+         *
          * Grow the execution pool by evicting cached blocks, thereby shrinking the storage pool.
          *
          * When acquiring memory for a task, the execution pool may need to make multiple
          * attempts. Each attempt must be able to evict storage in case another task jumps in
          * and caches a large block between the attempts. This is called once per attempt.
+         *
+         *
          */
         def maybeGrowExecutionPool(extraMemoryNeeded: Long): Unit = {
           if (extraMemoryNeeded > 0) {
@@ -138,12 +145,28 @@ private[spark] class UnifiedMemoryManager private[memory] (
             // storage. We can reclaim any free memory from the storage pool. If the storage pool
             // has grown to become larger than `storageRegionSize`, we can evict blocks and reclaim
             // the memory that storage has borrowed from execution.
+
+
+            /** *
+              * 从storage可以借的内存是storage memory的可用内存以及storage从execution借走内存的最大值
+              * 假如当前free storage memory是100M，而借走的execution memory是200M，那么storage memory需要evict以将借走的execution memory归还
+              *
+              */
             val memoryReclaimableFromStorage =
               math.max(storageMemoryPool.memoryFree, storageMemoryPool.poolSize - storageRegionSize)
+
+
+            /** *
+              * 如果可以从storage借内存，实际借走的内存是理论上可借的内存memoryReclaimableFromStorage与实际需要的内存(extraMemoryNeeded)之间的较小者
+              */
             if (memoryReclaimableFromStorage > 0) {
               // Only reclaim as much space as is necessary and available:
               val spaceReclaimed = storageMemoryPool.shrinkPoolToFreeSpace(
                 math.min(extraMemoryNeeded, memoryReclaimableFromStorage))
+
+              /** *
+                * on heap execution memory增加容量，spaceReclaimed是从storage memory借来的
+                */
               onHeapExecutionMemoryPool.incrementPoolSize(spaceReclaimed)
             }
           }
@@ -151,6 +174,8 @@ private[spark] class UnifiedMemoryManager private[memory] (
 
         /**
          * The size the execution pool would have after evicting storage memory.
+         *
+         *  execution从storage借走内存后，execution pool size的最大值
          *
          * The execution memory pool divides this quantity among the active tasks evenly to cap
          * the execution memory allocation for each task. It is important to keep this greater
@@ -161,8 +186,14 @@ private[spark] class UnifiedMemoryManager private[memory] (
          * in execution memory allocation across tasks, Otherwise, a task may occupy more than
          * its fair share of execution memory, mistakenly thinking that other tasks can acquire
          * the portion of storage memory that cannot be evicted.
+         *
+         * 最大execution pool size是maxMemory减去使用的storage memory和storageRegionSize之间的较小者
+         *
+         * storageMemoryUsed为200M，而storageRegionSize是100M，那么将storage借用的100M返还
+         * storageMemoryUsed为50M，而storageRegionSize是200M，那么可以从storage memory借用150M
          */
         def computeMaxExecutionPoolSize(): Long = {
+
           maxMemory - math.min(storageMemoryUsed, storageRegionSize)
         }
 

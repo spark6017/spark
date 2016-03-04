@@ -23,15 +23,25 @@ import org.apache.spark.unsafe.Platform;
 
 /**
  * A consecutive block of memory, starting at a {@link MemoryLocation} with a fixed size.
+ *
+ * MemoryBlock继承自MemoryLocation是非常low的设计，它应该组合MemoryLocation，因为MemoryBlock包含有address+size的信息，因此：
+ * MemoryBlock has a Location，but  it is hard to say that MemoryBlock is a location
+ * MemoryBlock is a Location
  */
 public class MemoryBlock extends MemoryLocation {
 
+  /***
+   * 内存字节数
+   */
   private final long length;
 
   /**
-   * Optional page number; used when this MemoryBlock represents a page allocated by a
-   * TaskMemoryManager. This field is public so that it can be modified by the TaskMemoryManager,
+   * Optional page number;
+   * Used when this MemoryBlock represents a page allocated by a TaskMemoryManager. This field is public so that it can be modified by the TaskMemoryManager,
    * which lives in a different package.
+   *
+   * MemoryBlock也可以当做TaskMemoryManager分配的内存page使用，又一个很low的设计
+   *
    */
   public int pageNumber = -1;
 

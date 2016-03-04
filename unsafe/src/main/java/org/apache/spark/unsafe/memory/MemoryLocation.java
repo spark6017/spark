@@ -22,6 +22,11 @@ import javax.annotation.Nullable;
 /**
  * A memory location. Tracked either by a memory address (with off-heap allocation),
  * or by an offset from a JVM object (in-heap allocation).
+ *
+ * on-heap内存，那么obj代表的是申请的内存空间，通常为字节数组，在这种情况下，offset指的是obj的offset，对于字节数组而言，就是Platform.BYTE_ARRAY_OFFSET
+ * off-heap内存，那么obj为空，offset指的是内存空间的决定地址
+ *
+ * MemoryLocation只指定了内存的地址，但是没有指定内存的size。MemoryLocation这个类名起的正如其名，只有内存的location信息，没有size信息
  */
 public class MemoryLocation {
 

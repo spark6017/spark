@@ -133,10 +133,10 @@ public final class Platform {
 
   /**
    * 复制内存
-   * @param src
-   * @param srcOffset
-   * @param dst
-   * @param dstOffset
+   * @param src 要复制的对象占用的内存空间
+   * @param srcOffset 复制对象对象空间的offset，如果src是字节数组，那么对于字节数组，offset为Platform.BYTE_ARRAY_OFFSET
+   * @param dst 复制对象内存对象空间到目标对象的内存空间
+   * @param dstOffset 复制内存到目标对象的offset
      * @param length
      */
   public static void copyMemory(

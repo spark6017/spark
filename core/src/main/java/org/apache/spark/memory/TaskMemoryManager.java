@@ -67,8 +67,13 @@ import org.apache.spark.util.Utils;
  * approximately 35 terabytes of memory.
  *
  *
- * 问题：在TaskMemoryManager中，高13位记录page number，低51位记录offset，那么内存的size怎么判断的？
- */
+ * 问题：在TaskMemoryManager中，高13位记录page number，低51位记录offset。page number用于定义MemoryBlock(或者page)，而offset则定义了
+ * 数据在MemoryBlock中的offset，那么该数据在MemoryBlock占用多少字节是怎么判断的？
+ *
+ * offset不仅仅记录了数据在MemoryBlock中的偏移量，同时记录了数据的长度，也就是说51位的offset这个long值同时记录了数据的位置以及长度，
+ * 这个逻辑在什么地方？看encodePageNumberAndOffset调用时的逻辑---ShuffleExternalSorter的insertRecord方法
+ *
+ * */
 public class TaskMemoryManager {
 
   private final Logger logger = LoggerFactory.getLogger(TaskMemoryManager.class);

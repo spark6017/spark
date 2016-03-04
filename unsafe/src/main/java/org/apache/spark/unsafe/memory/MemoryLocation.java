@@ -49,6 +49,10 @@ public class MemoryLocation {
     this.offset = newOffset;
   }
 
+  /***
+   * 如果是off heap模式，那么obj为null
+   * @return
+   */
   public final Object getBaseObject() {
     return obj;
   }

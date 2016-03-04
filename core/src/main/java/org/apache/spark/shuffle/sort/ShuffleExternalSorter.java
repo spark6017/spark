@@ -94,6 +94,10 @@ final class ShuffleExternalSorter extends MemoryConsumer {
   // These variables are reset after spilling:
   @Nullable private ShuffleInMemorySorter inMemSorter;
   @Nullable private MemoryBlock currentPage = null;
+
+  /***
+   * pageCursor记录数据在数据页中的位置
+   */
   private long pageCursor = -1;
 
   public ShuffleExternalSorter(
@@ -359,6 +363,13 @@ final class ShuffleExternalSorter extends MemoryConsumer {
 
   /**
    * Write a record to the shuffle sorter.
+   * 将一条数据写入shuffle sorter中
+   *
+   * @param recordBase 所谓的record
+   * @param recordOffset
+   * @param length record的长度
+   * @param partitionId
+   * @throws IOException
    */
   public void insertRecord(Object recordBase, long recordOffset, int length, int partitionId)
     throws IOException {
@@ -375,11 +386,30 @@ final class ShuffleExternalSorter extends MemoryConsumer {
     acquireNewPageIfNecessary(required);
 
     assert(currentPage != null);
+
+    /***
+     *  如果base是个null，该当如何？
+     */
     final Object base = currentPage.getBaseObject();
+
+    /***
+     *  pageCursor是数据在MemoryBlock中的偏移量
+     */
     final long recordAddress = taskMemoryManager.encodePageNumberAndOffset(currentPage, pageCursor);
+
+    /**
+     * 在pageCursor处首先写入4个字节的数据长度信息
+     */
     Platform.putInt(base, pageCursor, length);
+
     pageCursor += 4;
+
+    /***
+     *  将recordBase和recordOffset复制到base+pageCursor处，拷贝的长度是length
+     */
     Platform.copyMemory(recordBase, recordOffset, base, pageCursor, length);
+
+    //移动pageCursor
     pageCursor += length;
     inMemSorter.insertRecord(recordAddress, partitionId);
   }

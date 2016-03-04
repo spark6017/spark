@@ -29,6 +29,9 @@ import org.apache.spark.unsafe.Platform;
  * A simple {@link MemoryAllocator} that can allocate up to 16GB using a JVM long primitive array.
  *
  * In on-heap mode, memory addresses are identified by the combination of a base Object and an offset within that object
+ *
+ * 负责堆上内存的申请与释放，申请的内存包装成MemoryBlock，释放时也以MemoryBlock为参数
+ * MemoryBlock记录了memory的绝对地址(off heap模式)或者on heap对象以及对象内的偏移量(on heap模式)
  */
 public class HeapMemoryAllocator implements MemoryAllocator {
 
@@ -45,14 +48,27 @@ public class HeapMemoryAllocator implements MemoryAllocator {
   /**
    * Returns true if allocations of the given size should go through the pooling mechanism and
    * false otherwise.
+   *
+   *
    */
   private boolean shouldPool(long size) {
     // Very small allocations are less likely to benefit from pooling.
     return size >= POOLING_THRESHOLD_BYTES;
   }
 
+  /***
+   * 在堆上内存分配size字节的内存,size字节是有限制的
+   * @param size
+   * @return
+   * @throws OutOfMemoryError
+   */
   @Override
   public MemoryBlock allocate(long size) throws OutOfMemoryError {
+
+    /***
+     * 首先从内存池里获取满足条件的内存，
+     * free内存时，bufferPoolsBySize会记录释放的内存
+     */
     if (shouldPool(size)) {
       synchronized (this) {
         final LinkedList<WeakReference<MemoryBlock>> pool = bufferPoolsBySize.get(size);
@@ -69,6 +85,14 @@ public class HeapMemoryAllocator implements MemoryAllocator {
         }
       }
     }
+
+    /***
+     * 因为(size + 7)/8是整数，因此对size有大小限制， (size + 7) /8 <= 2^32 - 1
+     *
+     * 加入分配8个字节，那么array是长度为1的数组；如果是10个字节，那么将array是长度为2的数组，8个字节对齐
+     * 如果分配24个字节，那么array是长度为3的数组；如果是30个字节，那让array是长度为4的数组，8个字节对齐
+     * 所以，这里通过创建long数组完成分配内存空间，或者说，申请内存空间的过程就是创建long数组的过程，实际分配的字节数是8对齐的
+     */
     long[] array = new long[(int) ((size + 7) / 8)];
     return new MemoryBlock(array, Platform.LONG_ARRAY_OFFSET, size);
   }

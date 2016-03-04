@@ -42,6 +42,8 @@ public class MemoryBlock extends MemoryLocation {
    *
    * MemoryBlock也可以当做TaskMemoryManager分配的内存page使用，又一个很low的设计
    *
+   * 这里把MemoryBlock用做一个内存page， pageNumber记录了TaskMemoryManager持有的MemoryBlock集合的下标
+   *
    */
   public int pageNumber = -1;
 

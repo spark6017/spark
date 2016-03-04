@@ -17,6 +17,12 @@
 
 package org.apache.spark.unsafe.memory;
 
+
+/***
+ * 负责内存申请与释放，申请的内存包装为MemoryBlock，释放时也以MemoryBlock为参数
+ * 在Tungsten内存管理中，内存分为on heap和off heap模式，通过Memory Block将二者联系起来
+ * 同时，MemoryBlock在TaskMemoryManager也当做page使用，一个page就是内存空间，最大16G
+ */
 public interface MemoryAllocator {
 
   /**

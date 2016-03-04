@@ -37,12 +37,18 @@ import org.apache.spark.storage.BlockId
  *
  *  第三点：execution memory和storage memory交互之execution借用storage内存的策略
  *
+ *  Storage可以借用execution所有空闲的内存。当execution收回它借用的内存时，storage的空闲内存不足以将借用的内存归还，
+ *  那么Storage会进行内存evict直到execution请求的内存得到满足。
+ *  问题：如果Storage借用了500M，而Execution向Storage请求800M(storage必须归还向execution借用的500M内存，在内存不够的情况下是否优先满足execution？)
+ *
  * Storage can borrow as much execution memory as is free until execution reclaims its space.
  * When this happens, cached blocks will be evicted from memory until sufficient borrowed
  * memory is released to satisfy the execution memory request.
  *
  *
- * 第三点：execution memory和storage memory交互之storage借用execution内存的策略
+ * 第四点：execution memory和storage memory交互之execution借用storage内存的策略
+ * execution可以向storage借用所有空闲的内存，但是storage要求execution归还的内存而execution的内存吃紧时，execution不会evict 它的内存
+ * 也就是说，当execution借用了storage大部分内存时，storage用于缓存的功能会受到很大影响(问题：storage 会进行老的cached block擦除吗？)
  *
  * Similarly, execution can borrow as much storage memory as is free. However, execution
  * memory is *never* evicted by storage due to the complexities involved in implementing this.
@@ -51,13 +57,14 @@ import org.apache.spark.storage.BlockId
  * according to their respective storage levels.
  *
  *
- *
- *
+ * @param conf
+ * @param maxMemory
  * @param storageRegionSize Size of the storage region, in bytes.
  *                          This region is not statically reserved; execution can borrow from
  *                          it if necessary. Cached blocks can be evicted only if actual
  *                          storage memory usage exceeds this region.
- */
+  * @param numCores 并行度，并行的Task共享内存，也就是说每个Task的可用内存是有限制的
+  */
 private[spark] class UnifiedMemoryManager private[memory] (
     conf: SparkConf,
     val maxMemory: Long,
@@ -66,7 +73,7 @@ private[spark] class UnifiedMemoryManager private[memory] (
   extends MemoryManager(
     conf,
     numCores,
-    storageRegionSize,
+    storageRegionSize, /**storage memory的size，Region是什么概念**/
     maxMemory - storageRegionSize) { /**MemoryManager的onHeapExecutionMemory=maxMemory - storageRegionSize*/
 
   // We always maintain this invariant:
@@ -75,7 +82,9 @@ private[spark] class UnifiedMemoryManager private[memory] (
   /** *
     * 这是一个方法，每次调用都会进行计算
     * 统一内存管理下，最大可用的存储内存是本Executor的最大可用内存-执行内存的使用量
-    * 也就是是说，最大存储内存是所有的内存减去execution memory
+    * 也就是是说，最大存储内存是所有的内存减去execution memory。
+    * 问题：为什么可以计算max storage memory而不可以计算max execution memory？原因是只要execution的内存使用了就不能给storage使用
+    * 而execution memory则不然，它可以向storage借用(storage不足，那么可以进行evict。从理论上说，execution memory的最大值就是maxMemory)
     * @return
     */
   override def maxStorageMemory: Long = synchronized {
@@ -83,20 +92,36 @@ private[spark] class UnifiedMemoryManager private[memory] (
   }
 
   /**
+   * 【尝试】向execution 申请numBytes字节的memory，申请execution memory需要有一个taskAttemptId表示申请execution memory的Task
+   * 注意：与acquireStorageMemory返回boolean(要么申请成功或者申请失败，这是All or Nothing的语义)不同，
+   * acquireExecutionMemory返回的是long，表示实际申请的字节数；返回值在0到numBytes之间
+   *
+   *
    * Try to acquire up to `numBytes` of execution memory for the current task and return the
    * number of bytes obtained, or 0 if none can be allocated.
+   *
+   *  每个Task都有机会申请到1/(2*N)*maxPoolSize的内存
    *
    * This call may block until there is enough free memory in some situations, to make sure each
    * task has a chance to ramp up to at least 1 / 2N of the total memory pool (where N is the # of
    * active tasks) before it is forced to spill. This can happen if the number of tasks increase
    * but an older task had a lot of memory already.
-   */
+
+    * @param numBytes
+    * @param taskAttemptId
+    * @param memoryMode 用于区分是on heap execution memory还是off heap execution memory
+    * @return
+    */
   override private[memory] def acquireExecutionMemory(
       numBytes: Long,
       taskAttemptId: Long,
       memoryMode: MemoryMode): Long = synchronized {
     assert(onHeapExecutionMemoryPool.poolSize + storageMemoryPool.poolSize == maxMemory)
     assert(numBytes >= 0)
+
+    /** *
+      * 根据不同的memory mode进行处理（分ON_HEAP和OFF_HEAP）
+      */
     memoryMode match {
       case MemoryMode.ON_HEAP =>
 
@@ -141,32 +166,46 @@ private[spark] class UnifiedMemoryManager private[memory] (
           maxMemory - math.min(storageMemoryUsed, storageRegionSize)
         }
 
+        /** *
+          * 调用on heap execution memory pool的acquireMemory方法
+          */
         onHeapExecutionMemoryPool.acquireMemory(
           numBytes, taskAttemptId, maybeGrowExecutionPool, computeMaxExecutionPoolSize)
 
+      /** *
+        * 如果是OFF_HEAP模式，那么调用off heap execution memory pool的acquireMemory方法
+        */
       case MemoryMode.OFF_HEAP =>
         // For now, we only support on-heap caching of data, so we do not need to interact with
         // the storage pool when allocating off-heap memory. This will change in the future, though.
+        /** *
+          * 因为目前支持在堆上缓存数据，因此在off heap模式下不需要与storage pool打交道
+          */
         offHeapExecutionMemoryPool.acquireMemory(numBytes, taskAttemptId)
     }
   }
 
   /** *
+    * 向storage memory申请内存
+    * 如果free storage memory + free execution memory < numBytes，那么storage memory需要evict
     *
     * @param blockId 要放到内存的BlockId
-    * @param numBytes 要放到内存的字节数？还是要向StorageMemory借用的内存数？是要存放到storage memory的字节数
+    * @param numBytes 要存放到storage memory的字节数
     * @return whether all N bytes were successfully granted.
     */
   override def acquireStorageMemory(blockId: BlockId, numBytes: Long): Boolean = synchronized {
-    //保证堆上的Shuffle内存容量+RDD内存存储容量=maxMemory
+
+    /** *
+      * 时刻保证on heap execution memory  pool size + storage memory pool size = max memory
+      */
     assert(onHeapExecutionMemoryPool.poolSize + storageMemoryPool.poolSize == maxMemory)
     assert(numBytes >= 0)
 
     /**
-     * 如果要存放的内存大于最大存储内存，那么即使借光执行内存的空间也放不下，因此立即失败，
+     * 如果要存放的字节数大于storage memory最大可用值(最大可用值包括了storage可以向execution可用的内存)，因此立即失败，
      * 这是一种判断是否应该立即失败的策略，无需判断其它条件
      * 问题：
-     * maxStorageMemory是怎么计算的？
+     * maxStorageMemory是怎么计算的？答：最大内存 - execution使用的内存
      */
     if (numBytes > maxStorageMemory) {
       // Fail fast if the block simply won't fit
@@ -176,16 +215,24 @@ private[spark] class UnifiedMemoryManager private[memory] (
     }
 
     /** *
-      * 如果需要的内存容量(numBytes)大于当前可用的存储内存量，那么尝试从execution memory借用内存
+      * 判断条件1：
+      * 如果需要的内存量(numBytes)大于storage当前可用的存储内存量，那么从execution memory借用内存，
+      * 问题1：
+      * 借用多少？ Math.min(onHeapExecutionMemoryPool.memoryFree, numBytes),意思是说，如果numBytes < onHeapExecutionMemoryPool.memoryFree,那么
+      * 将向execution借用numByte字节(此时storage 的free memory继续空闲)
+      * 比如，free storage memory为100M，free execution memory为1000M，numBytes为300M，那么向execution借用300M，storage为block分配300M后，
+      * 仍然保留100M空闲空间
+      *
+      *
       * 问题：借用多少？
       */
     if (numBytes > storageMemoryPool.memoryFree) {
       // There is not enough free memory in the storage pool, so try to borrow free memory from
       // the execution pool.
-      // memoryBorrowedFromExecution记录了从on heap execution memory借用的内存量
+      // memoryBorrowedFromExecution记录了要从on heap execution memory借用的内存量
       // memoryBorrowedFromExecution的值是on heap execution memory和numBytes的最小值
       // 如果on heap execution memory小，表示on heap execution memory全部被借完
-      // 如果numBytes小，那么从on heap execution memory借用numBytes字节，在这种情况下，storage memory原来剩下可用的可以不用(因为借用的就满足需求了)
+      // 如果numBytes小，那么从on heap execution memory借用numBytes字节，在这种情况下，storage memory原来剩下可用的继续空闲(因为借用的就满足需求了)
       //
       val memoryBorrowedFromExecution = Math.min(onHeapExecutionMemoryPool.memoryFree, numBytes)
 
@@ -203,6 +250,7 @@ private[spark] class UnifiedMemoryManager private[memory] (
 
     /***
       * 如果一开始storage memory的可用容量小于numBytes，那么storageMemoryPool此时增加了memoryBorrowedFromExecution字节
+      *
       */
     storageMemoryPool.acquireMemory(blockId, numBytes)
   }

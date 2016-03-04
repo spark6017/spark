@@ -101,6 +101,7 @@ public class TaskMemoryManager {
   public static final long MAXIMUM_PAGE_SIZE_BYTES = ((1L << 31) - 1) * 8L;
 
   /** Bit mask for the lower 51 bits of a long. ,低51位
+   *
    * */
   private static final long MASK_LONG_LOWER_51_BITS = 0x7FFFFFFFFFFFFL;
 

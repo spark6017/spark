@@ -21,23 +21,37 @@ import org.apache.spark.SparkConf
 import org.apache.spark.storage.BlockId
 
 /**
+ *
+ *  第一点： 统一内存管理器的含义和动机
+ *  统一内存管理器抹掉了StaticMemoryManager的execution和storage memory明确的边界
  * A [[MemoryManager]] that enforces a soft boundary between execution and storage such that
  * either side can borrow memory from the other.
+ *
+ * 第二点：统一内存的可用内存量
+ * execution和storage总共的可用内存是总内存-300MB；然后剩下的内存乘以75%
  *
  * The region shared between execution and storage is a fraction of (the total heap space - 300MB)
  * configurable through `spark.memory.fraction` (default 0.75). The position of the boundary
  * within this space is further determined by `spark.memory.storageFraction` (default 0.5).
  * This means the size of the storage region is 0.75 * 0.5 = 0.375 of the heap space by default.
  *
+ *  第三点：execution memory和storage memory交互之execution借用storage内存的策略
+ *
  * Storage can borrow as much execution memory as is free until execution reclaims its space.
  * When this happens, cached blocks will be evicted from memory until sufficient borrowed
  * memory is released to satisfy the execution memory request.
+ *
+ *
+ * 第三点：execution memory和storage memory交互之storage借用execution内存的策略
  *
  * Similarly, execution can borrow as much storage memory as is free. However, execution
  * memory is *never* evicted by storage due to the complexities involved in implementing this.
  * The implication is that attempts to cache blocks may fail if execution has already eaten
  * up most of the storage space, in which case the new blocks will be evicted immediately
  * according to their respective storage levels.
+ *
+ *
+ *
  *
  * @param storageRegionSize Size of the storage region, in bytes.
  *                          This region is not statically reserved; execution can borrow from

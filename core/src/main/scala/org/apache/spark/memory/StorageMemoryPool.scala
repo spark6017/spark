@@ -38,6 +38,7 @@ private[memory] class StorageMemoryPool(lock: Object) extends MemoryPool(lock) w
   }
 
   private var _memoryStore: MemoryStore = _
+
   def memoryStore: MemoryStore = {
     if (_memoryStore == null) {
       throw new IllegalStateException("memory store not initialized yet")
@@ -56,7 +57,7 @@ private[memory] class StorageMemoryPool(lock: Object) extends MemoryPool(lock) w
   /***
     * Acquire N bytes of memory to cache the given block, evicting existing ones if necessary.
     *
-    * 代码运行到此处，该借的内存已经借了，但是可能依然不够
+    *  对于static memory manager而言，是申请storage memory
     *
     * @param blockId
     * @param numBytes
@@ -65,7 +66,7 @@ private[memory] class StorageMemoryPool(lock: Object) extends MemoryPool(lock) w
   def acquireMemory(blockId: BlockId, numBytes: Long): Boolean = lock.synchronized {
 
     /***
-      * 需要释放内存的字节数，如果numBytes - memoryFree > 0表示借完on heap execution的内存后storage memory依然不够存放numBytes
+      * 需要释放内存的字节数，如果numBytes - memoryFree > 0表示申请的内存大于剩余的内存，因此需要进行storage memory的evict
       */
     val numBytesToFree = math.max(0, numBytes - memoryFree)
 
@@ -78,9 +79,11 @@ private[memory] class StorageMemoryPool(lock: Object) extends MemoryPool(lock) w
   /**
    * Acquire N bytes of storage memory for the given block, evicting existing ones if necessary.
    *
-   * @param blockId the ID of the block we are acquiring storage memory for
-   * @param numBytesToAcquire the size of this block
-   * @param numBytesToFree the amount of space to be freed through evicting blocks(需要storage memory释放numBytesToFree字节的内存)
+   * 申请内存，如果可用内存不够分配(numBytesToFree > 0)，那么需要进行evict memory。如果释放内存还不足以放下，将发生OOM？
+   *
+   * @param blockId the ID of the block we are acquiring storage memory for 申请内存的blockId，比如RDD、Broadcast
+   * @param numBytesToAcquire the size of this block 申请的内存数
+   * @param numBytesToFree the amount of space to be freed through evicting blocks(需要storage memory释放numBytesToFree字节的内存，如果是0表示不用释放)
    * @return whether all N bytes were successfully granted.
    */
   def acquireMemory(
@@ -95,12 +98,18 @@ private[memory] class StorageMemoryPool(lock: Object) extends MemoryPool(lock) w
       * 如果需要释放的内存字节数大于0，那么调用memoryStore.evictBlocksToFreeSpace执行实际的擦除操作,擦除操作执行后会更新_memoryUsed变量
       */
     if (numBytesToFree > 0) {
+      /** *
+        * 调用memoryStorage的evictBlocksToFreeSpace方法
+        * 问题：memoryStore是BlockManager管理的内存存储空间，为什么StorageMemoryPool也会持有一个memoryStorage
+        */
       memoryStore.evictBlocksToFreeSpace(Some(blockId), numBytesToFree)
     }
     // NOTE: If the memory store evicts blocks, then those evictions will synchronously call
     // back into this StorageMemoryPool in order to free memory. Therefore, these variables
     // should have been updated.
-    //如果此时的可用内存(memoryFree)大于等于numBytesToAcquire，表示可以放下，返回true，否则返回false
+      /**
+       *  如果此时的可用内存(memoryFree)大于等于numBytesToAcquire，表示可以为blockId分配内存空间，因此返回true，否则返回false
+       */
     val enoughMemory = numBytesToAcquire <= memoryFree
 
     //如果内存足够，表示要将numBytesToAcquire写入内存，更新_memoryUsed变量

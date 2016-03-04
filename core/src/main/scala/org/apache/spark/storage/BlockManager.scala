@@ -89,8 +89,17 @@ private[spark] class BlockManager(
     ThreadUtils.newDaemonCachedThreadPool("block-manager-future", 128))
 
   // Actual storage of where blocks are kept
+  /** *
+    * 构造MemoryStore时，传入MemoryStore
+    */
   private[spark] val memoryStore = new MemoryStore(this, memoryManager)
   private[spark] val diskStore = new DiskStore(this, diskBlockManager)
+
+  /** *
+    * 为MemoryManager设置MemoryStore，
+    * 因为每个JVM进程只有一个BlockManager，而每个JVM也只有一个MemoryStorage，
+    * 因此MemoryManager和BlockManager是1:1对应的
+    */
   memoryManager.setMemoryStore(memoryStore)
 
   // Note: depending on the memory manager, `maxStorageMemory` may actually vary over time.

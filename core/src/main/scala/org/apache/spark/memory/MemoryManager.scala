@@ -27,10 +27,21 @@ import org.apache.spark.unsafe.memory.MemoryAllocator
 /**
  * An abstract memory manager that enforces how memory is shared between execution and storage.
  *
+ *  决定execution memory和storage memory共享模式的内存管理器
+ *  execution memory指的是Task在运行过程中用到的shuffle、join、sort和Aggregation，它们在计算过程中会使用内存作为buffer
+ *  storage memory指的是用于缓存的内存，包括RDD cache、broadcast数据以及任务分发所用到的内存
+ *
+ *  注意：每个JVM只有一个内存管理器，因为Executor是内存的实际使用者，也就是说，每个Executor有唯一一个MemoryManager，称为ExecutorMemoryManager
+ *
  * In this context, execution memory refers to that used for computation in shuffles, joins,
  * sorts and aggregations, while storage memory refers to that used for caching and propagating
  * internal data across the cluster. There exists one MemoryManager per JVM.
- */
+  *
+  * @param conf
+  * @param numCores 并行度，并行的Task共享内存，也就是说每个Task的可用内存是有限制的
+  * @param storageMemory 存储用的内存大小
+  * @param onHeapExecutionMemory 构造MemoryManager时，传入的是堆上的executionMemory大小(问题：execution memory是否可以是堆外内存？)
+  */
 private[spark] abstract class MemoryManager(
     conf: SparkConf,
     numCores: Int,

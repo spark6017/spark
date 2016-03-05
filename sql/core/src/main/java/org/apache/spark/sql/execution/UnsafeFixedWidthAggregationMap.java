@@ -46,6 +46,8 @@ public final class UnsafeFixedWidthAggregationMap {
   /**
    * An empty aggregation buffer, encoded in UnsafeRow format. When inserting a new key into the
    * map, we copy this buffer and use it as the value.
+   *
+   * emptyAggregationBuffer是一个未初始化的bytes数组，因为是final的，因此它唯一的初始化位置是构造函数
    */
   private final byte[] emptyAggregationBuffer;
 
@@ -134,6 +136,10 @@ public final class UnsafeFixedWidthAggregationMap {
 
     // Initialize the buffer for aggregation value
     final UnsafeProjection valueProjection = UnsafeProjection.create(aggregationBufferSchema);
+
+    /***
+     * 初始化空的aggregation buffer
+     */
     this.emptyAggregationBuffer = valueProjection.apply(emptyAggregationBuffer).getBytes();
   }
 
@@ -149,20 +155,36 @@ public final class UnsafeFixedWidthAggregationMap {
   }
 
     /***
-     * 从Unsafe Grouping Key Row到UnsafeRow
-     * @param unsafeGroupingKeyRow
-     * @return
+     * 根据Grouping Key(由Unsafe Row表示)得到其对应的Aggregation Buffer(也是由Unsafe Row表示)
+     * @param unsafeGroupingKeyRow grouping key对应的UnsafeRow
+     * @return grouping key在map中对应的aggregation buffer(由UnsafeRow表示)
      */
   public UnsafeRow getAggregationBufferFromUnsafeRow(UnsafeRow unsafeGroupingKeyRow) {
     // Probe our map using the serialized key
 
+    /**
+     * 因为grouping key是一个UnsafeRow，所以可以获取UnsafeRow能够获取的一切信息，包括baseObject、baseOffset、sizeInBytes
+     */
     Object baseObject =  unsafeGroupingKeyRow.getBaseObject();
     long baseOffset = unsafeGroupingKeyRow.getBaseOffset();
     int sizeInBytes = unsafeGroupingKeyRow.getSizeInBytes();
+
+    /***
+     * 根据baseObject、baseOffset和sizeInBytes获取一个BytesToBytesMap.Location对象，
+     * 注意：map是BytesToBytesMap类型的，也就是说，UnsafeFixedWidthAggregationMap底层使用BytesToBytesMap完成操作
+     */
     final BytesToBytesMap.Location loc = map.lookup(baseObject,baseOffset, sizeInBytes);
+
+
+    /***
+     * 如果grouping key在BytesToBytesMap中没有定义
+     */
     if (!loc.isDefined()) {
       // This is the first time that we've seen this grouping key, so we'll insert a copy of the
       // empty aggregation buffer into the map:
+      /***
+       * 首先插入一个空的aggregation buffer(UnsafeRow)，下面将值写入
+       */
       boolean putSucceeded = loc.putNewKey(baseObject, baseOffset, sizeInBytes, emptyAggregationBuffer, Platform.BYTE_ARRAY_OFFSET, emptyAggregationBuffer.length);
       //如果插入失败，表示没有足够的内存了
       if (!putSucceeded) {
@@ -170,12 +192,21 @@ public final class UnsafeFixedWidthAggregationMap {
       }
     }
 
-    // Reset the pointer to point to the value that we just stored or looked up:
+    /***
+     * Reset the pointer to point to the value that we just stored or looked up:
+     * currentAggregationBuffer指向value的地址(这里的value就是aggregate buffer对应得到UnsafeRow，因为aggregate buffer是fixed width的，因此可以进行修改
+     * 而无需修改数据的长度)
+     *
+     */
     final MemoryLocation address = loc.getValueAddress();
     baseObject = address.getBaseObject();
     baseOffset = address.getBaseOffset();
     int valueLength = loc.getValueLength();
     currentAggregationBuffer.pointTo(baseObject, baseOffset, valueLength);
+
+    /***
+     * currentAggregationBuffer作为getAggregationBufferFromUnsafeRow的返回值，目前并没有对他进行update，这个应该是在方法之外进行操作
+     */
     return currentAggregationBuffer;
   }
 

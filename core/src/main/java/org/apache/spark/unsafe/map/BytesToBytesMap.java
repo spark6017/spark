@@ -414,7 +414,14 @@ public final class BytesToBytesMap extends MemoryConsumer {
    * Looks up a key, and return a {@link Location} handle that can be used to test existence
    * and read/write values.
    *
+   * lookup方法是针对Key这个UnsafeRow(在UnsafeFixedWidthAggregationMap中，key就是grouping key对应的unsafe row的baseObject、baseOffset信息)
+   *
    * This function always return the same {@link Location} instance to avoid object allocation.
+   *
+   * @param keyBase
+   * @param keyOffset
+   * @param keyLength
+   * @return
    */
   public Location lookup(Object keyBase, long keyOffset, int keyLength) {
     safeLookup(keyBase, keyOffset, keyLength, loc);
@@ -425,6 +432,11 @@ public final class BytesToBytesMap extends MemoryConsumer {
    * Looks up a key, and saves the result in provided `loc`.
    *
    * This is a thread-safe version of `lookup`, could be used by multiple threads.
+   *
+   * @param keyBase
+   * @param keyOffset
+   * @param keyLength
+   * @param loc
    */
   public void safeLookup(Object keyBase, long keyOffset, int keyLength, Location loc) {
     assert(longArray != null);
@@ -432,6 +444,10 @@ public final class BytesToBytesMap extends MemoryConsumer {
     if (enablePerfMetrics) {
       numKeyLookups++;
     }
+
+    /***
+     * 求hashcode值
+     */
     final int hashcode = HASHER.hashUnsafeWords(keyBase, keyOffset, keyLength);
     int pos = hashcode & mask;
     int step = 1;
@@ -638,8 +654,7 @@ public final class BytesToBytesMap extends MemoryConsumer {
      * @return true if the put() was successful and false if the put() failed because memory could
      *         not be acquired.
      */
-    public boolean putNewKey(Object keyBase, long keyOffset, int keyLength,
-        Object valueBase, long valueOffset, int valueLength) {
+    public boolean putNewKey(Object keyBase, long keyOffset, int keyLength,  Object valueBase, long valueOffset, int valueLength) {
       assert (!isDefined) : "Can only set value once for a key";
       assert (keyLength % 8 == 0);
       assert (valueLength % 8 == 0);

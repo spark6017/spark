@@ -281,6 +281,10 @@ class TungstenAggregationIterator(
             throw new OutOfMemoryError("No enough memory for aggregation")
           }
         }
+
+        /** *
+          * 得到buffer(还没有使用newInput进行聚合更新)之后，调用processRow使用newInput对buffer进行更新
+          */
         processRow(buffer, newInput)
         i += 1
       }

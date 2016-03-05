@@ -365,6 +365,9 @@ private[sql] case class CollapseCodegenStages(sqlContext: SQLContext) extends Ru
       // the generated code will be huge if there are too many columns
       val haveManyColumns = plan.output.length > 200
       !willFallback && !haveManyColumns
+
+      //Disable WholeStageCodegen operator for now
+      false
     case _ => false
   }
 

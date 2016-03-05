@@ -71,8 +71,12 @@ public final class UnsafeKVExternalSorter {
   }
 
   /***
+   * 因为Key和Value都是UnsafeRow，所有Key和Value都有Schema信息(StructType类型)。对于使用UnsafeFixedWidthAggregationMap的TungstenAggregate来说，
+   * keySchema就是grouping key的schema，valueSchema就是aggregation buffer的schema，它们都是Unsafe Row
    *
-   * @param keySchema 因为Key和Value都是UnsafeRow，所有Key和Value都有Schema信息(StructType类型)
+   * UnsafeKVExternalSorter的功能之一是排序，它是对Key这个Unsafe Row进行排序
+   *
+   * @param keySchema
    * @param valueSchema
    * @param blockManager
    * @param pageSizeBytes
@@ -89,9 +93,26 @@ public final class UnsafeKVExternalSorter {
     this.valueSchema = valueSchema;
     final TaskContext taskContext = TaskContext.get();
 
+    /**
+     * 对Key进行排序，获取Key对应的Prefix Computer(类型为UnsafeExternalRowSorter.PrefixComputer)
+     * 根据keySchema的第一列获取Prefix Computer
+     *
+     */
     prefixComputer = SortPrefixUtils.createPrefixGenerator(keySchema);
+
+    /***
+     *根据keySchema的第一列获取PrefixComparator
+     */
     PrefixComparator prefixComparator = SortPrefixUtils.getPrefixComparator(keySchema);
+
+    /**
+     *
+     */
     BaseOrdering ordering = GenerateOrdering.create(keySchema);
+
+    /***
+     * 创建KVComparator
+     */
     KVComparator recordComparator = new KVComparator(ordering, keySchema.length());
 
     TaskMemoryManager taskMemoryManager = taskContext.taskMemoryManager();
@@ -109,13 +130,21 @@ public final class UnsafeKVExternalSorter {
         prefixComparator,
         /* initialSize */ 4096,
         pageSizeBytes);
-    } else {
-      //如果创建一个UnsafeInMemorySorter
+    }
+
+    /***
+     *  如果map不为空，那么借用map进行内存内排序？
+     */
+    else {
       // During spilling, the array in map will not be used, so we can borrow that and use it
       // as the underline array for in-memory sorter (it's always large enough).
       // Since we will not grow the array, it's fine to pass `null` as consumer.
-      final UnsafeInMemorySorter inMemSorter = new UnsafeInMemorySorter(
-        null, taskMemoryManager, recordComparator, prefixComparator, map.getArray());
+      /***
+       * 使用map对应的array进行内存内排序，
+       * 问题：构造UnsafeInMemorySorter时，是否对数据进行了排序？排序的数据放在哪里？
+       * 答：数据存放在map中，构造UnsafeInMemorySorter时没有进行排序操作
+       */
+      final UnsafeInMemorySorter inMemSorter = new UnsafeInMemorySorter(null, taskMemoryManager, recordComparator, prefixComparator, map.getArray());
 
       // We cannot use the destructive iterator here because we are reusing the existing memory
       // pages in BytesToBytesMap to hold records during sorting.
@@ -123,6 +152,10 @@ public final class UnsafeKVExternalSorter {
       BytesToBytesMap.MapIterator iter = map.iterator();
       final int numKeyFields = keySchema.size();
       UnsafeRow row = new UnsafeRow(numKeyFields);
+
+      /***
+       * 遍历map中的数据，做什么操作？
+       */
       while (iter.hasNext()) {
         final BytesToBytesMap.Location loc = iter.next();
         final Object baseObject = loc.getKeyAddress().getBaseObject();
@@ -138,11 +171,15 @@ public final class UnsafeKVExternalSorter {
         row.pointTo(baseObject, baseOffset, loc.getKeyLength());
         final long prefix = prefixComputer.computePrefix(row);
 
+        /***
+         * 向array中写入数据？
+         */
         inMemSorter.insertRecord(address, prefix);
       }
 
       /***
-       * 内存内排好序后，调用createWithExistingInMemorySorter创建UnsafeExternalSorter，传入inMemSorter
+       * createWithExistingInMemorySorter创建UnsafeExternalSorter，传入inMemSorter
+       * 此时inMemSorter中的数据还没有排序
        */
       sorter = UnsafeExternalSorter.createWithExistingInMemorySorter(
         taskMemoryManager,

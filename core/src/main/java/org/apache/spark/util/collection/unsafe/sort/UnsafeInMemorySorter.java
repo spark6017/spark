@@ -150,12 +150,14 @@ public final class UnsafeInMemorySorter {
   }
 
   /***
+   * 基于LongArray进行内存排序
    *
+   * 构造UnsafeInMemorySorter还没有进行排序
    * @param consumer
    * @param memoryManager
    * @param recordComparator
    * @param prefixComparator
-     * @param array 内存LongArray
+     * @param array LongArray，UnsafeKVExternalSorter持有的BytesToBytesMap通过调用toArray可以得到LongArray
      */
   public UnsafeInMemorySorter(
     final MemoryConsumer consumer,
@@ -310,6 +312,8 @@ public final class UnsafeInMemorySorter {
   /**
    * Return an iterator over record pointers in sorted order. For efficiency, all calls to
    * {@code next()} will return the same mutable object.
+   *
+   * 调用getSortedIterator对持有的LongArray进行排序
    */
   public SortedIterator getSortedIterator() {
     if (sorter != null) {

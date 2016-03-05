@@ -223,6 +223,9 @@ public final class BytesToBytesMap extends MemoryConsumer {
    */
   public int numElements() { return numElements; }
 
+  /***
+   * 实现了Iterator的迭代器，集合中的每个元素是一个Location
+   */
   public final class MapIterator implements Iterator<Location> {
 
     private int numRecords;

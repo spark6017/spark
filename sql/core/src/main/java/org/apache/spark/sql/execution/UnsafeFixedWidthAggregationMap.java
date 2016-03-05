@@ -304,6 +304,14 @@ public final class UnsafeFixedWidthAggregationMap {
     org.apache.spark.storage.BlockManager  blockManager = SparkEnv.get().blockManager();
     long pageSizeBytes =  map.getPageSizeBytes();
 
+    /***
+     * 在UnsafeKVExternalSorter的构造函数中做了大量的事情，对于UnsafeFixedWidthAggregationMap而言，它要处理的是grouping key和aggregation buffer两个
+     * Unsafe Row对应关系问题，因此，对它而言，它需要的是KV类型的External Sorter(K是grouping key，V是aggregation buffer)
+     *
+     * UnsafeKVExternalSorter构造函数的第一个参数和第二个参数分别是K的schema和V的schema，这里传入的是grouping key的schema和aggregation buffer的schema
+     *
+     * 问题：因为构造UnsafeKVExternalSorter时传入了非空的map，那么排序是在map上进行然后再spill到磁盘？
+     */
     UnsafeKVExternalSorter sorter =  new UnsafeKVExternalSorter(groupingKeySchema, aggregationBufferSchema,blockManager, pageSizeBytes, map);
     return sorter;
   }

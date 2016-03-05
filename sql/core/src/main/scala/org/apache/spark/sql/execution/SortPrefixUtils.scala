@@ -80,18 +80,33 @@ object SortPrefixUtils {
 
   /**
    * Creates the prefix computer for the first field in the given schema, in ascending order.
-   */
+   *
+   * 根据Schema获取PrefixComputer
+   *
+   * 问题：如果Schema有多个列，那么究竟根据那个列计算PrefixComputer？答：根据schema指定的第一列
+    *
+    * @param schema
+    * @return
+    */
   def createPrefixGenerator(schema: StructType): UnsafeExternalRowSorter.PrefixComputer = {
     if (schema.nonEmpty) {
+
+      /** *
+        * 取schema的第一个列作为计算prefix的依据
+        */
       val boundReference = BoundReference(0, schema.head.dataType, nullable = true)
-      val prefixProjection = UnsafeProjection.create(
-        SortPrefix(SortOrder(boundReference, Ascending)))
+      val prefixProjection = UnsafeProjection.create(SortPrefix(SortOrder(boundReference, Ascending)))
+
       new UnsafeExternalRowSorter.PrefixComputer {
         override def computePrefix(row: InternalRow): Long = {
           prefixProjection.apply(row).getLong(0)
         }
       }
     } else {
+
+      /** *
+        * 如果schema为空，那么返回的prefix的值都是空，也就是说，在这种情况下，先根据prefix进行排序后record排序的价值失效(只能根据record排序)
+        */
       new UnsafeExternalRowSorter.PrefixComputer {
         override def computePrefix(row: InternalRow): Long = 0
       }

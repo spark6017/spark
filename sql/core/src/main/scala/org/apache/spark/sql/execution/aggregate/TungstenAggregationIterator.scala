@@ -492,7 +492,9 @@ class TungstenAggregationIterator(
   }
 
   /** *
-    * 去聚合结果集合的下一个聚合结果(放在UnsafeRow中)
+    * 去聚合结果集合的下一个聚合结果(放在UnsafeRow中).
+    *
+    * 同样是基于最后是hash map based aggregation还是sort based aggregation分别处理
     * @return
     */
   override final def next(): UnsafeRow = {

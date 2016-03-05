@@ -264,13 +264,16 @@ public final class UnsafeFixedWidthAggregationMap {
    * Note that the map will be reset for inserting new records, and the returned sorter can NOT be used
    * to insert records.
    *
-   * 两件事：
-   * 1. map被destroy/reset，用于插入新的records
-   * 2. 返回的UnsafeKVExternalSorter不能用于插入数据
+   * destructAndCreateExternalSorter做的事情
+   * 1. map中的聚合数据经排序后spill到磁盘
+   * 1. map被reset，释放占用的空间，然后复用插入新的records
+   * 2. 返回的UnsafeKVExternalSorter,不能用于插入新的record，只能用于指示本地聚合时hash map spill到磁盘的数据
    */
   public UnsafeKVExternalSorter destructAndCreateExternalSorter() throws IOException {
-    return new UnsafeKVExternalSorter(
-      groupingKeySchema, aggregationBufferSchema,
-      SparkEnv.get().blockManager(), map.getPageSizeBytes(), map);
+    org.apache.spark.storage.BlockManager  blockManager = SparkEnv.get().blockManager();
+    long pageSizeBytes =  map.getPageSizeBytes();
+
+    UnsafeKVExternalSorter sorter =  new UnsafeKVExternalSorter(groupingKeySchema, aggregationBufferSchema,blockManager, pageSizeBytes, map);
+    return sorter;
   }
 }

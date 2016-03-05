@@ -40,14 +40,28 @@ import org.apache.spark.util.collection.unsafe.sort.*;
  *
  * Note that this class allows optionally passing in a {@link BytesToBytesMap} directly in order
  * to perform in-place sorting of records in the map.
+ *
+ * 如果构造UnsafeKVExternalSorter时传入了一个不为null的BytesToBytesMap，那么将在map内进行排序
  */
 public final class UnsafeKVExternalSorter {
 
   private final StructType keySchema;
   private final StructType valueSchema;
   private final UnsafeExternalRowSorter.PrefixComputer prefixComputer;
+
+  /***
+   * 构造出这个UnsafeExternalSorter有什么用？
+   */
   private final UnsafeExternalSorter sorter;
 
+  /**
+   *
+   * @param keySchema
+   * @param valueSchema
+   * @param blockManager
+   * @param pageSizeBytes
+   * @throws IOException
+   */
   public UnsafeKVExternalSorter(
       StructType keySchema,
       StructType valueSchema,
@@ -56,6 +70,15 @@ public final class UnsafeKVExternalSorter {
     this(keySchema, valueSchema, blockManager, pageSizeBytes, null);
   }
 
+  /***
+   *
+   * @param keySchema 因为Key和Value都是UnsafeRow，所有Key和Value都有Schema信息(StructType类型)
+   * @param valueSchema
+   * @param blockManager
+   * @param pageSizeBytes
+   * @param map
+   * @throws IOException
+   */
   public UnsafeKVExternalSorter(
       StructType keySchema,
       StructType valueSchema,
@@ -73,6 +96,10 @@ public final class UnsafeKVExternalSorter {
 
     TaskMemoryManager taskMemoryManager = taskContext.taskMemoryManager();
 
+    /***
+     * 如果BytesToBytesMap为null，那么创建一个UnsafeExternalSorter
+     *
+     */
     if (map == null) {
       sorter = UnsafeExternalSorter.create(
         taskMemoryManager,
@@ -83,6 +110,7 @@ public final class UnsafeKVExternalSorter {
         /* initialSize */ 4096,
         pageSizeBytes);
     } else {
+      //如果创建一个UnsafeInMemorySorter
       // During spilling, the array in map will not be used, so we can borrow that and use it
       // as the underline array for in-memory sorter (it's always large enough).
       // Since we will not grow the array, it's fine to pass `null` as consumer.
@@ -113,6 +141,9 @@ public final class UnsafeKVExternalSorter {
         inMemSorter.insertRecord(address, prefix);
       }
 
+      /***
+       * 内存内排好序后，调用createWithExistingInMemorySorter创建UnsafeExternalSorter，传入inMemSorter
+       */
       sorter = UnsafeExternalSorter.createWithExistingInMemorySorter(
         taskMemoryManager,
         blockManager,

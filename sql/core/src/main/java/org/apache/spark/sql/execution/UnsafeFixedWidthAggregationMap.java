@@ -36,6 +36,10 @@ import java.io.IOException;
  * Unsafe-based HashMap for performing aggregations where the aggregated values are fixed-width.
  *
  * This map supports a maximum of 2 billion keys.
+ *
+ *
+ * 聚合函数结果类型长度固定的聚合Map
+ *
  */
 public final class UnsafeFixedWidthAggregationMap {
 
@@ -45,12 +49,20 @@ public final class UnsafeFixedWidthAggregationMap {
    */
   private final byte[] emptyAggregationBuffer;
 
+  /***
+   * 聚合结果数据行的Schema
+   */
   private final StructType aggregationBufferSchema;
 
+  /***
+   * 分组Key的Schema
+   */
   private final StructType groupingKeySchema;
 
   /**
    * Encodes grouping keys as UnsafeRows.
+   *
+   * 把grouping keys编码为UnsafeRows，如何做到的？
    */
   private final UnsafeProjection groupingKeyProjection;
 
@@ -61,6 +73,10 @@ public final class UnsafeFixedWidthAggregationMap {
 
   /**
    * Re-used pointer to the current aggregation buffer
+   *
+   * 因为Aggregation Buffer是一个UnsafeRow，使用currentAggregationBuffer指向当前的aggregation buffer
+   *
+   * 何为Re-used pointer？
    */
   private final UnsafeRow currentAggregationBuffer;
 
@@ -69,14 +85,18 @@ public final class UnsafeFixedWidthAggregationMap {
   /**
    * @return true if UnsafeFixedWidthAggregationMap supports aggregation buffers with the given
    *         schema, false otherwise.
+   *         聚合函数的结果类型
+   *
    */
   public static boolean supportsAggregationBufferSchema(StructType schema) {
 
+    /***
+     *  遍历所有的列,所有的列的数据类型都要求是Mutable的
+     *
+     */
     StructField[] fields = schema.fields();
     for (StructField field: fields) {
       DataType dataType = field.dataType();
-
-      //如果有一个DataType使得UnsafeRow.isMutable返回false，那么就不支持
       boolean isMutable = UnsafeRow.isMutable(dataType);
       if (!isMutable) {
         return false;

@@ -7,8 +7,12 @@ import org.apache.spark.{SparkConf, SparkContext}
 
 
 object SparkSQLTestStudentGroupBy {
+  def addAdditionalConfigutions(conf : SparkConf, key: String, value : String): Unit = {
+    conf.set(key,value)
+  }
   def main(args: Array[String]) {
-    val conf = new SparkConf().setAppName("SparkSQLTestStudent").setMaster("local");
+    val conf = new SparkConf().setAppName("SparkSQLTestStudent").setMaster("local")
+    addAdditionalConfigutions(conf, "spark.sql.TungstenAggregate.testFallbackStartsAt", "5")
     val sc = new SparkContext(conf);
     val ssc = new SQLContext(sc);
 

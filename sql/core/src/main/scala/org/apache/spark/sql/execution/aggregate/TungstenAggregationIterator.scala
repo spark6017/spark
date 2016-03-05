@@ -87,7 +87,7 @@ class TungstenAggregationIterator(
     newMutableProjection: (Seq[Expression], Seq[Attribute]) => (() => MutableProjection),
     originalInputAttributes: Seq[Attribute],
     inputIter: Iterator[InternalRow],
-    testFallbackStartsAt: Option[Int],
+    testFallbackStartsAt: Option[Int], /**TungstenAggregation处理多少条rows之后切换到Sort based aggregation**/
     numInputRows: LongSQLMetric,
     numOutputRows: LongSQLMetric,
     dataSize: LongSQLMetric,
@@ -403,9 +403,11 @@ class TungstenAggregationIterator(
   ///////////////////////////////////////////////////////////////////////////
 
   /**
-   * Start processing input rows, processInputs是在TungstenAggregationIterator构造函数中调用的
+   * Start processing input rows,
+   *
+   * processInputs是在TungstenAggregationIterator构造函数中调用的
     *
-    * sortBased会在processInputs进行处理，处理过程中如果切换到sort based aggregation,那么会将sortBased置为true
+    * sortBased变量会在processInputs进行赋值，处理过程中如果切换到sort based aggregation,那么会将sortBased置为true
    */
   processInputs(testFallbackStartsAt.getOrElse(Int.MaxValue))
 

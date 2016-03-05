@@ -33,12 +33,12 @@ import org.apache.spark.unsafe.KVIterator
 /**
  *
  * @param requiredChildDistributionExpressions
- * @param groupingExpressions
- * @param aggregateExpressions
- * @param aggregateAttributes
+ * @param groupingExpressions 分组表达式，group by 子句
+ * @param aggregateExpressions 聚合表达式，每个aggregate expression封装了一个aggregate function
+ * @param aggregateAttributes 聚合属性(何解？难道用于聚合的列？)
  * @param initialInputBufferOffset
  * @param resultExpressions
- * @param child
+ * @param child  如果是final mode的TungstenAggregate，那么child就是partial mode的TungstenAggregate
  */
 case class TungstenAggregate(
     requiredChildDistributionExpressions: Option[Seq[Expression]],
@@ -77,9 +77,19 @@ case class TungstenAggregate(
     }
   }
 
-  // This is for testing. We force TungstenAggregationIterator to fall back to sort-based
-  // aggregation once it has processed a given number of input rows.
+  //
+  //
   // testFallbackStartsAt是一个整型数字Option,默认是Null，如果配置了这个选项，那么就取配置值
+
+  /** *
+    * This is for testing. We force TungstenAggregationIterator to fall back to sort-based aggregation once it has processed a given number of input rows.
+    *
+    * 当TungstenAggregationIterator处理了testFallbackStartsAt个input rows后就是用sort based aggregation
+    *
+    * 问题：
+    * 如果testFallbackStartsAt为None表示不切换到sort base aggregation? testFallbackStartsAt为None，那么TungstenAggregationIterator会使用默认值(Integer.MAX_VALUE)
+    *
+    */
   private val testFallbackStartsAt: Option[Int] = {
     sqlContext.getConf("spark.sql.TungstenAggregate.testFallbackStartsAt", null) match {
       case null | "" => None
@@ -112,7 +122,7 @@ case class TungstenAggregate(
               newMutableProjection(expressions, inputSchema, subexpressionEliminationEnabled),
             child.output,
             iter,
-            testFallbackStartsAt,
+            testFallbackStartsAt, /**tungsten aggregation处理多少条rows后切换到sort based aggregation的*/
             numInputRows,
             numOutputRows,
             dataSize,
@@ -273,6 +283,8 @@ case class TungstenAggregate(
 
   /**
     * This is called by generated Java class, should be public.
+    *
+    * @return 返回UnsafeFixedWidthAggregationMap （固定长度的Aggregation，何解？）
     */
   def createHashMap(): UnsafeFixedWidthAggregationMap = {
     // create initialized aggregate buffer
@@ -453,15 +465,31 @@ case class TungstenAggregate(
      """
   }
 
+  /** *
+    * TunstenAggregate物理计划的字符串表示
+    * @return
+    */
   override def simpleString: String = {
+
+    /** *
+      * 聚合表达式
+      */
     val allAggregateExpressions = aggregateExpressions
 
     testFallbackStartsAt match {
+
+      /** *
+        * 如果不使用fall back on sort based aggregation模式
+        */
       case None =>
         val keyString = groupingExpressions.mkString("[", ",", "]")
         val functionString = allAggregateExpressions.mkString("[", ",", "]")
         val outputString = output.mkString("[", ",", "]")
         s"TungstenAggregate(key=$keyString, functions=$functionString, output=$outputString)"
+
+      /** *
+        * 如果使用了fall back on sort based aggregation模式
+        */
       case Some(fallbackStartsAt) =>
         s"TungstenAggregateWithControlledFallback $groupingExpressions " +
           s"$allAggregateExpressions $resultExpressions fallbackStartsAt=$fallbackStartsAt"
@@ -471,13 +499,24 @@ case class TungstenAggregate(
 
 object TungstenAggregate {
   /***
-    * 是否支持TungstenAggregate
+    * 是否支持TungstenAggregate, Spark SQL支持TungstenAggregation的条件是什么？
+    *
+    * 传入的是aggregate buffer的attributes，aggregate buffer是一个有schema的unsafe row，用于存放聚合结果的schema信息
+    * 对于select count(age) from TBL_STUDENT group  by classId,那么aggregateBufferAttributes是的AttributeReference集合,如果count#6L
+    *
     * @param aggregateBufferAttributes aggregateBuffer这个row对应的attribute
     * @return
     */
   def supportsAggregate(aggregateBufferAttributes: Seq[Attribute]): Boolean = {
+    /** *
+      *  通过调用 StructType.fromAttributes将Seq[Attribute]转换为Schema，aggregationBufferSchema的类型是StructType
+      */
     val aggregationBufferSchema = StructType.fromAttributes(aggregateBufferAttributes)
-    UnsafeFixedWidthAggregationMap.supportsAggregationBufferSchema(aggregationBufferSchema)
-//    false
+
+    /** *
+      * 给定aggregationBufferSchema，判断是否支持Tungsten Aggregation。基本数据类型都是mutable的
+      */
+    val supportsAggregate = UnsafeFixedWidthAggregationMap.supportsAggregationBufferSchema(aggregationBufferSchema)
+    supportsAggregate
   }
 }

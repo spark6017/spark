@@ -358,8 +358,19 @@ object StructType extends AbstractDataType {
     StructType(fields.asScala)
   }
 
-  protected[sql] def fromAttributes(attributes: Seq[Attribute]): StructType =
-    StructType(attributes.map(a => StructField(a.name, a.dataType, a.nullable, a.metadata)))
+  /** *
+    * 将Attribute集合转换为StructType
+    * @param attributes
+    * @return
+    */
+  protected[sql] def fromAttributes(attributes: Seq[Attribute]): StructType = {
+    /**
+     * 因为Attribute是一个NamedExpression，因此有name、dataType、nullable和metadata的信息
+     * 可见NamedExpression定义了很多属性，通过这些属性可以将一个NamedExpression转换为一个StructField
+     */
+    val dt = StructType(attributes.map(a => StructField(a.name, a.dataType, a.nullable, a.metadata)))
+    dt
+  }
 
   def removeMetadata(key: String, dt: DataType): DataType =
     dt match {

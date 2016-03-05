@@ -82,6 +82,10 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
 
   /**
    * Field types that can be updated in place in UnsafeRows (e.g. we support set() for these types)
+   *
+   * 允许修改，数值类型都是可以更新的，注意：StringType不是mutable的
+   *
+   * 问题：一个数据类型是否可以mutable的判断标准是什么？难道是根据长度是否固定进行判断？变长的String以为长度可变，所以不支持mutable
    */
   public static final Set<DataType> mutableFieldTypes;
 
@@ -112,9 +116,9 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
   }
 
   /***
-   * 是否是可变的数据类型
-   * @param dt DecimalType是可变的，基本数据类型也是可变的
-   * @return
+   * 给定一个DataType，判断是否是可修改的数据类型
+   * @param dt  数据类型
+   * @return 如果DataType是可以修改的，那么就返回true；否则返回false
      */
   public static boolean isMutable(DataType dt) {
     return mutableFieldTypes.contains(dt) || dt instanceof DecimalType;

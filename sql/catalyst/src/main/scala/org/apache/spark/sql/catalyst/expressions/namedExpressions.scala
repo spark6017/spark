@@ -89,7 +89,12 @@ trait NamedExpression extends Expression {
     */
   def toAttribute: Attribute
 
-  /** Returns the metadata when an expression is a reference to another expression with metadata. */
+  /** Returns the metadata when an expression is a reference to another expression with metadata.
+    *
+    *   如果本expression指向了另一个带有metadata信息的expression
+    *   问题：StructField带有metadata信息，StructField是否是NamedExpression？不是，StructField是一个独立的类，没有继承任何其它类
+    * @return
+    */
   def metadata: Metadata = Metadata.empty
 
   /** Returns a copy of this expression with a new `exprId`. */

@@ -179,7 +179,8 @@ public final class UnsafeKVExternalSorter {
 
       /***
        * createWithExistingInMemorySorter创建UnsafeExternalSorter，传入inMemSorter
-       * 此时inMemSorter中的数据还没有排序
+       * 此时inMemSorter中的数据还没有排序？答：不确定，因为已经spill到磁盘了，因此应该是排序后spill
+       * 在createWithExistingInMemorySorter方法会完成InMemorySorter的数据spill到磁盘
        */
       sorter = UnsafeExternalSorter.createWithExistingInMemorySorter(
         taskMemoryManager,

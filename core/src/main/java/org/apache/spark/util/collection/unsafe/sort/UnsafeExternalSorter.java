@@ -98,6 +98,19 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
   private long peakMemoryUsedBytes = 0;
   private volatile SpillableIterator readingIterator = null;
 
+  /***
+   * 创建使用InMemorySorter的UnsafeExternalSorter，在
+   * @param taskMemoryManager
+   * @param blockManager
+   * @param taskContext
+   * @param recordComparator
+   * @param prefixComparator
+   * @param initialSize
+   * @param pageSizeBytes
+   * @param inMemorySorter
+   * @return
+   * @throws IOException
+   */
   public static UnsafeExternalSorter createWithExistingInMemorySorter(
       TaskMemoryManager taskMemoryManager,
       BlockManager blockManager,
@@ -107,6 +120,9 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
       int initialSize,
       long pageSizeBytes,
       UnsafeInMemorySorter inMemorySorter) throws IOException {
+    /***
+     * 创建UnsafeExternalSorter，然后调用spill，将sorter中的数据(以为underlying是InMemorySorter，所以是InMemorySorter spill到磁盘)spill到磁盘
+     */
     UnsafeExternalSorter sorter = new UnsafeExternalSorter(taskMemoryManager, blockManager,
       taskContext, recordComparator, prefixComparator, initialSize, pageSizeBytes, inMemorySorter);
     sorter.spill(Long.MAX_VALUE, sorter);

@@ -24,20 +24,22 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate._
 
-/**
- * The base class of [[SortBasedAggregationIterator]] and [[TungstenAggregationIterator]].
- * It mainly contains two parts:
- * 1. It initializes aggregate functions.
- * 2. It creates two functions, `processRow` and `generateOutput` based on [[AggregateMode]] of
- *    its aggregate functions. `processRow` is the function to handle an input. `generateOutput`
- *    is used to generate result.
- *
- *
- *    1. 初始化聚合函数，
- *    2. 基于AggregateFunction的AggregateMode创建两个function，processRow和generateOutput
- *
- *    processRow用于处理输入，generateOutput用于生成结果
- */
+/** *
+  * The base class of [[SortBasedAggregationIterator]] and [[TungstenAggregationIterator]].
+  * It mainly contains two parts:
+  * 1. It initializes aggregate functions.
+  * 2. It creates two functions, `processRow` and `generateOutput` based on [[AggregateMode]] of
+  *    its aggregate functions. `processRow` is the function to handle an input. `generateOutput`
+  *    is used to generate result.
+  *
+  * @param groupingExpressions 分组表达式
+  * @param inputAttributes attributes of representing input rows from `inputIter
+  * @param aggregateExpressions  [[AggregateExpression]] containing [[AggregateFunction]]s with mode [[Partial]], [[PartialMerge]], or [[Final]].
+  * @param aggregateAttributes the attributes of the aggregateExpressions'outputs when they are stored in the final aggregation buffer.
+  * @param initialInputBufferOffset
+  * @param resultExpressions
+  * @param newMutableProjection
+  */
 abstract class AggregationIterator(
     groupingExpressions: Seq[NamedExpression],
     inputAttributes: Seq[Attribute],

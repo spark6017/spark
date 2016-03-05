@@ -28,16 +28,23 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.unsafe.KVIterator
 
 /**
- * An iterator used to evaluate aggregate functions. It operates on [[UnsafeRow]]s.
-  *
-  *
-  * 对UnsafeRow进行聚合函数值的计算
+ *
+ * 基于Tungsten的Aggregation，它接受的输入是Iterator[UnsafeRow]
+ *  An iterator used to evaluate aggregate functions. It operates on [[UnsafeRow]]s.
  *
  * This iterator first uses hash-based aggregation to process input rows. It uses
  * a hash map to store groups and their corresponding aggregation buffers. If we
  * this map cannot allocate memory from memory manager, it spill the map into disk
  * and create a new one. After processed all the input, then merge all the spills
  * together using external sorter, and do sort-based aggregation.
+ *
+ *  聚合流程：
+ *  首先对输入的unsafe rows进行hash-based的聚合，具体做法是使用Hash Map来存放group keys和对应的aggregation buffer的对应关系，如果Map中还没有group key，那么
+ *  将初始化一个Aggregation buffer，然后将<groupKey,aggbuffer>加入到map中；如果group key已经存在于map中，那么取出对一个的aggregation buffer，将它进行upadte操作
+ *
+ *  如果hash map使得内存空间不足(比如重复的group key很少导致每个group key，都会在map中建立一个groupkey和buffer的对应关系)，那么将hash map的数据spill到磁盘，然后创建一个新的hash map继续进行hash based聚合，如果内存不够再spill到磁盘
+ *  重复上面的过程直到输入的所有unsafe rows处理完成，然后使用external sorter对spill到磁盘的数据进行merge，然后执行sort-based聚合
+ *
  *
  * The process has the following step:
  *  - Step 0: Do hash-based aggregation.
@@ -48,6 +55,18 @@ import org.apache.spark.unsafe.KVIterator
  *  - Step 4: Repeat step 0 until no more input.
  *  - Step 5: Initialize sort-based aggregation on the sorted iterator.
  * Then, this iterator works in the way of sort-based aggregation.
+ *
+ * 聚合执行流程：
+ * 第0步：执行hash-based聚合
+ * 第1步：如果内存空间不足，那么将hash-based聚合使用到的Hash Map中的数据spill到磁盘，在spill前需要进行排序操作，它是根据分组列的值进行排序的
+ * 第2步：基于spill到磁盘上以排序的map entries创建一个external sorter，然后重新创建第一步用到的Hash Map
+ * 第3步：基于第二步创建的external sorter，获取一个KVIterator
+ * 第4步：重复第0步到第4步
+ * 第5步：初始化sort base aggregation
+ * 问题：
+ * 1. 第二步创建的external sorter和第三步创建的sorted KVIterator用来干啥了？
+ * 2. 因为第0步到第3步是repeat的，那么也就是说针对每次spill都会产生一个external sorter？
+ *
  *
  * The code of this class is organized as follows:
  *  - Part 1: Initializing aggregate functions.
@@ -62,22 +81,20 @@ import org.apache.spark.unsafe.KVIterator
  *  - Part 8: A utility function used to generate a result when there is no
  *            input and there is no grouping expression.
  *
- * @param groupingExpressions
- *   expressions for grouping keys
- * @param aggregateExpressions
- * [[AggregateExpression]] containing [[AggregateFunction]]s with mode [[Partial]],
- * [[PartialMerge]], or [[Final]].
- * @param aggregateAttributes the attributes of the aggregateExpressions'
- *   outputs when they are stored in the final aggregation buffer.
- * @param resultExpressions
- *   expressions for generating output rows.
- * @param newMutableProjection
- *   the function used to create mutable projections.
- * @param originalInputAttributes
- *   attributes of representing input rows from `inputIter`.
- * @param inputIter 输入数据(UnsafeRow的迭代集合)
- *   the iterator containing input [[UnsafeRow]]s.
- */
+  * @param groupingExpressions expressions for grouping keys
+  * @param aggregateExpressions  [[AggregateExpression]] containing [[AggregateFunction]]s with mode [[Partial]], [[PartialMerge]], or [[Final]].
+  * @param aggregateAttributes the attributes of the aggregateExpressions'outputs when they are stored in the final aggregation buffer.
+  * @param initialInputBufferOffset
+  * @param resultExpressions expressions for generating output rows.
+  * @param newMutableProjection the function used to create mutable projections.
+  * @param originalInputAttributes attributes of representing input rows from `inputIter
+  * @param inputIter the iterator containing input [[UnsafeRow]]s.
+  * @param testFallbackStartsAt The threshold when switching to sort based aggregation(can be used to force hash based aggregation to switch to sort based aggregation)
+  * @param numInputRows the number of the input rows from inputIter
+  * @param numOutputRows the number of the output rows after aggregation by tungsten aggregation
+  * @param dataSize
+  * @param spillSize
+  */
 class TungstenAggregationIterator(
     groupingExpressions: Seq[NamedExpression],
     aggregateExpressions: Seq[AggregateExpression],
@@ -87,7 +104,7 @@ class TungstenAggregationIterator(
     newMutableProjection: (Seq[Expression], Seq[Attribute]) => (() => MutableProjection),
     originalInputAttributes: Seq[Attribute],
     inputIter: Iterator[InternalRow],
-    testFallbackStartsAt: Option[Int], /**TungstenAggregation处理多少条rows之后切换到Sort based aggregation**/
+    testFallbackStartsAt: Option[Int],
     numInputRows: LongSQLMetric,
     numOutputRows: LongSQLMetric,
     dataSize: LongSQLMetric,

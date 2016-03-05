@@ -240,22 +240,41 @@ class TungstenAggregationIterator(
         val groupingKey = groupingProjection.apply(newInput)
         var buffer: UnsafeRow = null
 
-        //如果i小于fallbackStartsAt，表示继续使用hashMap进行聚合
+          /** *
+            *  如果i小于fallbackStartsAt，表示继续使用hashMap进行聚合
+            *  如果buffer返回的是null，表示hashMap将内存用尽，需要进行spill
+            *  i记录着本hashMap处理了多少个row
+            */
         if (i < fallbackStartsAt) {
           buffer = hashMap.getAggregationBufferFromUnsafeRow(groupingKey)
         }
 
-        //如果buffer为null，表示什么情况？
+          /** *
+            * 如果buffer为null，表示什么情况？两种情况：
+            * 1. hash map的存储空间不够，需要spill
+            * 2. 为了测试spill的目的，设置了一个fallbackStartsAt值，强制TugnstenAggregationIterator进行spill
+            */
         if (buffer == null) {
+          /** *
+            * hashMap只是desctruct并没有将hashMap设置为null，也就是所，hashMap是可重用的
+            */
           val sorter = hashMap.destructAndCreateExternalSorter()
+
+          /** *
+            * 如果externalSorter为空，表示第一次spill，否则将本次spill的结果(记录在sorter中)与已经spill的结果(记录在externalSorter中)进行合并
+            */
           if (externalSorter == null) {
             externalSorter = sorter
           } else {
             //UnsafeKVExternalSorter进行merge
             externalSorter.merge(sorter)
           }
+
+          /** *
+            * spill结束，将记录本hashMap处理了多少条row的变量i清0从头开始计算，
+            * 然后根据groupingKey重新分配一个buffer
+            */
           i = 0
-          //重新构造hash based aggregation buffer
           buffer = hashMap.getAggregationBufferFromUnsafeRow(groupingKey)
           if (buffer == null) { /**内存不足**/
             // failed to allocate the first page
@@ -266,8 +285,12 @@ class TungstenAggregationIterator(
         i += 1
       }
 
-      //如果externalSorter不为空，则switch到sort based aggregation，
-      //问题：externalSorter在什么地方初始化的？
+      /** *
+        * 处理完所有的input rows之后，检查externalSorter是否为null，如果为null，表示在处理input rows过程中有spill发生，那么首先将hash map中
+        * 保存的结果转换为一个sorter，然后跟externalSorter做最后一次merge，并且将hashMap销毁。切换到sort based aggregation
+        *
+        * 问题：如果没有发生spill，那么下面的代码逻辑不会执行，并且aggregation的结果保存在hashMap中，那么怎么取出这些数据
+        */
       if (externalSorter != null) {
         val sorter = hashMap.destructAndCreateExternalSorter()
         externalSorter.merge(sorter)
@@ -302,8 +325,6 @@ class TungstenAggregationIterator(
   /**
    * Switch to sort-based aggregation when the hash-based approach is unable to acquire memory.
    *
-   * hash-based需要的内存比sort-based需要的大
-    *
     * switchToSortBasedAggregation调用时，externalSorter不为null
    */
   private def switchToSortBasedAggregation(): Unit = {
@@ -323,6 +344,9 @@ class TungstenAggregationIterator(
     sortBasedProcessRow = generateProcessRow(newExpressions, newFunctions, newInputAttributes)
 
     // Step 5: Get the sorted iterator from the externalSorter.
+    /** *
+      * 在sort based aggregation中，聚合数据存放在sortedKVIterator中
+      */
     sortedKVIterator = externalSorter.sortedIterator()
 
     // Step 6: Pre-load the first key-value pair from the sorted iterator to make
@@ -428,8 +452,15 @@ class TungstenAggregationIterator(
    */
   processInputs(testFallbackStartsAt.getOrElse(Int.MaxValue))
 
-  // If we did not switch to sort-based aggregation in processInputs,
-  // we pre-load the first key-value pair from the map (to make hasNext idempotent).
+ /** *
+    * If we did not switch to sort-based aggregation in processInputs,we pre-load the first key-value pair from the map (to make hasNext idempotent).
+    *
+    *
+    * 如果在processInputs没有切换到sort based aggregation，代码执行到此处，聚合的结果完全存放在hash map中
+   *
+   * 当所有的input rows处理完成后，如果没有启用sort based aggregation，那么聚合数据存放在aggregationBufferMapIterator中
+   * 如果启动了sort base aggregation，那么聚合数据由sort based aggregation生成
+    */
   if (!sortBased) {
     // First, set aggregationBufferMapIterator.
     aggregationBufferMapIterator = hashMap.iterator()
@@ -445,13 +476,25 @@ class TungstenAggregationIterator(
   // Part 7: Iterator's public methods.
   ///////////////////////////////////////////////////////////////////////////
 
-  //是否还有元素
+  /** *
+    * 聚合结果集合是否还有未遍历的数据
+    *
+    * 根据所有input rows处理完成时，根据是否switch到sort based aggregation分别进行判断
+    * 1.如果最后是sort based，那么检查sortedInputHasNewGroup
+    * 2.如果最后是hash-map based，那么检查mapIteratorHasNext
+    *
+    * @return
+    */
   override final def hasNext: Boolean = {
     val a = sortBased && sortedInputHasNewGroup
     val b = !sortBased && mapIteratorHasNext
     a || b
   }
 
+  /** *
+    * 去聚合结果集合的下一个聚合结果(放在UnsafeRow中)
+    * @return
+    */
   override final def next(): UnsafeRow = {
     if (hasNext) {
       val res = if (sortBased) {

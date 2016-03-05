@@ -25,18 +25,34 @@ import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 /**
  * A mutable wrapper that makes two rows appear as a single concatenated row.  Designed to
  * be instantiated once per thread and reused.
+ *
+ * 将两个InternalRow合并到一起，对使用者而言像是一个InternalRow，这是一个组合模式
+ *
  */
 class JoinedRow extends InternalRow {
   private[this] var row1: InternalRow = _
   private[this] var row2: InternalRow = _
 
+  /** *
+    * 构造JoinedRow，传入两个InternalRow
+    * @param left
+    * @param right
+    */
   def this(left: InternalRow, right: InternalRow) = {
     this()
     row1 = left
     row2 = right
   }
 
-  /** Updates this JoinedRow to used point at two new base rows.  Returns itself. */
+  /**
+   * Updates this JoinedRow to used point at two new base rows.  Returns itself.
+   *  val joinedRow = JoinedRow(row1,row2),那么会调用类的apply方法？不是！
+   *  val joinedRow = new JoinedRow(row1,row2)
+   *  joinedRow(row3,row4)将返回一个新对象？
+   * @param r1
+   * @param r2
+   * @return
+   */
   def apply(r1: InternalRow, r2: InternalRow): JoinedRow = {
     row1 = r1
     row2 = r2

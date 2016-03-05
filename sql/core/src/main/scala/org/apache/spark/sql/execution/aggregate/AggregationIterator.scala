@@ -38,7 +38,8 @@ import org.apache.spark.sql.catalyst.expressions.aggregate._
   * @param aggregateAttributes the attributes of the aggregateExpressions'outputs when they are stored in the final aggregation buffer.
   * @param initialInputBufferOffset
   * @param resultExpressions
-  * @param newMutableProjection
+  * @param newMutableProjection 它是一个函数类型，函数入参是 (Seq[Expression], Seq[Attribute]),函数的返回值仍然是一个函数，这个函数
+  *                             的入参是()，返回值是MutableProjection
   */
 abstract class AggregationIterator(
     groupingExpressions: Seq[NamedExpression],
@@ -68,6 +69,11 @@ abstract class AggregationIterator(
     */
   /////============================初始化块01============================
   {
+    /** *
+      * 计算出聚合表达式中的聚合模式并对聚合模式的检查：
+      * 1.  所有的聚合表达式最多有两个mode
+      * 2. 所有的聚合表达式必须是Partial、PartialMerge的子集或者是Final、Complete的子集
+      */
     val modes = aggregateExpressions.map(_.mode).distinct.toSet
     require(modes.size <= 2,
       s"$aggregateExpressions are not supported because they have more than 2 distinct modes.")
@@ -75,18 +81,45 @@ abstract class AggregationIterator(
       s"$aggregateExpressions can't have Partial/PartialMerge and Final/Complete in the same time.")
   }
 
-  // Initialize all AggregateFunctions by binding references if necessary,
-  // and set inputBufferOffset and mutableBufferOffset.
+  /** *
+    * Initialize all AggregateFunctions by binding references if necessary and set inputBufferOffset and mutableBufferOffset.
+    *
+    * 问题：binding references表示什么意思？
+    *
+    * @param expressions 聚合表达式的集合
+    * @param startingInputBufferOffset
+    * @return 聚合函数的集合
+    */
   protected def initializeAggregateFunctions(
       expressions: Seq[AggregateExpression],
       startingInputBufferOffset: Int): Array[AggregateFunction] = {
     var mutableBufferOffset = 0
     var inputBufferOffset: Int = startingInputBufferOffset
+
+    /** *
+      * 每个聚合表达式转换为一个聚合函数
+      */
     val functions = new Array[AggregateFunction](expressions.length)
     var i = 0
+
+    /** *
+      * 遍历所有的聚合表达式
+      */
     while (i < expressions.length) {
+
+      /** *
+        * 取出聚合表达式中的聚合函数，它是AggregateFunction类型
+        */
       val func = expressions(i).aggregateFunction
+
+      /** *
+        * 对AggregateFunction进行reference binding
+        */
       val funcWithBoundReferences: AggregateFunction = expressions(i).mode match {
+
+        /**
+         * 如果是指令式聚合函数且聚合模式是Partial或者Complete，那么调用 BindReferences.bindReference对函数进行绑定
+         */
         case Partial | Complete if func.isInstanceOf[ImperativeAggregate] =>
           // We need to create BoundReferences if the function is not an
           // expression-based aggregate function (it does not support code-gen) and the mode of
@@ -94,6 +127,10 @@ abstract class AggregationIterator(
           // function's children in the update method of this aggregate function.
           // Those eval calls require BoundReferences to work.
           BindReferences.bindReference(func, inputAttributes)
+
+        /**
+          * 对于其它情况
+          */
         case _ =>
           // We only need to set inputBufferOffset for aggregate functions with mode
           // PartialMerge and Final.
@@ -105,6 +142,8 @@ abstract class AggregationIterator(
           inputBufferOffset += func.aggBufferSchema.length
           updatedFunc
       }
+
+
       val funcWithUpdatedAggBufferOffset = funcWithBoundReferences match {
         case function: ImperativeAggregate =>
           // Set mutableBufferOffset for this function. It is important that setting
@@ -121,6 +160,9 @@ abstract class AggregationIterator(
   }
 
   /////============================常量01============================
+  /** *
+    * 调用initializeAggregateFunctions对聚合表达式中的聚合函数进行初始化
+    */
   protected val aggregateFunctions: Array[AggregateFunction] =
   {
     val a = initializeAggregateFunctions(aggregateExpressions, initialInputBufferOffset)
@@ -132,6 +174,9 @@ abstract class AggregationIterator(
   // func2 and func3 are imperative aggregate functions.
   // ImperativeAggregateFunctionPositions will be [1, 2].
   /////============================常量02============================
+  /** *
+    * 查找出所有的指令式聚合函数
+    */
   protected[this] val allImperativeAggregateFunctionPositions: Array[Int] = {
     val positions = new ArrayBuffer[Int]()
     var i = 0
@@ -148,7 +193,14 @@ abstract class AggregationIterator(
 
   // The projection used to initialize buffer values for all expression-based aggregates.
   /////============================常量03============================
+  /** *
+    * 用于为declarative based aggregations设置初始值
+    */
   protected[this] val expressionAggInitialProjection = {
+
+    /** *
+      * DeclarativeAggregate的initialValues是一个表达式，比如Count函数的initialValues返回的是Literal(0)
+      */
     val initExpressions = aggregateFunctions.flatMap {
       case ae: DeclarativeAggregate => {
         val a = ae.initialValues
@@ -172,6 +224,9 @@ abstract class AggregationIterator(
 
   // All imperative AggregateFunctions.
   /////============================常量04============================
+  /** *
+    *
+    */
   protected[this] val allImperativeAggregateFunctions: Array[ImperativeAggregate] =
   {
     val a = allImperativeAggregateFunctionPositions
@@ -181,11 +236,11 @@ abstract class AggregationIterator(
   }
 
   /**
-   * 调用AggregateFunction的updateExpression、mergeExpression方法
+   * 返回处理input row的函数，
    * @param expressions 类型为AggregateExpression的集合
    * @param functions 类型为AggregateFunction的集合
    * @param inputAttributes
-   * @return 一个函数，函数类型是(MutableRow, InternalRow) => Unit
+   * @return 一个函数，函数类型是(MutableRow, InternalRow) => Unit，MutableRow是aggregation buffer，InternalRow是当前处理的row
    */
   protected def generateProcessRow(
       expressions: Seq[AggregateExpression],
@@ -284,14 +339,14 @@ abstract class AggregationIterator(
     }
   }
 
-  /**
-   * 这是一个成员变量，返回值是一个函数
-    *
-    * MutableRow是要update的，而InternalRow是原始数据？
-   */
   /////============================常量05============================
+  /** *
+    * processRow是一个函数，它在构造AggregateIterator时就初始化完成
+    * processRow是个值函数，入参是(MutableRow,InternalRow)，返回值是Unit
+    */
   protected val processRow: (MutableRow, InternalRow) => Unit =
   {
+    //调用generateProcessRow创建
     val a = generateProcessRow(aggregateExpressions, aggregateFunctions, inputAttributes)
     a
   }

@@ -59,12 +59,34 @@ class CodegenContext {
     * Add an object to `references`, create a class member to access it.
     *
     * Returns the name of class member.
+   *
+   *  添加一个引用的对象
+    *
+    * @param name 变量名
+    * @param obj 对象
+    * @param className 对象的类名，如果className为null，那么调用obj.getClass.getName获取出类名
+    * @return 添加的变量的名称
     */
   def addReferenceObj(name: String, obj: Any, className: String = null): String = {
+    /** *
+      * 创建变量名
+      */
     val term = freshName(name)
+
+    /** *
+      * 取出当前references集合的长度，然后将obj加到references集合中
+      */
     val idx = references.length
     references += obj
+
+    /** *
+      * 获取obj对象的类名
+      */
     val clsName = Option(className).getOrElse(obj.getClass.getName)
+
+    /** *
+      * 添加一个复合类型的成员变量，比如this.now_1 = (java.util.Date)references[0]
+      */
     addMutableState(clsName, term, s"this.$term = ($clsName) references[$idx];")
     term
   }
@@ -93,10 +115,25 @@ class CodegenContext {
   val mutableStates: mutable.ArrayBuffer[(String, String, String)] =
     mutable.ArrayBuffer.empty[(String, String, String)]
 
+  /** *
+    * 为mutableStates添加一个三元组(javatype ,varName, code),比如
+    * int x_1 = a_1 + b_1
+    *
+    * 增加一个赋值语句
+    *
+    * @param javaType 赋值语句的变量的类型
+    * @param variableName   变量名称
+    * @param initCode 赋值语句
+    */
   def addMutableState(javaType: String, variableName: String, initCode: String): Unit = {
     mutableStates += ((javaType, variableName, initCode))
   }
 
+  /** *
+    * 声明类的成员变量，比如private int x_1
+    * 注意：并没有赋值(包括没有赋默认值)
+    * @return
+    */
   def declareMutableStates(): String = {
     mutableStates.map { case (javaType, variableName, _) =>
       s"private $javaType $variableName;"

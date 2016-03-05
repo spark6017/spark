@@ -62,6 +62,11 @@ case class TungstenAggregate(
     "dataSize" -> SQLMetrics.createSizeMetric(sparkContext, "data size"),
     "spillSize" -> SQLMetrics.createSizeMetric(sparkContext, "spill size"))
 
+  /** *
+    * TungstenAggregate物理计划输出的数据的结构(由Seq[Attribute]表达)
+    * 它是根据resultExpression表示的
+    * @return
+    */
   override def output: Seq[Attribute] = resultExpressions.map(_.toAttribute)
 
   override def producedAttributes: AttributeSet =
@@ -283,8 +288,11 @@ case class TungstenAggregate(
 
   /**
     * This is called by generated Java class, should be public.
+   *
+   * 由动态生成的Java Class调用，是哪个Java Class，调用时需要提供TungsgtenAggregate的实例，在什么地方调用？搜索下
+   *
     *
-    * @return 返回UnsafeFixedWidthAggregationMap （固定长度的Aggregation，何解？）
+    * @return 返回UnsafeFixedWidthAggregationMap （固定长度的Aggregation，何解？只用于类型固定的Aggregation）
     */
   def createHashMap(): UnsafeFixedWidthAggregationMap = {
     // create initialized aggregate buffer
@@ -320,27 +328,70 @@ case class TungstenAggregate(
     metrics.incPeakExecutionMemory(mapMemory)
   }
 
+  /** *
+    * 在生成的代码中会调用TungstenAggregate的createHashMap方法
+    * 问题：doProduceWithKeys在什么地方调用？
+    *
+    * @param ctx
+    * @return 返回生成的代码字符串
+    */
   private def doProduceWithKeys(ctx: CodegenContext): String = {
+    /**
+     * freshName用于添加前缀以及将唯一的ID作为后缀，这里用于生成一个变量名
+     */
     val initAgg = ctx.freshName("initAgg")
+
+    /** *
+      * 创建一个成员变量，类型boolean，变量名为$initAgg, 语句是赋值为false
+      */
     ctx.addMutableState("boolean", initAgg, s"$initAgg = false;")
 
-    // create hashMap
+    /** *
+      *  create hashMap
+      *
+      *  首先创建一个成员变量，变量的名字是plan，赋值为当前对象(TungstenAggregate)
+      */
     val thisPlan = ctx.addReferenceObj("plan", this)
+
+    /** *
+      * 创建一个名称为hashMap的成员变量
+      */
     hashMapTerm = ctx.freshName("hashMap")
+
+    /** *
+      * 添加一个成员变量，类型为UnsafeFixedWidthAggregationMap，变量名称为$hashMapTerm, 赋值语句是调用TungstenAggregate的createHashMap
+      */
     val hashMapClassName = classOf[UnsafeFixedWidthAggregationMap].getName
     ctx.addMutableState(hashMapClassName, hashMapTerm, s"$hashMapTerm = $thisPlan.createHashMap();")
 
-    // Create a name for iterator from HashMap
+    /** *
+      * Create a name for iterator from HashMap
+      * 创建一个类型为mapIter的变量，这个变量的类型是KVIterator[UnsafeRow, UnsafeRow]，没有赋值语句
+      */
     val iterTerm = ctx.freshName("mapIter")
     ctx.addMutableState(classOf[KVIterator[UnsafeRow, UnsafeRow]].getName, iterTerm, "")
 
-    // generate code for output
+    /** *
+      * generate code for output
+      *
+      * 创建aggKey和aggBuffer变量
+      *
+      */
     val keyTerm = ctx.freshName("aggKey")
     val bufferTerm = ctx.freshName("aggBuffer")
+
+
+    /** *
+      * 如果聚合是Final或者Complete阶段
+      */
     val outputCode = if (modes.contains(Final) || modes.contains(Complete)) {
       // generate output using resultExpressions
       ctx.currentVars = null
       ctx.INPUT_ROW = keyTerm
+
+      /** *
+        *
+        */
       val keyVars = groupingExpressions.zipWithIndex.map { case (e, i) =>
           BoundReference(i, e.dataType, e.nullable).gen(ctx)
       }
@@ -368,18 +419,44 @@ case class TungstenAggregate(
        ${consume(ctx, resultVars)}
        """
 
-    } else if (modes.contains(Partial) || modes.contains(PartialMerge)) {
+    }
+
+    /** *
+      * 如果聚合是Partial或者PartialMerge阶段
+      */
+    else if (modes.contains(Partial) || modes.contains(PartialMerge)) {
       // This should be the last operator in a stage, we should output UnsafeRow directly
+      /** *
+        * 创建变量unsafeRowJoiner
+        */
       val joinerTerm = ctx.freshName("unsafeRowJoiner")
+
+      /** *
+        * 创建类型为UnsafeRowJoiner的成员变量，变量名unsafeRowJoiner，调用TungstenAggregate的createUnsafeJoiner对它进行初始化
+        */
       ctx.addMutableState(classOf[UnsafeRowJoiner].getName, joinerTerm,
         s"$joinerTerm = $thisPlan.createUnsafeJoiner();")
+
+
+
+      /** *
+        * 创建名为resultRow的变量，变量类型是UnsafeRow，赋值是调用UnsafeRowJoiner的join方法，
+        * 问题：join的两个参数$keyTerm和$bufferTerm什么时候赋值的？
+        *
+        */
       val resultRow = ctx.freshName("resultRow")
       s"""
        UnsafeRow $resultRow = $joinerTerm.join($keyTerm, $bufferTerm);
+       //调用consume方法
        ${consume(ctx, null, resultRow)}
        """
 
-    } else {
+    }
+
+    /** *
+      * 其它阶段
+      */
+    else {
       // generate result based on grouping key
       ctx.INPUT_ROW = keyTerm
       ctx.currentVars = null
@@ -392,6 +469,9 @@ case class TungstenAggregate(
        """
     }
 
+    println("=================================>Output Code Begin<===============================")
+    println(outputCode)
+    println("=================================>Output Code End<===============================")
     val doAgg = ctx.freshName("doAggregateWithKeys")
     ctx.addNewFunction(doAgg,
       s"""

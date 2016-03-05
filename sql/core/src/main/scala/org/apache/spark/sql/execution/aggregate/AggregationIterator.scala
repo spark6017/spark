@@ -313,19 +313,33 @@ abstract class AggregationIterator(
 
       /***
         *mergeExpressions是Seq[Expression]
+        * newMutableProjection的入参是(Seq[Expression], Seq[Attribute])，这里的mergeExpressions是第一个参数，aggregationBufferSchema ++ inputAttributes是第二个参数
+        * newMutableProjection的返回值是一个函数，类型为()=>MutableProjection,最后的()表示进行了方法(newMutableProjection的返回函数)调用，
+        * 因此updateProjection是一个MutableProjection类型的对象
+        *
         */
       val updateProjection =
         newMutableProjection(mergeExpressions, aggregationBufferSchema ++ inputAttributes)()
 
       /***
-        * 返回值，updateProjection需要使用mergeExpressions，因此方法体中的updateProjection.target也会用到mergeExpression
+        *  =====================================================================================
+        *  generateProcessRow返回的方法，也就是processrow指向的方法，该方法用于处理input row
+        *  =====================================================================================
+        */
+      /** *
+        * 入参是MutableRow和InternalRow,分别表示AggregationBuffer和InputRow
         */
       (currentBuffer: MutableRow, row: InternalRow) => {
         // Process all expression-based aggregate functions.
 
-
+        /**
+          *  updateProjection是MutableProjection类型的对象,它的target是干啥的？target返回一个MutableProjection对象
+          * 对于declarative aggregation，调用target(joinRow)方法时会完成currentBuffer的更新
+          */
         val target = updateProjection.target(currentBuffer)
         target(joinedRow(currentBuffer, row))
+
+
         // Process all imperative aggregate functions.
         var i = 0
         while (i < updateFunctions.length) {
@@ -341,8 +355,8 @@ abstract class AggregationIterator(
 
   /////============================常量05============================
   /** *
-    * processRow是一个函数，它在构造AggregateIterator时就初始化完成
-    * processRow是个值函数，入参是(MutableRow,InternalRow)，返回值是Unit
+    * processRow是一个函数，入参是(MutableRow,InternalRow)，返回值是Unit, 它在构造AggregateIterator时就初始化完成
+    * 它是通过调用generateProcessRow方法返回一个处理input row的方法
     */
   protected val processRow: (MutableRow, InternalRow) => Unit =
   {

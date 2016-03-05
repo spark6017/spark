@@ -50,6 +50,15 @@ public final class UnsafeSorterSpillWriter {
   private DiskBlockObjectWriter writer;
   private int numRecordsSpilled = 0;
 
+  /***
+   * UnsafeSorterSpillWriter构造时传入BlockManager，也就是说，UnsafeSorterSpillWriter使用BlockManager的DiskBlock功能对磁盘进行读写
+   *
+   * @param blockManager
+   * @param fileBufferSize
+   * @param writeMetrics
+   * @param numRecordsToWrite
+   * @throws IOException
+   */
   public UnsafeSorterSpillWriter(
       BlockManager blockManager,
       int fileBufferSize,

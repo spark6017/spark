@@ -125,6 +125,10 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
      */
     UnsafeExternalSorter sorter = new UnsafeExternalSorter(taskMemoryManager, blockManager,
       taskContext, recordComparator, prefixComparator, initialSize, pageSizeBytes, inMemorySorter);
+
+    /***
+     * 调用spill方法，为什么把UnsafeExternalSorter作为参数传给spill方法了？自己触发自己进行spill
+     */
     sorter.spill(Long.MAX_VALUE, sorter);
     // The external sorter will be used to insert records, in-memory sorter is not needed.
     sorter.inMemSorter = null;

@@ -25,3 +25,43 @@ fi
 export PYTHONHASHSEED=0
 
 exec "${SPARK_HOME}"/bin/spark-class org.apache.spark.deploy.SparkSubmit "$@"
+
+
+分析
+1. 执行dirname "$0"将得到spark-submit这个脚本所在的路径，包括脚本本身
+2. 通过$(cd "`dirname "$0"`/.."; pwd)，首先cd到脚本的上级目录，然后执行pwd获得脚本上级目录
+
+3. exec是执行一个脚本，它是执行SPARK_HOME/bin/spark-class脚本，传入的参数是SparkSubmit类全名以及提供给SparkSubmit的所有参数列表
+$@表示除$0之外的所有参数
+
+4. 变量${SPARK_HOME}可以通过双引号引起来，如果是单引号，那么SPARK_HOME变量将不会进行扩展，即
+>xyz=123
+>echo "$xyz"
+>echo '$xyz'
+结果是
+123
+$xyz
+
+5. 变量可以使用{}括起来，在下面的例子中很有用
+
+>abc=123
+>abcxyz=456
+>echo ${abc}xyz
+>echo $abcxyz
+那么输出是：
+123xyz
+456
+
+6. ``可以用来将命令的结果返回给一个变量，比如
+>abc=`cd /home/yuzt;pwd`
+>echo $abc
+输出/home/yuzt
+
+>abc=`echo "abcd"`
+>echo $abc
+输出是abcd吗？
+
+``等价于$()
+>abc=$(cd /home/yuzt;pwd)
+>echo $abc
+输出/home/yuzt

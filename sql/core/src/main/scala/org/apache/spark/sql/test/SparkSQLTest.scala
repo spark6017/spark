@@ -17,6 +17,8 @@ object SparkSQLTest {
         "/home/yuzt/development/openprojects/spark-2.0.0-snapshot/examples/src/main/resources/users.parquet"
       }
 
+    ssc.sql("show functions").collect().foreach(println);
+
     ssc.read.parquet(path).registerTempTable("TBL_USER");
     val df = ssc.sql("select count(name) from TBL_USER where name > 'abc'");
     println(df.queryExecution)

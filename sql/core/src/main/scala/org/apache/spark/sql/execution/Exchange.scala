@@ -34,12 +34,24 @@ import org.apache.spark.util.MutablePair
 
 /**
  * Performs a shuffle that will result in the desired `newPartitioning`.
- */
+  *
+  * Exchange物理计划，它有三个参数: partitioning、child spark plan以及ExchangeCoordinator
+  *
+  * 问题：为什么要Exchange物理计划，它的目的是什么？使用了Exchange物理计划，产生什么样的影响或者结果
+  *
+  * @param newPartitioning
+  * @param child
+  * @param coordinator
+  */
 case class Exchange(
     var newPartitioning: Partitioning,
     child: SparkPlan,
     @transient coordinator: Option[ExchangeCoordinator]) extends UnaryNode {
 
+  /***
+    * Exchange物理计划显示的节点名称
+    * @return
+    */
   override def nodeName: String = {
     val extraInfo = coordinator match {
       case Some(exchangeCoordinator) if exchangeCoordinator.isEstimated =>

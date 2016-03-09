@@ -48,7 +48,7 @@ case object UnspecifiedDistribution extends Distribution
 case object AllTuples extends Distribution
 
 /**
- * Represents data where tuples that share the same values for the `clustering`
+ *  Representsdata where tuples that share the same values for the `clustering`
  * [[Expression Expressions]] will be co-located. Based on the context, this
  * can mean such tuples are either co-located in the same partition or they will be contiguous（相邻的）
  * within a single partition.
@@ -176,6 +176,12 @@ sealed trait Partitioning {
 }
 
 object Partitioning {
+
+  /** *
+    * 何为Compatible?
+    * @param partitionings
+    * @return
+    */
   def allCompatible(partitionings: Seq[Partitioning]): Boolean = {
     // Note: this assumes transitivity
     partitionings.sliding(2).map {

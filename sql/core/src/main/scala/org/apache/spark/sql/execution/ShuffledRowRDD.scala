@@ -39,8 +39,16 @@ private final class ShuffledRowRDDPartition(
 /**
  * A dummy partitioner for use with records whose partition ids have been pre-computed (i.e. for
  * use on RDDs of (Int, Row) pairs where the Int is a partition id in the expected range).
- */
+  *
+  * @param numPartitions
+  */
 private class PartitionIdPassthrough(override val numPartitions: Int) extends Partitioner {
+
+  /** *
+    * key是是整型的partitionId，在[0, numPartitions)之间？
+    * @param key
+    * @return
+    */
   override def getPartition(key: Any): Int = key.asInstanceOf[Int]
 }
 
@@ -147,12 +155,23 @@ class ShuffledRowRDD(
     }
   }
 
+  /** *
+    * ShuffledRDDRow的数据本地性计算
+    * @param partition
+    * @return
+    */
   override def getPreferredLocations(partition: Partition): Seq[String] = {
     val tracker = SparkEnv.get.mapOutputTracker.asInstanceOf[MapOutputTrackerMaster]
     val dep = dependencies.head.asInstanceOf[ShuffleDependency[_, _, _]]
     tracker.getPreferredLocationsForShuffle(dep, partition.index)
   }
 
+  /** *
+    * ShuffledRDDRow的
+    * @param split
+    * @param context
+    * @return
+    */
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     val shuffledRowPartition = split.asInstanceOf[ShuffledRowRDDPartition]
     // The range of pre-shuffle partitions that we are fetching at here is

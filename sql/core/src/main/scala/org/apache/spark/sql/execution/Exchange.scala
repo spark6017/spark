@@ -37,9 +37,9 @@ import org.apache.spark.util.MutablePair
  *  Exchange物理计划的目的是插入Shuffle，比如Sort、Join等SQL操作通常是涉及有Shuffle操作的
  *
   *
-  * Exchange物理计划，它有三个参数: partitioning、child spark plan以及可选的ExchangeCoordinator
+  * Exchange物理计划，它有三个参数: newpartitioning、child spark plan以及可选的ExchangeCoordinator
   *
-  * 问题：为什么要Exchange物理计划，它的目的是什么？使用了Exchange物理计划，产生什么样的影响或者结果
+  * 问题：为什么要Exchange物理计划，它的目的是什么？使用了Exchange物理计划，产生什么样的影响或者结果。在原来的物理计划
   *
   * @param newPartitioning 这个partitioning是Exchange这个物理计划的输出Partitioning
   * @param child
@@ -78,7 +78,7 @@ case class Exchange(
   override def outputPartitioning: Partitioning = newPartitioning
 
   /**
-   * 该物理计划输出的属性，Exchange物理计划输出的是孩子物理计划的输出属性
+   * 该物理计划输出的属性，Exchange物理计划输出的是孩子物理计划的输出属性。所以对于原来child的parent而言，它的child的输出属性不变
    * @return
    */
   override def output: Seq[Attribute] = child.output
@@ -211,6 +211,10 @@ case class Exchange(
       case RangePartitioning(_, _) | SinglePartition => identity
       case _ => sys.error(s"Exchange not implemented for $newPartitioning")
     }
+
+    /** *
+      * 获得一个RDD[K,V]用于Shuffle，它的Key是Int类型，Value是InternalRow类型
+      */
     val rddWithPartitionIds: RDD[Product2[Int, InternalRow]] = {
       if (needToCopyObjectsBeforeShuffle(part, serializer)) {
         rdd.mapPartitionsInternal { iter =>
@@ -229,6 +233,12 @@ case class Exchange(
     // Now, we manually create a ShuffleDependency. Because pairs in rddWithPartitionIds
     // are in the form of (partitionId, row) and every partitionId is in the expected range
     // [0, part.numPartitions - 1]. The partitioner of this is a PartitionIdPassthrough.
+
+    /** *
+      *  rddWithPartitionIds是RDD
+      *  PartitionIdPassthrough是Partitioner
+      *  Some(serializer)是序列化器
+      */
     val dependency =
       new ShuffleDependency[Int, InternalRow, InternalRow](
         rddWithPartitionIds,
@@ -243,6 +253,11 @@ case class Exchange(
    * This [[ShuffledRowRDD]] is created based on a given [[ShuffleDependency]] and an optional
    * partition start indices array. If this optional array is defined, the returned
    * [[ShuffledRowRDD]] will fetch pre-shuffle partitions based on indices of this array.
+   *
+   *
+   * @param shuffleDependency
+   * @param specifiedPartitionStartIndices
+   * @return  ShuffledRowRDD，它是RDD[InternalRow]的子类
    */
   private[sql] def preparePostShuffleRDD(
       shuffleDependency: ShuffleDependency[Int, InternalRow, InternalRow],
@@ -252,17 +267,29 @@ case class Exchange(
     // update the number of post-shuffle partitions.
     specifiedPartitionStartIndices.foreach { indices =>
       assert(newPartitioning.isInstanceOf[HashPartitioning])
-      newPartitioning = UnknownPartitioning(indices.length)
+      newPartitioning = UnknownPartitioning(indices.length)  // 为什么给newPartitioning赋值为UnknownPartitioning?
     }
     new ShuffledRowRDD(shuffleDependency, specifiedPartitionStartIndices)
   }
 
+  /** *
+    * Exchange的doExecute方法返回的RDD类型是RDD[InternalRow]
+    * @return
+    */
   protected override def doExecute(): RDD[InternalRow] = attachTree(this, "execute") {
     coordinator match {
+
+      /** *
+        * 如果有Exchange协处理器，那么调用Exchange协处理器的postShuffleRDD计算ShuffledRowRDD
+        */
       case Some(exchangeCoordinator) =>
         val shuffleRDD = exchangeCoordinator.postShuffleRDD(this)
         assert(shuffleRDD.partitions.length == newPartitioning.numPartitions)
         shuffleRDD
+
+      /**
+       * 如果没有Exchange协处理器，那么首先获取ShuffleDependency，然后再获得ShuffleRDD
+       */
       case None =>
         val shuffleDependency = prepareShuffleDependency()
         preparePostShuffleRDD(shuffleDependency)
@@ -271,9 +298,34 @@ case class Exchange(
 }
 
 /** *
+  * Exchange伴生对象，调用apply方法创建Exchange类的实例
+  * Exchange类是SparkPlan的子类，也有doExecute方法
   *
   */
 object Exchange {
+
+  /** *
+    * 生成的Exchange物理计划的outputPartitioning
+    * @param newPartitioning
+    * @param child 原来物理计划树上的child物理计划将称为Exchange物理计划的child，而原child物理计划的parent将成为Exchange物理计划的parent
+    *
+    *              parent
+    *              /
+    *          /
+    *      child
+    *
+    *变化为：
+    *                parent
+    *                   /
+    *                /
+    *           Exchange
+    *             /
+    *         /
+    *   child
+    *
+    *
+    * @return
+    */
   def apply(newPartitioning: Partitioning, child: SparkPlan): Exchange = {
     Exchange(newPartitioning, child, coordinator = None: Option[ExchangeCoordinator])
   }
@@ -304,6 +356,11 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
 
   /**
    * Given a required distribution, returns a partitioning that satisfies that distribution.
+   * 创建一个能够满足distribution的partitioning
+   *
+   * @param requiredDistribution
+   * @param numPartitions
+   * @return
    */
   private def createPartitioning(
       requiredDistribution: Distribution,
@@ -409,18 +466,19 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
   }
 
   /**
-   * 当前的物理计划要求它的子物理计划的数据分布和排序满足是它需要的
-   * @param operator
+   * 确保当前的物理计划对子物理计划的数据分布和排序要求得到满足
+   * @param operator 当前的物理计划(算子)
    * @return
    */
   private def ensureDistributionAndOrdering(operator: SparkPlan): SparkPlan = {
     /** *
-      * 当前物理计划要求子物理计划的数据分布方式，比如是否按照output的属性值进行Hash后的数据分布
+      * 当前物理计划要求子物理计划的数据分布方式。每个物理计划都有一个Distribution属性
+      *
       */
     val requiredChildDistributions: Seq[Distribution] = operator.requiredChildDistribution
 
     /** *
-      * 当前物理计划要求子物理计划的数据排序性
+      * 当前物理计划要求子物理计划的数据排序性，每个物理计划都有一个Seq[SortOrder]集合，根据一个或者多个列进行排序
       */
     val requiredChildOrderings: Seq[Seq[SortOrder]] = operator.requiredChildOrdering
 
@@ -437,17 +495,23 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
 
     // Ensure that the operator's children satisfy their output distribution requirements:
 
-    /** *
-      *  将物理计划集合和数据分布集合进行zip，得到的children可能已经插入了Exchange，
-      */
+    /**
+     * children是物理计划的集合，children.zip(requiredChildDistributions)是一个二元组集合，每个元素是child物理计划以及该物理计划
+     * 对该child的数据分布的要求
+     */
     children = children.zip(requiredChildDistributions).map {
       case (child, distribution) =>
+
+        /** *
+          * 如果child物理计划的数据分区满足该物理计划对该child物理计划的数据分布的要求，那么不需要添加Exchange
+          */
         if (child.outputPartitioning.satisfies(distribution)) {
           child
         } else {
-          /**
-           * Exchange是child的子物理计划
-           */
+
+          /** *
+            * 如果child物理计划的数据分布不满足该物理计划对该child物理计划的数据分布的要求
+            */
           Exchange(createPartitioning(distribution, defaultNumPreShufflePartitions), child)
         }
     }

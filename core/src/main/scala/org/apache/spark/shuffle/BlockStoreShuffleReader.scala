@@ -102,12 +102,16 @@ private[spark] class BlockStoreShuffleReader[K, C](
       serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
     }
 
+    if(! recordIter.isEmpty) {
+//      println("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+      println
+    }
+
     // Update the context task metrics for each record read.
     val readMetrics = context.taskMetrics.registerTempShuffleReadMetrics()
 
 
     val metricIter = CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
-
 
       recordIter.map(record => {
         readMetrics.incRecordsRead(1)

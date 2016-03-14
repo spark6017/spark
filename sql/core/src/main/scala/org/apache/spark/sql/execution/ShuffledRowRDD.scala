@@ -205,7 +205,8 @@ class ShuffledRowRDD(
         context)
 
     //读取到的数据是Product2[Int,InternalRow]
-    reader.read().asInstanceOf[Iterator[Product2[Int, InternalRow]]].map(_._2)
+    val data = reader.read()
+    data.asInstanceOf[Iterator[Product2[Int, InternalRow]]].map(_._2)
   }
 
   override def clearDependencies() {

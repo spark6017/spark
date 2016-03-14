@@ -251,6 +251,9 @@ private[spark] object SQLConf {
       "size is small enough.",
     isPublic = false)
 
+  /** *
+    * 默认200
+    */
   val SHUFFLE_PARTITIONS = intConf("spark.sql.shuffle.partitions",
     defaultValue = Some(200),
     doc = "The default number of partitions to use when shuffling data for joins or aggregations.")
@@ -546,6 +549,10 @@ private[sql] class SQLConf extends Serializable with CatalystConf with ParserCon
 
   private[spark] def columnBatchSize: Int = getConf(COLUMN_BATCH_SIZE)
 
+  /** *
+    * 默认200
+    * @return
+    */
   private[spark] def numShufflePartitions: Int = getConf(SHUFFLE_PARTITIONS)
 
   private[spark] def targetPostShuffleInputSize: Long =

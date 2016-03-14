@@ -175,6 +175,9 @@ case class Exchange(
     //执行孩子物理计划得到RDD，这里应该不是提交Job，而是RDD的转换
     val rdd = child.execute()
 
+    val schema = rdd.toDebugString
+
+
     //根据Exchange的newPartitioning获得ShuffleDependency的Partitioner
     val part: Partitioner = newPartitioning match {
       case RoundRobinPartitioning(numPartitions) => new HashPartitioner(numPartitions)

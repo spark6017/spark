@@ -40,7 +40,19 @@ abstract class CompletionIterator[ +A, +I <: Iterator[A]](sub: I) extends Iterat
   def completion(): Unit
 }
 
+/** *
+  *
+  */
 private[spark] object CompletionIterator {
+
+  /** *
+    *
+    * @param sub Iterator类型的变量
+    * @param completionFunction 是一个返回值为Unit的函数
+    * @tparam A
+    * @tparam I
+    * @return
+    */
   def apply[A, I <: Iterator[A]](sub: I, completionFunction: => Unit) : CompletionIterator[A, I] = {
     new CompletionIterator[A, I](sub) {
       def completion(): Unit = completionFunction

@@ -255,15 +255,24 @@ private[spark] object SQLConf {
     defaultValue = Some(200),
     doc = "The default number of partitions to use when shuffling data for joins or aggregations.")
 
+  /***
+    * 默认64M
+    */
   val SHUFFLE_TARGET_POSTSHUFFLE_INPUT_SIZE =
     longMemConf("spark.sql.adaptive.shuffle.targetPostShuffleInputSize",
       defaultValue = Some(64 * 1024 * 1024),
       doc = "The target post-shuffle input size in bytes of a task.")
 
+  /***
+    *是否启用自适应性Execution
+    */
   val ADAPTIVE_EXECUTION_ENABLED = booleanConf("spark.sql.adaptive.enabled",
     defaultValue = Some(false),
     doc = "When true, enable adaptive query execution.")
 
+  /***
+    * POST Shuffle的最小分区数，默认-1
+    */
   val SHUFFLE_MIN_NUM_POSTSHUFFLE_PARTITIONS =
     intConf("spark.sql.adaptive.minNumPostShufflePartitions",
       defaultValue = Some(-1),

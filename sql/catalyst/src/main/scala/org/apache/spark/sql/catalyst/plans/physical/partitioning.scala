@@ -179,7 +179,7 @@ sealed trait Partitioning {
 object Partitioning {
 
   /** *
-    * 何为Compatible?
+    * Partitioning的allCompatible是个静态方法
     * @param partitionings
     * @return
     */

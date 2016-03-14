@@ -320,6 +320,7 @@ case class Exchange(
        * 如果没有Exchange协处理器，那么首先获取ShuffleDependency，然后再获得ShuffleRDD
        */
       case None =>
+        //创建ShuffleDependency
         val shuffleDependency = prepareShuffleDependency()
         preparePostShuffleRDD(shuffleDependency)
     }
@@ -367,17 +368,38 @@ object Exchange {
  * each operator by inserting [[Exchange]] Operators where required.  Also ensure that the
  * input partition ordering requirements are met.
   *
- *  一个转换策略，调用apply方法
+ *  EnsureRequirements是一物理计划的转换策略，在物理计划执行前就会试试转换
  *
   * @param sqlContext
   */
 private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[SparkPlan] {
+
+  /***
+    * 默认的pre-shuffle的分区数
+    * @return
+    */
   private def defaultNumPreShufflePartitions: Int = sqlContext.conf.numShufflePartitions
 
+  /***
+    * target是什么含义？
+    * post-shuffle指的是什么？
+    * post-shuffle input size指的是什么？ 默认64M
+    *
+    *
+    * @return
+    */
   private def targetPostShuffleInputSize: Long = sqlContext.conf.targetPostShuffleInputSize
 
+  /***
+    * 是否其中自适应性Execution
+    * @return
+    */
   private def adaptiveExecutionEnabled: Boolean = sqlContext.conf.adaptiveExecutionEnabled
 
+  /***
+    * Post Shuffle的最小分区数,默认-1
+    * @return
+    */
   private def minNumPostShufflePartitions: Option[Int] = {
     val minNumPostShufflePartitions = sqlContext.conf.minNumPostShufflePartitions
     if (minNumPostShufflePartitions > 0) Some(minNumPostShufflePartitions) else None
@@ -385,7 +407,9 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
 
   /**
    * Given a required distribution, returns a partitioning that satisfies that distribution.
-   * 创建一个能够满足distribution的partitioning
+   *
+    * 给定一个Distribution，返回一个能够满足Distribution的Partitioning
+    * 创建一个能够满足distribution的partitioning
    *
    * @param requiredDistribution
    * @param numPartitions
@@ -545,7 +569,7 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
       case (child, distribution) =>
 
         /** *
-          * 如果child物理计划的数据分区满足该物理计划对该child物理计划的数据分布的要求，那么不需要添加Exchange
+          * 如果child物理计划的数据分区策略(outputPartitioning)不能满足该物理计划对该child物理计划的数据分布(requiredChildDistribution)的要求，那么需要添加Exchange
           */
         if (child.outputPartitioning.satisfies(distribution)) {
           child
@@ -563,9 +587,11 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
 
 
     /** *
+      * children个数大于1，比如JOIN
+      *
       * if条件判定为true的条件是：
-      * a. 孩子物理计划的个数大于1
-      * b. 本物理计划需要的子物理计划的数据分布不仅仅是UnspecifiedDistribution(即，在要求的孩子物理计划的数据分布中，至少有一个不是UnspecifiedDistribution)
+      * a. 孩子物理计划的个数大于1， 例如Join
+      * b. 本物理计划需要的子物理计划的数据分布不仅仅是UnspecifiedDistribution(即，在要求的孩子物理计划的数据分布中，至少有一个不是UnspecifiedDistribution)，JOIN应该也有
       * c.
       */
     if (children.length > 1
@@ -576,6 +602,7 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
       // partitioned by the same partitioning into the same number of partitions. In that case,
       // don't try to make them match `defaultPartitions`, just use the existing partitioning.
       val maxChildrenNumPartitions = children.map(_.outputPartitioning.numPartitions).max
+
       val useExistingPartitioning = children.zip(requiredChildDistributions).forall {
         case (child, distribution) => {
           child.outputPartitioning.guarantees(
@@ -634,10 +661,15 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
     children = withExchangeCoordinator(children, requiredChildDistributions)
 
     // Now that we've performed any necessary shuffles, add sorts to guarantee output orderings:
+
+    //添加Sort物理计划，注意不是添加Exchange物理计划，实际上，添加了Sort物理计划会再添加Exchange物理计划
     children = children.zip(requiredChildOrderings).map { case (child, requiredOrdering) =>
       if (requiredOrdering.nonEmpty) {
         // If child.outputOrdering is [a, b] and requiredOrdering is [a], we do not need to sort.
+        //从child.outputOrdering取出requiredOrdering元素个数的SortOrder元素
         if (requiredOrdering != child.outputOrdering.take(requiredOrdering.length)) {
+
+          //分区内排序，而不是全局排序
           Sort(requiredOrdering, global = false, child = child)
         } else {
           child

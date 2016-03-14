@@ -48,14 +48,12 @@ case object UnspecifiedDistribution extends Distribution
 case object AllTuples extends Distribution
 
 /**
- * Represents data where tuples that share the same values for the `clustering`
+ *  Representsdata where tuples that share the same values for the `clustering`
  * [[Expression Expressions]] will be co-located. Based on the context, this
  * can mean such tuples are either co-located in the same partition or they will be contiguous（相邻的）
  * within a single partition.
   *
-  * ClusteredDistribution是相对于AllTuples(单个分区)而言的，即数据分布式分布，它的特性是
-  * 'clustering'表达式的结果相同的tuples将放在一起
-  *
+   *
  */
 case class ClusteredDistribution(clustering: Seq[Expression]) extends Distribution {
   require(
@@ -123,6 +121,9 @@ sealed trait Partitioning {
    * to satisfy the partitioning scheme mandated by the `required` [[Distribution]],
    * i.e. the current dataset does not need to be re-partitioned for the `required`
    * Distribution (it is possible that tuples within a partition need to be reorganized).
+   *
+   * child物理计划的outputPartitioning是否满足parent物理计划对孩子物理计划的数据分布的要求
+   *
    */
   def satisfies(required: Distribution): Boolean
 
@@ -176,6 +177,12 @@ sealed trait Partitioning {
 }
 
 object Partitioning {
+
+  /** *
+    * 何为Compatible?
+    * @param partitionings
+    * @return
+    */
   def allCompatible(partitionings: Seq[Partitioning]): Boolean = {
     // Note: this assumes transitivity
     partitionings.sliding(2).map {
@@ -235,7 +242,15 @@ case object SinglePartition extends Partitioning {
  * Represents a partitioning where rows are split up across partitions based on the hash
  * of `expressions`.  All rows where `expressions` evaluate to the same values are guaranteed to be
  * in the same partition.
- */
+  *
+  * 基于Hash算法的数据分区。表达式的计算结果相同的行会被划分到同一个分区
+ *
+ * 比如select count(1) from tbl_student group by classId,那么classId相同的行将聚合到同一个分区(在Aggregation中需要根据分组表达式进行分区)
+ *
+ *
+  * @param expressions
+  * @param numPartitions
+  */
 case class HashPartitioning(expressions: Seq[Expression], numPartitions: Int)
   extends Expression with Partitioning with Unevaluable {
 
@@ -243,6 +258,15 @@ case class HashPartitioning(expressions: Seq[Expression], numPartitions: Int)
   override def nullable: Boolean = false
   override def dataType: DataType = IntegerType
 
+  /** *
+    * 如果孩子物理计划的outputPartitioning是HashParitioning，
+    * 那么
+    * 1. 如果父物理计划对孩子物理计划的数据分布要求是UnspecifiedDistribution，那么返回true
+    * 2. 如果父物理机计划对孩子物理计划的数据分布的要求是ClusteredDistribution，那么
+    *
+    * @param required
+    * @return
+    */
   override def satisfies(required: Distribution): Boolean = required match {
     case UnspecifiedDistribution => true
     case ClusteredDistribution(requiredClustering) =>

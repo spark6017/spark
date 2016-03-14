@@ -34,12 +34,14 @@ import org.apache.spark.util.MutablePair
 
 /**
  * Performs a shuffle that will result in the desired `newPartitioning`.
+ *  Exchange物理计划的目的是插入Shuffle，比如Sort、Join等SQL操作通常是涉及有Shuffle操作的
+ *
   *
-  * Exchange物理计划，它有三个参数: partitioning、child spark plan以及ExchangeCoordinator
+  * Exchange物理计划，它有三个参数: newpartitioning、child spark plan以及可选的ExchangeCoordinator
   *
-  * 问题：为什么要Exchange物理计划，它的目的是什么？使用了Exchange物理计划，产生什么样的影响或者结果
+  * 问题：为什么要Exchange物理计划，它的目的是什么？使用了Exchange物理计划，产生什么样的影响或者结果。在原来的物理计划
   *
-  * @param newPartitioning
+  * @param newPartitioning 这个partitioning是Exchange这个物理计划的输出Partitioning
   * @param child
   * @param coordinator
   */
@@ -53,6 +55,10 @@ case class Exchange(
     * @return
     */
   override def nodeName: String = {
+
+    /** *
+      *
+      */
     val extraInfo = coordinator match {
       case Some(exchangeCoordinator) if exchangeCoordinator.isEstimated =>
         s"(coordinator id: ${System.identityHashCode(coordinator)})"
@@ -65,8 +71,16 @@ case class Exchange(
     s"$simpleNodeName$extraInfo"
   }
 
+  /** *
+    * 该物理计划输出的数据的分区算法
+    * @return
+    */
   override def outputPartitioning: Partitioning = newPartitioning
 
+  /**
+   * 该物理计划输出的属性，Exchange物理计划输出的是孩子物理计划的输出属性。所以对于原来child的parent而言，它的child的输出属性不变
+   * @return
+   */
   override def output: Seq[Attribute] = child.output
 
   /**
@@ -197,6 +211,10 @@ case class Exchange(
       case RangePartitioning(_, _) | SinglePartition => identity
       case _ => sys.error(s"Exchange not implemented for $newPartitioning")
     }
+
+    /** *
+      * 获得一个RDD[K,V]用于Shuffle，它的Key是Int类型，Value是InternalRow类型
+      */
     val rddWithPartitionIds: RDD[Product2[Int, InternalRow]] = {
       if (needToCopyObjectsBeforeShuffle(part, serializer)) {
         rdd.mapPartitionsInternal { iter =>
@@ -215,6 +233,12 @@ case class Exchange(
     // Now, we manually create a ShuffleDependency. Because pairs in rddWithPartitionIds
     // are in the form of (partitionId, row) and every partitionId is in the expected range
     // [0, part.numPartitions - 1]. The partitioner of this is a PartitionIdPassthrough.
+
+    /** *
+      *  rddWithPartitionIds是RDD
+      *  PartitionIdPassthrough是Partitioner
+      *  Some(serializer)是序列化器
+      */
     val dependency =
       new ShuffleDependency[Int, InternalRow, InternalRow](
         rddWithPartitionIds,
@@ -229,6 +253,11 @@ case class Exchange(
    * This [[ShuffledRowRDD]] is created based on a given [[ShuffleDependency]] and an optional
    * partition start indices array. If this optional array is defined, the returned
    * [[ShuffledRowRDD]] will fetch pre-shuffle partitions based on indices of this array.
+   *
+   *
+   * @param shuffleDependency
+   * @param specifiedPartitionStartIndices
+   * @return  ShuffledRowRDD，它是RDD[InternalRow]的子类
    */
   private[sql] def preparePostShuffleRDD(
       shuffleDependency: ShuffleDependency[Int, InternalRow, InternalRow],
@@ -238,17 +267,29 @@ case class Exchange(
     // update the number of post-shuffle partitions.
     specifiedPartitionStartIndices.foreach { indices =>
       assert(newPartitioning.isInstanceOf[HashPartitioning])
-      newPartitioning = UnknownPartitioning(indices.length)
+      newPartitioning = UnknownPartitioning(indices.length)  // 为什么给newPartitioning赋值为UnknownPartitioning?
     }
     new ShuffledRowRDD(shuffleDependency, specifiedPartitionStartIndices)
   }
 
+  /** *
+    * Exchange的doExecute方法返回的RDD类型是RDD[InternalRow]
+    * @return
+    */
   protected override def doExecute(): RDD[InternalRow] = attachTree(this, "execute") {
     coordinator match {
+
+      /** *
+        * 如果有Exchange协处理器，那么调用Exchange协处理器的postShuffleRDD计算ShuffledRowRDD
+        */
       case Some(exchangeCoordinator) =>
         val shuffleRDD = exchangeCoordinator.postShuffleRDD(this)
         assert(shuffleRDD.partitions.length == newPartitioning.numPartitions)
         shuffleRDD
+
+      /**
+       * 如果没有Exchange协处理器，那么首先获取ShuffleDependency，然后再获得ShuffleRDD
+       */
       case None =>
         val shuffleDependency = prepareShuffleDependency()
         preparePostShuffleRDD(shuffleDependency)
@@ -256,7 +297,35 @@ case class Exchange(
   }
 }
 
+/** *
+  * Exchange伴生对象，调用apply方法创建Exchange类的实例
+  * Exchange类是SparkPlan的子类，也有doExecute方法
+  *
+  */
 object Exchange {
+
+  /** *
+    * 生成的Exchange物理计划的outputPartitioning
+    * @param newPartitioning
+    * @param child 原来物理计划树上的child物理计划将称为Exchange物理计划的child，而原child物理计划的parent将成为Exchange物理计划的parent
+    *
+    *              parent
+    *              /
+    *          /
+    *      child
+    *
+    *变化为：
+    *                parent
+    *                   /
+    *                /
+    *           Exchange
+    *             /
+    *         /
+    *   child
+    *
+    *
+    * @return
+    */
   def apply(newPartitioning: Partitioning, child: SparkPlan): Exchange = {
     Exchange(newPartitioning, child, coordinator = None: Option[ExchangeCoordinator])
   }
@@ -268,7 +337,11 @@ object Exchange {
  * [[org.apache.spark.sql.catalyst.plans.physical.Distribution Distribution]] requirements for
  * each operator by inserting [[Exchange]] Operators where required.  Also ensure that the
  * input partition ordering requirements are met.
- */
+  *
+ *  一个转换策略，调用apply方法
+ *
+  * @param sqlContext
+  */
 private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[SparkPlan] {
   private def defaultNumPreShufflePartitions: Int = sqlContext.conf.numShufflePartitions
 
@@ -283,6 +356,11 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
 
   /**
    * Given a required distribution, returns a partitioning that satisfies that distribution.
+   * 创建一个能够满足distribution的partitioning
+   *
+   * @param requiredDistribution
+   * @param numPartitions
+   * @return
    */
   private def createPartitioning(
       requiredDistribution: Distribution,
@@ -387,25 +465,67 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
     withCoordinator
   }
 
+  /**
+   * 确保当前的物理计划对子物理计划的数据分布和排序要求得到满足
+   * @param operator 当前的物理计划(算子)
+   * @return
+   */
   private def ensureDistributionAndOrdering(operator: SparkPlan): SparkPlan = {
+    /** *
+      * 当前物理计划要求子物理计划的数据分布方式。每个物理计划都有一个Distribution属性
+      *
+      */
     val requiredChildDistributions: Seq[Distribution] = operator.requiredChildDistribution
+
+    /** *
+      * 当前物理计划要求子物理计划的数据排序性，每个物理计划都有一个Seq[SortOrder]集合，根据一个或者多个列进行排序
+      */
     val requiredChildOrderings: Seq[Seq[SortOrder]] = operator.requiredChildOrdering
+
+    /**
+     * 子物理计划
+     */
     var children: Seq[SparkPlan] = operator.children
+
+    /** *
+      * 每个子物理计划都需要数据分布和数据排序性
+      */
     assert(requiredChildDistributions.length == children.length)
     assert(requiredChildOrderings.length == children.length)
 
     // Ensure that the operator's children satisfy their output distribution requirements:
+
+    /**
+     * children是物理计划的集合，children.zip(requiredChildDistributions)是一个二元组集合，每个元素是child物理计划以及该物理计划
+     * 对该child的数据分布的要求
+     */
     children = children.zip(requiredChildDistributions).map {
       case (child, distribution) =>
+
+        /** *
+          * 如果child物理计划的数据分区满足该物理计划对该child物理计划的数据分布的要求，那么不需要添加Exchange
+          */
         if (child.outputPartitioning.satisfies(distribution)) {
           child
         } else {
+
+          /** *
+            * 如果child物理计划的数据分布不满足该物理计划对该child物理计划的数据分布的要求
+            */
           Exchange(createPartitioning(distribution, defaultNumPreShufflePartitions), child)
         }
     }
 
     // If the operator has multiple children and specifies child output distributions (e.g. join),
     // then the children's output partitionings must be compatible:
+
+
+    /** *
+      * if条件判定为true的条件是：
+      * a. 孩子物理计划的个数大于1
+      * b. 本物理计划需要的子物理计划的数据分布不仅仅是UnspecifiedDistribution(即，在要求的孩子物理计划的数据分布中，至少有一个不是UnspecifiedDistribution)
+      * c.
+      */
     if (children.length > 1
         && requiredChildDistributions.toSet != Set(UnspecifiedDistribution)
         && !Partitioning.allCompatible(children.map(_.outputPartitioning))) {
@@ -487,6 +607,11 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
     operator.withNewChildren(children)
   }
 
+  /** *
+    * 如果是Exchange物理计划，那么
+    * @param plan
+    * @return
+    */
   def apply(plan: SparkPlan): SparkPlan = plan.transformUp {
     case operator @ Exchange(partitioning, child, _) =>
       child.children match {

@@ -199,6 +199,7 @@ private[sql] class ExchangeCoordinator(
       // Make sure we have the expected number of registered Exchange operators.
       assert(exchanges.length == numExchanges)
 
+
       val newPostShuffleRDDs = new JHashMap[Exchange, ShuffledRowRDD](numExchanges)
 
       // Submit all map stages
@@ -254,7 +255,16 @@ private[sql] class ExchangeCoordinator(
     }
   }
 
+  /** *
+    *
+    * @param exchange
+    * @return
+    */
   def postShuffleRDD(exchange: Exchange): ShuffledRowRDD = {
+
+    /** *
+      * 如有必要则进行评估
+      */
     doEstimationIfNecessary()
 
     if (!postShuffleRDDs.containsKey(exchange)) {

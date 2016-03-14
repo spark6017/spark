@@ -43,7 +43,8 @@ import org.apache.spark.util.Utils
  * Note that once a SparkConf object is passed to Spark, it is cloned and can no longer be modified
  * by the user. Spark does not support modifying the configuration at runtime.
  *
- * @param loadDefaults whether to also load values from Java system properties
+ * @param loadDefaults whether to also load values from Java system properties loadDefaults为true表示从Java System Properties加载spark开头的system properties到
+  *
  */
 class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging {
 

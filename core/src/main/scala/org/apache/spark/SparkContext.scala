@@ -401,6 +401,10 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
 
     // System property spark.yarn.app.id must be set if user code ran by AM on a YARN cluster
     // yarn-standalone is deprecated, but still supported
+
+    /***
+      * 如果是YARN-CLUSTER模式，而SparkConf不存在spark.yarn.app.id，那么会抛异常
+      */
     if ((master == "yarn-cluster" || master == "yarn-standalone") &&
         !_conf.contains("spark.yarn.app.id")) {
       throw new SparkException("Detected yarn-cluster mode, but isn't running on a cluster. " +

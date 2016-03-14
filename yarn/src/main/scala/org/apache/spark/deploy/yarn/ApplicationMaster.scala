@@ -142,6 +142,7 @@ private[spark] class ApplicationMaster(
         System.setProperty("spark.master", "yarn-cluster")
 
         // Propagate the application ID so that YarnClusterSchedulerBackend can pick it up.
+        //将spark.yarn.app.id设置到System环境变量中, SparkConf通过读取System Properties将它放到SparkConf中
         System.setProperty("spark.yarn.app.id", appAttemptId.getApplicationId().toString())
 
         // Propagate the attempt if, so that in case of event logging,

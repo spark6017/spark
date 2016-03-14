@@ -27,7 +27,16 @@ import org.apache.spark.sql.catalyst.InternalRow
  * The [[Partition]] used by [[ShuffledRowRDD]]. A post-shuffle partition
  * (identified by `postShufflePartitionIndex`) contains a range of pre-shuffle partitions
  * (`startPreShufflePartitionIndex` to `endPreShufflePartitionIndex - 1`, inclusive).
- */
+  *
+  * 问题：何为pre-shuffle，何为post-shuffle？
+  *
+  * postShufflePartitionIndex的取值范围是[startPreShufflePartitionIndex,endPreShufflePartitionIndex)
+  * ShuffledRowRDDPartition的index变量的值是postShufflePartitionIndex
+  *
+  * @param postShufflePartitionIndex
+  * @param startPreShufflePartitionIndex
+  * @param endPreShufflePartitionIndex
+  */
 private final class ShuffledRowRDDPartition(
     val postShufflePartitionIndex: Int,
     val startPreShufflePartitionIndex: Int,
@@ -126,6 +135,9 @@ class ShuffledRowRDD(
 
   private[this] val numPreShufflePartitions = dependency.partitioner.numPartitions
 
+  /***
+    * specifiedPartitionStartIndices如果没有定义，那么使用numPreShufflePartitions
+    */
   private[this] val partitionStartIndices: Array[Int] = specifiedPartitionStartIndices match {
     case Some(indices) => indices
     case None =>
@@ -134,6 +146,9 @@ class ShuffledRowRDD(
       (0 until numPreShufflePartitions).toArray
   }
 
+  /****
+    *
+    */
   private[this] val part: Partitioner =
     new CoalescedPartitioner(dependency.partitioner, partitionStartIndices)
 
@@ -141,6 +156,10 @@ class ShuffledRowRDD(
 
   override val partitioner: Option[Partitioner] = Some(part)
 
+  /***
+    * 获取ShuffledRowRDD的分区，每个分区是一个ShuffledRowRDDPartition
+    * @return
+    */
   override def getPartitions: Array[Partition] = {
     assert(partitionStartIndices.length == part.numPartitions)
     Array.tabulate[Partition](partitionStartIndices.length) { i =>
@@ -167,7 +186,9 @@ class ShuffledRowRDD(
   }
 
   /** *
-    * ShuffledRDDRow的
+    * ShuffledRDDRow的compute方法，从哪里读取Shuffle数据？通过dependency.shuffleHandle变量
+    *
+    * 问题：Shuffle数据是什么时候写进去的
     * @param split
     * @param context
     * @return
@@ -182,6 +203,8 @@ class ShuffledRowRDD(
         shuffledRowPartition.startPreShufflePartitionIndex,
         shuffledRowPartition.endPreShufflePartitionIndex,
         context)
+
+    //读取到的数据是Product2[Int,InternalRow]
     reader.read().asInstanceOf[Iterator[Product2[Int, InternalRow]]].map(_._2)
   }
 

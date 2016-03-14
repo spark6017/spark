@@ -80,15 +80,29 @@ abstract class BlockTransferService extends ShuffleClient with Closeable with Lo
 
   /**
    * A special case of [[fetchBlocks]], as it fetches only one block and is blocking.
-   *
    * It is also only available after [[init]] is invoked.
-   */
+    *
+    * 从指定的host和port获取ManagedBuffer
+    *
+    * @param host
+    * @param port
+    * @param execId
+    * @param blockId
+    * @return
+    */
   def fetchBlockSync(host: String, port: Int, execId: String, blockId: String): ManagedBuffer = {
     // A monitor for the thread to wait on.
     val result = Promise[ManagedBuffer]()
+
+    /**
+      * fetchBlocks，结束时(成功或者失败时)回调BlockFetchingListener的onBlockFetchSuccess或者onBlockFetchFailure方法
+      */
     fetchBlocks(host, port, execId, Array(blockId),
       new BlockFetchingListener {
         override def onBlockFetchFailure(blockId: String, exception: Throwable): Unit = {
+          /***
+            * Promise的failure方法的参数是Scala的Throwable
+            */
           result.failure(exception)
         }
         override def onBlockFetchSuccess(blockId: String, data: ManagedBuffer): Unit = {
@@ -99,6 +113,9 @@ abstract class BlockTransferService extends ShuffleClient with Closeable with Lo
         }
       })
 
+    /***
+      * 同步等待result的success或者failure调用
+      */
     Await.result(result.future, Duration.Inf)
   }
 

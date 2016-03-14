@@ -364,6 +364,8 @@ private[spark] class BlockManager(
    * it is still valid). This ensures that update in master will compensate for the increase in
    * memory on slave.
     *
+    * 向Driver汇报本Executor的BlockManager的状态
+    *
     * @param blockId
     * @param info
     * @param status
@@ -375,6 +377,10 @@ private[spark] class BlockManager(
       status: BlockStatus,
       droppedMemorySize: Long = 0L): Unit = {
     val successReportBlockStatus = tryToReportBlockStatus(blockId, info, status, droppedMemorySize)
+
+    /***
+      * report失败，那么需要重新注册
+      */
     val needReregister = !successReportBlockStatus
 
     /**
@@ -400,10 +406,17 @@ private[spark] class BlockManager(
       info: BlockInfo,
       status: BlockStatus,
       droppedMemorySize: Long = 0L): Boolean = {
+    /***
+      * 是否tellMaster也记录在了BlockInfo中了
+      */
     if (info.tellMaster) {
       val storageLevel = status.storageLevel
       val inMemSize = Math.max(status.memSize, droppedMemorySize)
       val onDiskSize = status.diskSize
+
+      /***
+        * 调用master的updateBlockInfo方法,master是BlockManagerMaster类型
+        */
       master.updateBlockInfo(blockManagerId, blockId, storageLevel, inMemSize, onDiskSize)
     } else {
       true
@@ -660,7 +673,12 @@ private[spark] class BlockManager(
 
   /**
    * Get block from remote block managers as serialized bytes.
-   */
+    *
+    * 从Remote的BlockManager获取一个Block(该Block的ID是blockId),获取结果是一个ByteBuffer
+    *
+    * @param blockId
+    * @return
+    */
   def getRemoteBytes(blockId: BlockId): Option[ByteBuffer] = {
     logDebug(s"Getting remote block $blockId as bytes")
     doGetRemote(blockId, asBlockResult = false).asInstanceOf[Option[ByteBuffer]]
@@ -696,7 +714,7 @@ private[spark] class BlockManager(
     * 3. 如果本地机器有多个executor，那么本地机器就有多个blockmanager，属于另一个executor的blockmanager是否也算是remote的？ 如果算是，如何优先从本机的blockmanager读取？
     *    --算是remote blockmanager，优先从本机blockmanager读取
     * @param blockId
-    * @param asBlockResult
+    * @param asBlockResult 如果asBlockResult会false，则返回的是Option[ByteBuffer]
     * @return 如果从远程机器没有读取到，则返回None
     */
   private def doGetRemote(blockId: BlockId, asBlockResult: Boolean): Option[Any] = {
@@ -717,8 +735,9 @@ private[spark] class BlockManager(
         /***
           * 同步fetch数据，从指定的host，port上(host+port怎么知道要读取多少数据？)
           */
-        blockTransferService.fetchBlockSync(
-          loc.host, loc.port, loc.executorId, blockId.toString).nioByteBuffer()
+        val byteBuffer = blockTransferService.fetchBlockSync(
+          loc.host, loc.port, loc.executorId, blockId.toString)
+          byteBuffer.nioByteBuffer()
       } catch {
         case NonFatal(e) =>
           numFetchFailures += 1
@@ -763,6 +782,10 @@ private[spark] class BlockManager(
       }
       logDebug(s"The value of block $blockId is null")
     }
+
+    /***
+      * 如果没有读取到，那么打印日志，返回None
+      */
     logDebug(s"Block $blockId not found")
     None
   }
@@ -1003,7 +1026,14 @@ private[spark] class BlockManager(
           // Now that the block is in either the memory, externalBlockStore, or disk store,
           // let other threads read it, and tell the master about it.
           marked = true
+
           putBlockInfo.markReady(size)
+
+          /***
+            * 通知Driver Block Manager,本Executor的BlockManager写入了一个Block，BlockId是blockId
+            * 问题：什么时候可以不通知？
+            *
+            */
           if (tellMaster) {
             reportBlockStatus(blockId, putBlockInfo, putBlockStatus)
           }

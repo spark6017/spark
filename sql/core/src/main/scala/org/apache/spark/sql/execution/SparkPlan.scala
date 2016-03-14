@@ -118,7 +118,7 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ
    * after adding query plan information to created RDDs for visualization.
    * Concrete implementations of SparkPlan should override doExecute instead.
    *
-   *
+   * SparkSQL物理计划的execute方法返回一个RDD[InternalRow]，它是一个final方法，首先执行prepare方法，然后执行doExecute方法
    */
   final def execute(): RDD[InternalRow] = {
     RDDOperationScope.withScope(sparkContext, nodeName, false, true) {

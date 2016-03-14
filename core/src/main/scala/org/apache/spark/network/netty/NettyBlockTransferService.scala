@@ -78,6 +78,15 @@ class NettyBlockTransferService(conf: SparkConf, securityManager: SecurityManage
     Utils.startServiceOnPort(portToTry, startService, conf, getClass.getName)._1
   }
 
+  /***
+    * 读取数据块
+    *
+    * @param host
+    * @param port
+    * @param execId
+    * @param blockIds
+    * @param listener
+    */
   override def fetchBlocks(
       host: String,
       port: Int,

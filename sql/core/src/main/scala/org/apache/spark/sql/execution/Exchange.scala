@@ -164,11 +164,24 @@ case class Exchange(
    * Returns a [[ShuffleDependency]] that will partition rows of its child based on
    * the partitioning scheme defined in `newPartitioning`. Those partitions of
    * the returned ShuffleDependency will be the input of shuffle.
-   */
+    *
+    * 对孩子物理计划输出的记录进行分区，分区算法使用Exchange的构造参数newPartitioning. ShuffleDependency的分区是Shuffle的输入
+    *
+    *
+    * @return 返回ShuffleDependency
+    */
   private[sql] def prepareShuffleDependency(): ShuffleDependency[Int, InternalRow, InternalRow] = {
+
+    //执行孩子物理计划得到RDD，这里应该不是提交Job，而是RDD的转换
     val rdd = child.execute()
+
+    //根据Exchange的newPartitioning获得ShuffleDependency的Partitioner
     val part: Partitioner = newPartitioning match {
       case RoundRobinPartitioning(numPartitions) => new HashPartitioner(numPartitions)
+
+      /***
+        * 如果是HashPartitioning，那么在此实现Partitioner，以[K,V]的K作为partitionId
+        */
       case HashPartitioning(_, n) =>
         new Partitioner {
           override def numPartitions: Int = n
@@ -176,6 +189,11 @@ case class Exchange(
           // `HashPartitioning.partitionIdExpression` to produce partitioning key.
           override def getPartition(key: Any): Int = key.asInstanceOf[Int]
         }
+
+
+      /***
+        * 如果是RangePartitioning，那么使用RangePartitioner
+        */
       case RangePartitioning(sortingExpressions, numPartitions) =>
         // Internally, RangePartitioner runs a job on the RDD that samples keys to compute
         // partition bounds. To get accurate samples, we need to copy the mutable keys.
@@ -188,6 +206,10 @@ case class Exchange(
         // Spark core code.
         implicit val ordering = new InterpretedOrdering(sortingExpressions, child.output)
         new RangePartitioner(numPartitions, rddForSampling, ascending = true)
+
+      /***
+        * 如果是SinglePartition,那么在此实现Partitioner，只有一个分区
+        */
       case SinglePartition =>
         new Partitioner {
           override def numPartitions: Int = 1
@@ -196,6 +218,12 @@ case class Exchange(
       case _ => sys.error(s"Exchange not implemented for $newPartitioning")
       // TODO: Handle BroadcastPartitioning.
     }
+
+
+    /***
+      *
+      * @return 函数类型为InternalRow=>Any的函数
+      */
     def getPartitionKeyExtractor(): InternalRow => Any = newPartitioning match {
       case RoundRobinPartitioning(numPartitions) =>
         // Distributes elements evenly across output partitions, starting from a random partition.
@@ -207,6 +235,7 @@ case class Exchange(
         }
       case h: HashPartitioning =>
         val projection = UnsafeProjection.create(h.partitionIdExpression :: Nil, child.output)
+        //返回的函数是row=>projection(row).getInt(0)
         row => projection(row).getInt(0)
       case RangePartitioning(_, _) | SinglePartition => identity
       case _ => sys.error(s"Exchange not implemented for $newPartitioning")

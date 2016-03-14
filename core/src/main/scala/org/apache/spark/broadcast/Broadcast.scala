@@ -64,7 +64,13 @@ abstract class Broadcast[T: ClassTag](val id: Long) extends Serializable with Lo
 
   private var _destroySite = ""
 
-  /** Get the broadcasted value. */
+  /***
+    * Get the broadcasted value
+    *
+    * 在Task中调用Broadcast.value方法获得Broadcast数据
+    *
+    * @return
+    */
   def value: T = {
     assertValid()
     getValue()
@@ -122,7 +128,9 @@ abstract class Broadcast[T: ClassTag](val id: Long) extends Serializable with Lo
   /**
    * Actually get the broadcasted value. Concrete implementations of Broadcast class must
    * define their own way to get the value.
-   */
+    *
+    * @return
+    */
   protected def getValue(): T
 
   /**

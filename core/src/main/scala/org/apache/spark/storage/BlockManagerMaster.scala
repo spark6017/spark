@@ -61,6 +61,8 @@ class BlockManagerMaster(
 
   /***
     * 调用blockManagerMasterEndpoint向BlockManagerMaster汇报block info
+    *
+    * 向BlockManagerMasterEndpoint发送UpdateBlockInfo信息
     * @param blockManagerId
     * @param blockId
     * @param storageLevel
@@ -80,7 +82,14 @@ class BlockManagerMaster(
     res
   }
 
-  /** Get locations of the blockId from the driver */
+  /***
+    * Get locations of the blockId from the driver
+    *
+    * 获取Block存在哪些BlockManager上
+    *
+    * @param blockId
+    * @return
+    */
   def getLocations(blockId: BlockId): Seq[BlockManagerId] = {
     val msg = GetLocations(blockId)
 

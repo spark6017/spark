@@ -95,7 +95,7 @@ class BlockManagerMasterEndpoint(
       context.reply(true)
 
     /**
-      * 更新block info
+      * Executor的BM向Master发送UpdateBlockInfo消息通过master它的block info已经更新
       */
     case _updateBlockInfo @
         UpdateBlockInfo(blockManagerId, blockId, storageLevel, deserializedSize, size) =>
@@ -370,7 +370,7 @@ class BlockManagerMasterEndpoint(
   }
 
   /**
-    * 更新block info
+    * 更新block info，返回值是Boolean
     * @param blockManagerId
     * @param blockId
     * @param storageLevel
@@ -395,11 +395,17 @@ class BlockManagerMasterEndpoint(
       }
     }
 
+    /***
+      * 如果blockId为空，那么仅仅更新最后访问时间
+      */
     if (blockId == null) {
       blockManagerInfo(blockManagerId).updateLastSeenMs()
       return true
     }
 
+    /***
+      * BlockManagerId与BlockManagerInfo之间的映射，此处调用BlockManagerInfo的updateBlockInfo方法
+      */
     blockManagerInfo(blockManagerId).updateBlockInfo(blockId, storageLevel, memSize, diskSize)
 
     var locations: mutable.HashSet[BlockManagerId] = null
@@ -518,6 +524,13 @@ private[spark] class BlockManagerInfo(
     _lastSeenMs = System.currentTimeMillis()
   }
 
+  /***
+    * 更新BlockInfo，参数中不包含BlockManagerId,原因是每个BlockManagerInfo在构造时就设置了BlockManagerId
+    * @param blockId
+    * @param storageLevel
+    * @param memSize
+    * @param diskSize
+    */
   def updateBlockInfo(
       blockId: BlockId,
       storageLevel: StorageLevel,

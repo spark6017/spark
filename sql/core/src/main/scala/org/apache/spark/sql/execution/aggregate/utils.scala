@@ -146,7 +146,10 @@ object Utils {
      * partialAggregate是一个SparkPlan，它作为finalAggregate的child
      * 注意区分partialAggregate和finalAggregate的参数的区别
       *
-      * partialAggregate是一个SortBasedAggregate
+      * 对于partial aggregation，requiredChildDistributionExpressions的参数是None；
+     * 对于final aggregation，requiredChildDistributionExpressions的参数是Some
+     *
+     * 也就是说，对于partial aggregation，不需要Exchange(或者说是Shuffle)，而对于final aggregation则需要Exchange(或者说是Shuffle)
      */
     val partialAggregate = createAggregate(
         requiredChildDistributionExpressions = None,

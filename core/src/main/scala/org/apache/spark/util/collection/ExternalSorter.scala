@@ -212,6 +212,9 @@ private[spark] class ExternalSorter[K, V, C](
     serializerBatchSizes: Array[Long],
     elementsPerPartition: Array[Long])
 
+  /** *
+    * 记录了Spill的文件，每个元素是一个SpilledFile
+    */
   private val spills = new ArrayBuffer[SpilledFile]
 
   /**
@@ -391,9 +394,16 @@ private[spark] class ExternalSorter[K, V, C](
    * partition we then have an iterator over its contents, and these are expected to be accessed
    * in order (you can't "skip ahead" to one partition without reading the previous one).
    * Guaranteed to return a key-value pair for each partition, in order of partition ID.
-   */
+    *
+   *   将spill到磁盘的数据Seq[SpilledFile]以及内存内的数据inMemory进行merge
+   *
+    * @param spills
+    * @param inMemory
+    * @return
+    */
   private def merge(spills: Seq[SpilledFile], inMemory: Iterator[((Int, K), C)])
       : Iterator[(Int, Iterator[Product2[K, C]])] = {
+    //将spills中的每个元素SpillFile构造为SpillReader，SpillReader的构造参数是SpillFile
     val readers = spills.map(new SpillReader(_))
     val inMemBuffered = inMemory.buffered
     (0 until numPartitions).iterator.map { p =>
@@ -702,8 +712,8 @@ private[spark] class ExternalSorter[K, V, C](
 
   /**
    * Return an iterator over all the data written to this object, aggregated by our aggregator.
-   *
-   * ExternalSorter具有iterator方法
+   * partitionedIterator会对spill到磁盘的数据进行merge
+   * ExternalSorter具有iterator方法，
    */
   def iterator: Iterator[Product2[K, C]] = partitionedIterator.flatMap(pair => pair._2)
 

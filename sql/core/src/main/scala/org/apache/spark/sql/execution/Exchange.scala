@@ -173,6 +173,7 @@ case class Exchange(
   private[sql] def prepareShuffleDependency(): ShuffleDependency[Int, InternalRow, InternalRow] = {
 
     //执行孩子物理计划得到RDD，这里应该不是提交Job，而是RDD的转换
+    //rdd应该是作为ShuffleDependency的构造参数
     val rdd = child.execute()
 
     val schema = rdd.toDebugString
@@ -225,6 +226,8 @@ case class Exchange(
 
     /***
       *
+      * getPartitionKeyExtractor的返回值是一个类型为InternalRow=>Any的函数，它根据newPartitioning的值获取不同的函数
+      *
       * @return 函数类型为InternalRow=>Any的函数
       */
     def getPartitionKeyExtractor(): InternalRow => Any = newPartitioning match {
@@ -245,7 +248,8 @@ case class Exchange(
     }
 
     /** *
-      * 获得一个RDD[K,V]用于Shuffle，它的Key是Int类型，Value是InternalRow类型
+      * 获得一个RDD[K,V]用于Shuffle，它的Key是Int类型，Value是InternalRow类型，
+      * rddWithPartitionIds作为ShuffleDependency的构造参数，它是对rdd进行了一次mapPartition
       */
     val rddWithPartitionIds: RDD[Product2[Int, InternalRow]] = {
       if (needToCopyObjectsBeforeShuffle(part, serializer)) {
@@ -254,7 +258,9 @@ case class Exchange(
           iter.map { row => (part.getPartition(getPartitionKey(row)), row.copy()) }
         }
       } else {
+        //对rdd进行mapPartition操作，iter是分区数据集合
         rdd.mapPartitionsInternal { iter =>
+          //每个分区调用一次getPartitionKeyExtractor
           val getPartitionKey = getPartitionKeyExtractor()
           val mutablePair = new MutablePair[Int, InternalRow]()
           iter.map { row => mutablePair.update(part.getPartition(getPartitionKey(row)), row) }

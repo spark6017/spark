@@ -36,7 +36,15 @@ case class MutablePair[@specialized(Int, Long, Double, Char, Boolean/* , AnyRef 
   /** No-arg constructor for serialization */
   def this() = this(null.asInstanceOf[T1], null.asInstanceOf[T2])
 
-  /** Updates this pair with new values and returns itself */
+  /***
+    * Updates this pair with new values and returns itself
+    *
+    * 返回MutablePair本身
+    *
+    * @param n1
+    * @param n2
+    * @return
+    */
   def update(n1: T1, n2: T2): MutablePair[T1, T2] = {
     _1 = n1
     _2 = n2

@@ -107,10 +107,19 @@ class CoalescedPartitioner(val parent: Partitioner, val partitionStartIndices: A
  * shuffling rows instead of Java key-value pairs. Note that something like this should eventually
  * be implemented in Spark core, but that is blocked by some more general refactorings to shuffle
  * interfaces / internals.
+  *
+  *
+  * ShuffledRowRDD是一个特殊形式的ShuffledRDD，它用于对Spark SQL的数据行(row)进行shuffle
+  *
  *
  * This RDD takes a [[ShuffleDependency]] (`dependency`),
  * and a optional array of partition start indices as input arguments
  * (`specifiedPartitionStartIndices`).
+  *
+  *
+  * ShuffledRowRDD以ShuffleDependency和一个可选的partition start indices数组作为输入参数。参数： partition start indices指的是什么？
+  *
+  *
  *
  * The `dependency` has the parent RDD of this RDD, which represents the dataset before shuffle
  * (i.e. map output). Elements of this RDD are (partitionId, Row) pairs.
@@ -118,6 +127,8 @@ class CoalescedPartitioner(val parent: Partitioner, val partitionStartIndices: A
  * `dependency.partitioner` is the original partitioner used to partition
  * map output, and `dependency.partitioner.numPartitions` is the number of pre-shuffle partitions
  * (i.e. the number of partitions of the map output).
+  *
+  * dependency包含了ShuffleRowRDD依赖的父RDD，父RDD代表的是shuffle前的数据集。ShuffleRowRDD的数据格式是(partitionId,row)
  *
  * When `specifiedPartitionStartIndices` is defined, `specifiedPartitionStartIndices.length`
  * will be the number of post-shuffle partitions. For this case, the `i`th post-shuffle

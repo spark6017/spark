@@ -276,6 +276,8 @@ private[spark] class ExternalSorter[K, V, C](
   private def maybeSpillCollection(usingMap: Boolean): Unit = {
     var estimatedSize = 0L
     if (usingMap) {
+
+      //对PartitionedAppendOnlyMap的大小进行采样评估
       estimatedSize = map.estimateSize()
       if (maybeSpill(map, estimatedSize)) {
         map = new PartitionedAppendOnlyMap[K, C]

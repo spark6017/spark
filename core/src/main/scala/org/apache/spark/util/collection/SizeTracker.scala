@@ -92,7 +92,9 @@ private[spark] trait SizeTracker {
 
   /**
    * Estimate the current size of the collection in bytes. O(1) time.
-   */
+    * PartitionedAppendOnlyMap的估算大小
+    * @return
+    */
   def estimateSize(): Long = {
     assert(samples.nonEmpty)
     val extrapolatedDelta = bytesPerUpdate * (numUpdates - samples.last.numUpdates)

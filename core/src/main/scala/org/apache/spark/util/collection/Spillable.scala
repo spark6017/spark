@@ -91,7 +91,8 @@ private[spark] trait Spillable[C] extends Logging {
       // Claim up to double our current memory from the shuffle memory pool
 
       /***
-        * 申请内存，
+        * 申请内存，因为currentMemory >= myMemoryThreshold,因此，申请的内存量是大于currentMemory的，
+        * 也就说，申请的内存不小于PartitionedAppendOnlyMap当前的内存使用量，是Map的容量翻倍
         */
       val amountToRequest = 2 * currentMemory - myMemoryThreshold
 

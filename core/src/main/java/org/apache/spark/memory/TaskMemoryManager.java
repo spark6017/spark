@@ -192,7 +192,7 @@ public class TaskMemoryManager {
    *
    * @param required 申请的字节数，实际申请到的字节数(返回值)可能小于required
    * @param mode
-   * @param consumer
+   * @param consumer consumer有可能是null
    * @return
    */
   public long acquireExecutionMemory(

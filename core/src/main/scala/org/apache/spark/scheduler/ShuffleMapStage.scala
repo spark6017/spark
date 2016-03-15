@@ -32,7 +32,18 @@ import org.apache.spark.util.CallSite
  * ShuffleMapStages can also be submitted independently as jobs with DAGScheduler.submitMapStage.
  * For such stages, the ActiveJobs that submitted them are tracked in `mapStageJobs`. Note that
  * there can be multiple ActiveJobs trying to compute the same shuffle map stage.
- */
+  *
+  * @param id Unique stage ID
+  * @param rdd RDD that this stage runs on: for a shuffle map stage, it's the RDD we run map tasks
+  *            on, while for a result stage, it's the target RDD that we ran an action on
+  * @param numTasks Total number of tasks in stage; result stages in particular may not need to
+  *                 compute all partitions, e.g. for first(), lookup(), and take().
+  * @param parents List of stages that this stage depends on (through shuffle dependencies).
+  * @param firstJobId ID of the first job this stage was part of, for FIFO scheduling.
+  * @param callSite Location in the user program associated with this stage: either where the target
+  *                 RDD was created, for a shuffle map stage, or where the action for a result stage was called.
+  * @param shuffleDep 每个ShuffleMapStage有一个ShuffleDependency构造参数
+  */
 private[spark] class ShuffleMapStage(
     id: Int,
     rdd: RDD[_],

@@ -254,7 +254,16 @@ abstract class RDD[T: ClassTag](
   /**
    * Get the list of dependencies of this RDD, taking into account whether the
    * RDD is checkpointed or not.
-   */
+   *
+   *  RDD的五大特性之一是RDD之间存在依赖关系，这个依赖关系是通过dependencies方法计算的，
+   *  RDD之间的依赖关系是通过Dependency描述的。
+   *
+   *  此处返回的是一个Dependency集合，意思是一个RDD可以能依赖于多个RDD，RDD和RDD之间的依赖关系只有一个Dependency
+   *
+   *  问题：dependencies方法是在什么地方调用到的？
+    *
+    * @return
+    */
   final def dependencies: Seq[Dependency[_]] = {
     checkpointRDD.map(r => List(new OneToOneDependency(r))).getOrElse {
       if (dependencies_ == null) {

@@ -77,7 +77,7 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
   }
 
   /**
-   * 获得该ShuffleRDD的依赖，它只有一个依赖，类型是ShuffleDependency， 因为ShuffleRDD构造时aggregator不为None，而mapSideCombine可能为None
+   * 获得该ShuffleRDD的依赖，它只有一个依赖，类型是ShuffleDependency。ShuffleRDD构造时aggregator可能不为None，而mapSideCombine可能为None
    * （参见PairRDDFunctions的combineXXX方法）
    *
    * getDependencies这个方法是说该RDD如何依赖它的父RDD，是窄依赖还是宽依赖。
@@ -85,6 +85,12 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
     *
     *
     * new ShuffleDependency操作会生成一个shuffle id，而getDependencies是唯一一个创建new ShuffleDependency的位置
+   *
+   *
+   *
+   * 以reduceByKey为例，reduceByKey会生成一个ShuffledRDD，那么当调用该ShuffledRDD的getDependencies就会创建ShuffleDependency
+   *
+   * 问题：getDependencies是什么时候调到的？
    *
    * @return
    */

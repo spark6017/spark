@@ -318,6 +318,8 @@ class DAGScheduler(
         }
         // Then register current shuffleDep
         val stage = newOrUsedShuffleStage(shuffleDep, firstJobId)
+
+        //ShuffleID与stage的关联关系
         shuffleToMapStage(shuffleDep.shuffleId) = stage
         stage
     }
@@ -417,7 +419,11 @@ class DAGScheduler(
    * the provided firstJobId.
     *
     * 获取ParentStages，放到parents这个HashSet中，其实就是获取ShuffleStage
-   */
+    *
+    * @param rdd rdd的之间依赖关系(OneToOne Dependency，ShuffleDependency)决定了Stage是否需要pipeline
+    * @param firstJobId
+    * @return
+    */
   private def getParentStages(rdd: RDD[_], firstJobId: Int): List[Stage] = {
     val parents = new HashSet[Stage]
     val visited = new HashSet[RDD[_]]
@@ -432,6 +438,7 @@ class DAGScheduler(
 
         /**
           * 遍历RDD的依赖（r.dependencies，如果包含ShuffleDependency，那么会生成唯一的ShuffleId）
+         * r.dependencies包含了parent RDD信息，此时已经创建了ShuffleDependency？不一定，因为dependencies是一个方法，需要首先计算
           */
         for (dep <- r.dependencies) {
           dep match {

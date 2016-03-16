@@ -468,10 +468,12 @@ case class TungstenAggregate(
        ${consume(ctx, eval)}
        """
     }
-
+/**
     println("=================================>Output Code Begin<===============================")
     println(outputCode)
     println("=================================>Output Code End<===============================")
+
+    **/
     val doAgg = ctx.freshName("doAggregateWithKeys")
     ctx.addNewFunction(doAgg,
       s"""

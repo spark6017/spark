@@ -145,12 +145,10 @@ final class UnsafeExternalRowSorter {
        * prefix和这个record引用放到一起，从而在进行row比较时，尽量避免获取record数据本身(record指针和record数据本身可能没有放到一起)
        *
        */
-    sorter.insertRecord(
-      row.getBaseObject(),
-      row.getBaseOffset(),
-      row.getSizeInBytes(),
-      prefix
-    );
+    Object baseObject = row.getBaseObject();
+    long baseOffset = row.getBaseOffset();
+    int sizeInBytes = row.getSizeInBytes();
+    sorter.insertRecord(baseObject, baseOffset, sizeInBytes, prefix);
     numRowsInserted++;
 
     //在生产环境，不支持spill

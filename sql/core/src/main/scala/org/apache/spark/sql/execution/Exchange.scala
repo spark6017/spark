@@ -30,6 +30,7 @@ import org.apache.spark.sql.catalyst.errors.attachTree
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.physical._
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.execution.aggregate.TungstenAggregate
 import org.apache.spark.util.MutablePair
 
 /**
@@ -546,6 +547,25 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
    * @return
    */
   private def ensureDistributionAndOrdering(operator: SparkPlan): SparkPlan = {
+
+    println("=====================> " + operator.getClass.getName)
+
+    //如果是Final Mode的TungstenAggregate，那么这是一个有效的转换
+    if (operator.isInstanceOf[TungstenAggregate]) {
+      val x = operator.asInstanceOf[TungstenAggregate]
+      val mode = x.aggregateExpressions(0).mode.toString;
+      if (mode.toLowerCase().contains("final")) {
+        println
+      }
+    }
+
+    //对于Sort物理计划，比如按照classId进行join，那么spark首先将所有的数据进行hash分区，将相同的classId shuffle到相同的分区上，
+    //然后进行排序，再Join
+    if (operator.isInstanceOf[Sort]) {
+      val x = operator.asInstanceOf[Sort]
+      x.sortOrder.foreach(println)
+    }
+
     /** *
       * 当前物理计划要求子物理计划的数据分布方式。每个物理计划都有一个Distribution属性
       *
@@ -574,20 +594,24 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
      * children是物理计划的集合，children.zip(requiredChildDistributions)是一个二元组集合，每个元素是child物理计划以及该物理计划
      * 对该child的数据分布的要求
      */
-    children = children.zip(requiredChildDistributions).map {
+    val zip = children.zip(requiredChildDistributions)
+    children = zip.map {
       case (child, distribution) =>
 
         /** *
           * 如果child物理计划的数据分区策略(outputPartitioning)不能满足该物理计划对该child物理计划的数据分布(requiredChildDistribution)的要求，那么需要添加Exchange
           */
-        if (child.outputPartitioning.satisfies(distribution)) {
+        val partitioning = child.outputPartitioning
+        val satisfied = partitioning.satisfies(distribution)
+        if (satisfied) {
           child
         } else {
 
           /** *
             * 如果child物理计划的数据分布不满足该物理计划对该child物理计划的数据分布的要求
             */
-          Exchange(createPartitioning(distribution, defaultNumPreShufflePartitions), child)
+          val partitioning = createPartitioning(distribution, defaultNumPreShufflePartitions)
+          Exchange(partitioning, child)
         }
     }
 
@@ -596,13 +620,9 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
 
 
     /** *
-      * children个数大于1，比如JOIN
+      * 如果children个数大于1而且它们的outputPartitioning不完全兼容，那么需要将它们进行统一化
       *
-      * if条件判定为true的条件是：
-      * a. 孩子物理计划的个数大于1， 例如Join
-      * b. 本物理计划需要的子物理计划的数据分布不仅仅是UnspecifiedDistribution(即，在要求的孩子物理计划的数据分布中，至少有一个不是UnspecifiedDistribution)，JOIN应该也有
-      * c.
-      */
+       */
     if (children.length > 1
         && requiredChildDistributions.toSet != Set(UnspecifiedDistribution)
         && !Partitioning.allCompatible(children.map(_.outputPartitioning))) {
@@ -610,8 +630,13 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
       // First check if the existing partitions of the children all match. This means they are
       // partitioned by the same partitioning into the same number of partitions. In that case,
       // don't try to make them match `defaultPartitions`, just use the existing partitioning.
+      //孩子物理计划的已有分区是否match：1. 使用相同的分区算法 2. 分区数相同
+      //孩子物理计划输出的数据的的最大分区数
       val maxChildrenNumPartitions = children.map(_.outputPartitioning.numPartitions).max
 
+      /** *
+        *
+        */
       val useExistingPartitioning = children.zip(requiredChildDistributions).forall {
         case (child, distribution) => {
           child.outputPartitioning.guarantees(
@@ -671,15 +696,19 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
 
     // Now that we've performed any necessary shuffles, add sorts to guarantee output orderings:
 
-    //添加Sort物理计划，注意不是添加Exchange物理计划，实际上，添加了Sort物理计划会再添加Exchange物理计划
+    //添加Sort物理计划，注意不是添加Exchange物理计划
     children = children.zip(requiredChildOrderings).map { case (child, requiredOrdering) =>
       if (requiredOrdering.nonEmpty) {
         // If child.outputOrdering is [a, b] and requiredOrdering is [a], we do not need to sort.
         //从child.outputOrdering取出requiredOrdering元素个数的SortOrder元素
-        if (requiredOrdering != child.outputOrdering.take(requiredOrdering.length)) {
+        val outputOrdering = child.outputOrdering
+        //如果outputOrdering是空集合，那么对空集合取take(1)返回什么？
+        if (requiredOrdering != outputOrdering.take(requiredOrdering.length)) {
 
-          //分区内排序，而不是全局排序
-          Sort(requiredOrdering, global = false, child = child)
+          //分区内排序，而不是全局排序, 如果是分区内排序，那么就不需要进行Shuffle
+          //child是Exchange，给Sort物理计划插入一个Exchange，表示首相将相同的key shuffle到同一个分区，然后对分区内数据进行排序
+          val sort = Sort(requiredOrdering, global = false, child = child)
+          sort
         } else {
           child
         }

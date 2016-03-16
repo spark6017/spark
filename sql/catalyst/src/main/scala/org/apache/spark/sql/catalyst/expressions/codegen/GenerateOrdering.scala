@@ -132,10 +132,11 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR
           return 0;
         }
       }"""
-
+    /**
     println("=================================================================")
     println(code)
     println("=================================================================")
+    */
 
     logDebug(s"Generated Ordering: ${CodeFormatter.format(code)}")
 

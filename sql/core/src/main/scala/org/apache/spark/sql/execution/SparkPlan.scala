@@ -86,7 +86,7 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ
   // TODO: Move to `DistributedPlan`
   /**
     * Specifies how data is partitioned across different nodes in the cluster.
-    * 本物理计划输出的RDD的数据是什么样的分区策略
+    * 本物理计划输出的RDD的数据是什么样的分区策略, Partitioning有一个numPartitions属性，表示分区的个数
     *
     * */
   def outputPartitioning: Partitioning = UnknownPartitioning(0) // TODO: WRONG WIDTH!

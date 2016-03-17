@@ -119,8 +119,10 @@ class Accumulable[R, T] private (
 
   /**
    * Add more data to this accumulator / accumulable
+   *
+   * 在Executor的Task中执行+=操作，Driver求value时怎么把每个Task的累加值累加起来
    * @param term the data to add
-   */
+    */
   def += (term: T) { value_ = param.addAccumulator(value_, term) }
 
   /**

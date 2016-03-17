@@ -71,6 +71,11 @@ class Accumulator[T] private[spark] (
     this(initialValue, param, name, false)
   }
 
+  /** *
+    * 构造Accumulator
+    * @param initialValue
+    * @param param
+    */
   def this(initialValue: T, param: AccumulatorParam[T]) = {
     this(initialValue, param, None, false)
   }
@@ -170,6 +175,9 @@ object AccumulatorParam {
     def zero(initialValue: Double): Double = 0.0
   }
 
+  /** *
+    * 隐式转换AccumulatorParam[Int]
+    */
   implicit object IntAccumulatorParam extends AccumulatorParam[Int] {
     def addInPlace(t1: Int, t2: Int): Int = t1 + t2
     def zero(initialValue: Int): Int = 0

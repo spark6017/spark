@@ -108,7 +108,10 @@ private[sql] class ExchangeCoordinator(
   /**
    * Estimates partition start indices for post-shuffle partitions based on
    * mapOutputStatistics provided by all pre-shuffle stages.
-   */
+    *
+    * @param mapOutputStatistics
+    * @return
+    */
   private[sql] def estimatePartitionStartIndices(
       mapOutputStatistics: Array[MapOutputStatistics]): Array[Int] = {
     // If we have mapOutputStatistics.length < numExchange, it is because we do not submit
@@ -129,7 +132,10 @@ private[sql] class ExchangeCoordinator(
           math.max(math.ceil(totalPostShuffleInputSize / numPartitions.toDouble).toLong, 16)
         math.min(maxPostShuffleInputSize, advisoryTargetPostShuffleInputSize)
 
-      case None => advisoryTargetPostShuffleInputSize
+      case None => {
+        //测试目的改为16了
+        advisoryTargetPostShuffleInputSize
+      }
     }
 
     logInfo(
@@ -152,23 +158,34 @@ private[sql] class ExchangeCoordinator(
     val numPreShufflePartitions = distinctNumPreShufflePartitions.head
 
     val partitionStartIndices = ArrayBuffer[Int]()
-    // The first element of partitionStartIndices is always 0.
+
+    /** *
+      *    The first element of partitionStartIndices is always 0.
+      *
+      */
     partitionStartIndices += 0
 
     var postShuffleInputSize = 0L
 
     var i = 0
+
+      /** *
+        * numPreShufflePartitions可能是默认的Shuffle分区200，此处是遍历所有的200个分区
+        * Exchange1和Exchange2每个的分区数是200
+        */
     while (i < numPreShufflePartitions) {
       // We calculate the total size of ith pre-shuffle partitions from all pre-shuffle stages.
       // Then, we add the total size to postShuffleInputSize.
       var j = 0
       while (j < mapOutputStatistics.length) {
-        postShuffleInputSize += mapOutputStatistics(j).bytesByPartitionId(i)
+        val size =  mapOutputStatistics(j).bytesByPartitionId(i)
+        postShuffleInputSize += size
         j += 1
       }
 
-      // If the current postShuffleInputSize is equal or greater than the
-      // targetPostShuffleInputSize, We need to add a new element in partitionStartIndices.
+      /** *
+        * If the current postShuffleInputSize is equal or greater than the targetPostShuffleInputSize, We need to add a new element in partitionStartIndices.
+        */
       if (postShuffleInputSize >= targetPostShuffleInputSize) {
         if (i < numPreShufflePartitions - 1) {
           // Next start index.
@@ -210,11 +227,12 @@ private[sql] class ExchangeCoordinator(
         val exchange = exchanges(i)
         val shuffleDependency = exchange.prepareShuffleDependency()
         shuffleDependencies += shuffleDependency
-        if (shuffleDependency.rdd.partitions.length != 0) {
+        val partitionLength = shuffleDependency.rdd.partitions.length
+        if ( partitionLength != 0) {
           // submitMapStage does not accept RDD with 0 partition.
           // So, we will not submit this dependency.
-          submittedStageFutures +=
-            exchange.sqlContext.sparkContext.submitMapStage(shuffleDependency)
+          val future = exchange.sqlContext.sparkContext.submitMapStage(shuffleDependency)
+          submittedStageFutures += future
         }
         i += 1
       }
@@ -224,6 +242,7 @@ private[sql] class ExchangeCoordinator(
       var j = 0
       while (j < submittedStageFutures.length) {
         // This call is a blocking call. If the stage has not finished, we will wait at here.
+        //等待submittedStageFutures运行结果
         mapOutputStatistics(j) = submittedStageFutures(j).get()
         j += 1
       }
@@ -234,7 +253,8 @@ private[sql] class ExchangeCoordinator(
         if (mapOutputStatistics.length == 0) {
           None
         } else {
-          Some(estimatePartitionStartIndices(mapOutputStatistics))
+          val x = estimatePartitionStartIndices(mapOutputStatistics)
+          Some(x)
         }
 
       var k = 0
@@ -276,6 +296,6 @@ private[sql] class ExchangeCoordinator(
   }
 
   override def toString: String = {
-    s"coordinator[target post-shuffle partition size: $advisoryTargetPostShuffleInputSize]"
+    s"coordinator[advisory target post-shuffle partition size: ${advisoryTargetPostShuffleInputSize/1024/1024}M]"
   }
 }

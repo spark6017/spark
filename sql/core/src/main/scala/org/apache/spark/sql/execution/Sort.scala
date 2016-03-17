@@ -54,8 +54,9 @@ case class Sort(
   override def outputOrdering: Seq[SortOrder] = sortOrder
 
   /**
-   *  Child Distribution,如果是全量排序，那么要求孩子节点的Distribution是OrderedDistribution[SortOrders]
-    *  如果是局部排序，那么对孩子物理计划的输出不要特定的分布
+   * 如果是全量排序，那么要求孩子物理计划的数据分布是OrderedDistribution，那么在插入Exchange物理计划时，需要插入Exchange(range-partitioning)
+   * 如果是布局排序(分区内排序)，那么对孩子物理计划的数据分布是UnspecifiedDistribution,那么在插入Exchange物理计划是，需要插入Exchange(hash-partitioning)
+   *
    * @return
    */
   override def requiredChildDistribution: Seq[Distribution] =

@@ -21,10 +21,10 @@ object SparkSQLTestStudentOrderBy {
     val df = sc.textFile(path).map(x => x.split(" ")).map(x => Student(x(0), x(1), x(2).toInt, x(3))).toDF()
     df.registerTempTable("TBL_STUDENT")
 
+    //全局排序使用rangepartioning
     val df2 = ssc.sql("select * from TBL_STUDENT order by name");
     println(df2.queryExecution)
     df2.show(20)
     readLine()
-    sc.stop
   }
 }

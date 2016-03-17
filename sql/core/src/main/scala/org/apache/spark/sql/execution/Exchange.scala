@@ -418,8 +418,8 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
   /**
    * Given a required distribution, returns a partitioning that satisfies that distribution.
    *
-    * 给定一个Distribution，返回一个能够满足Distribution的Partitioning
-    * 创建一个能够满足distribution的partitioning
+    * 如果是OrderedDistribution，那么创建HashPartitioning；
+   *  如果是UnspecifiedDistribution呢？报错？查看Sort物理计划，对于分区内排序，它对孩子物理计划的数据分布要求是UnspecifiedDistribution
    *
    * @param requiredDistribution
    * @param numPartitions
@@ -561,6 +561,7 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
 
     //对于Sort物理计划，比如按照classId进行join，那么spark首先将所有的数据进行hash分区，将相同的classId shuffle到相同的分区上，
     //然后进行排序，再Join
+    //这个断点在全量排序的情况下是可以为真的
     if (operator.isInstanceOf[Sort]) {
       val x = operator.asInstanceOf[Sort]
       x.sortOrder.foreach(println)
@@ -696,8 +697,9 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
 
     // Now that we've performed any necessary shuffles, add sorts to guarantee output orderings:
 
-    //添加Sort物理计划，注意不是添加Exchange物理计划
-    children = children.zip(requiredChildOrderings).map { case (child, requiredOrdering) =>
+    //如果children非空，而requiredChildOrderings为空，那么zip2就是空集合
+    val zip2 =  children.zip(requiredChildOrderings)
+    children = zip2.map { case (child, requiredOrdering) =>
       if (requiredOrdering.nonEmpty) {
         // If child.outputOrdering is [a, b] and requiredOrdering is [a], we do not need to sort.
         //从child.outputOrdering取出requiredOrdering元素个数的SortOrder元素
@@ -707,6 +709,7 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
 
           //分区内排序，而不是全局排序, 如果是分区内排序，那么就不需要进行Shuffle
           //child是Exchange，给Sort物理计划插入一个Exchange，表示首相将相同的key shuffle到同一个分区，然后对分区内数据进行排序
+          //问题：如果是全量排序，比如order by classId, 那么怎么实现的
           val sort = Sort(requiredOrdering, global = false, child = child)
           sort
         } else {
@@ -716,7 +719,7 @@ private[sql] case class EnsureRequirements(sqlContext: SQLContext) extends Rule[
         child
       }
     }
-
+    // 对于select * from tbl_student order by classId，此处的children为空集合
     operator.withNewChildren(children)
   }
 

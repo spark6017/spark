@@ -33,7 +33,17 @@ import org.apache.spark.util.collection.ExternalSorter
  * startPartition和endPartition通常只差1，表示只读取一个Partition的数据，参见
  * @see [[org.apache.spark.rdd.ShuffledRDD#compute]]#compute
  *
- */
+  *
+  * @param handle ShuffleHandle记录了shuffle id信息，通过ShuffledRDD
+ *               通过shuffle id获取上一个stage的数据
+  * @param startPartition
+  * @param endPartition
+  * @param context
+  * @param blockManager
+  * @param mapOutputTracker
+  * @tparam K
+  * @tparam C
+  */
 private[spark] class BlockStoreShuffleReader[K, C](
     handle: BaseShuffleHandle[K, _, C],
     startPartition: Int,

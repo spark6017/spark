@@ -27,6 +27,10 @@ import org.apache.spark.util.Utils
 /**
  * Result returned by a ShuffleMapTask to a scheduler. Includes the block manager address that the
  * task ran on as well as the sizes of outputs for each reducer, for passing on to the reduce tasks.
+ *
+ * ShuffleMapTask的任务执行结果(ShuffleMapTask返回的是MapStatus类型的结果)
+ * MapStatus记录了Shuffle数据的输出位置以及根据reduceId获取相应的shuffle数据的大小
+ *
  */
 private[spark] sealed trait MapStatus {
   /** Location where this task was run. */
@@ -41,9 +45,17 @@ private[spark] sealed trait MapStatus {
   def getSizeForBlock(reduceId: Int): Long
 }
 
-
+/** *
+  * 伴生对象
+  */
 private[spark] object MapStatus {
 
+  /** *
+    * 构造MapStatus实例，如果超过2000个分区，那么使用HighlyCompressedMapStatus，否则使用CompressedMapStatus
+    * @param loc
+    * @param uncompressedSizes
+    * @return
+    */
   def apply(loc: BlockManagerId, uncompressedSizes: Array[Long]): MapStatus = {
     if (uncompressedSizes.length > 2000) {
       HighlyCompressedMapStatus(loc, uncompressedSizes)
@@ -76,6 +88,7 @@ private[spark] object MapStatus {
     if (compressedSize == 0) {
       0
     } else {
+      //compressedSize是一个字节
       math.pow(LOG_BASE, compressedSize & 0xFF).toLong
     }
   }
@@ -106,12 +119,20 @@ private[spark] class CompressedMapStatus(
     MapStatus.decompressSize(compressedSizes(reduceId))
   }
 
+  /** *
+    * 序列化
+    * @param out
+    */
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
     loc.writeExternal(out)
     out.writeInt(compressedSizes.length)
     out.write(compressedSizes)
   }
 
+  /** *
+    * 反序列化
+    * @param in
+    */
   override def readExternal(in: ObjectInput): Unit = Utils.tryOrIOException {
     loc = BlockManagerId(in)
     val len = in.readInt()

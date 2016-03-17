@@ -139,6 +139,10 @@ private[spark] class SortShuffleWriter[K, V, C](
       * BlockManager的shuffleServerId是BlockManagerId
       *
       * 问题：ShuffleReader怎么根据MapStatus信息去Shuffle数据？
+     *
+     * MapStatus的第二个参数是partitionLengths，它是该任务写到磁盘上上的对应reduce task的字节数组，换句话说，
+     * partitionLengths记录了该map task输出到每个reduce task的字节数
+     *
      */
     mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)
   }

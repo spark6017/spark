@@ -116,6 +116,10 @@ case class TungstenAggregate(
         // so return an empty iterator.
         Iterator.empty
       } else {
+
+        /** *
+          * 分区内数据集合(iter)转换位TungstenAggregationIterator
+          */
         val aggregationIterator =
           new TungstenAggregationIterator(
             groupingExpressions,

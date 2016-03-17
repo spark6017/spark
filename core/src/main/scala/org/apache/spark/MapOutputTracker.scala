@@ -146,7 +146,7 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
    * endPartition is excluded from the range).
    *
    * 返回值是一个二元组的集合，
-   * 元组的第一个元素是BlockManagerId,元组的第二个元素是一个二元组集合
+   * 元组的第一个元素是BlockManagerId,元组的第二个元素是一个二元组集合，这个二元组记录了BlockId和Block的块大小信息
    *
    * @return A sequence of 2-item tuples, where the first item in the tuple is a BlockManagerId,
    *         and the second item is a sequence of (shuffle block id, shuffle block size) tuples
@@ -189,8 +189,11 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
    *
    * (It would be nice to remove this restriction in the future.)
     *
-    * 根据指定的shuffleId，获得MapStatus数组，什么需要fetch？
-   */
+    * 根据指定的shuffleId，获得MapStatus数组，MapStatus这个数据结构记录了哪些信息？
+    *
+    * @param shuffleId
+    * @return
+    */
   private def getStatuses(shuffleId: Int): Array[MapStatus] = {
 
     //如果取出来的为NULL，那么首先进行fetch，否则直接返回statuses

@@ -35,6 +35,7 @@ public class MemoryLocation {
 
   long offset;
 
+
   public MemoryLocation(@Nullable Object obj, long offset) {
     this.obj = obj;
     this.offset = offset;

@@ -28,6 +28,8 @@ public interface MemoryAllocator {
   /**
    * Allocates a contiguous block of memory. Note that the allocated memory is not guaranteed
    * to be zeroed out (call `zero()` on the result if this is necessary).
+   *
+   * 问题：不保证分配的内存是zero out的？zero out是什么意思？
    */
   MemoryBlock allocate(long size) throws OutOfMemoryError;
 

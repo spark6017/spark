@@ -342,6 +342,7 @@ object SparkEnv extends Logging {
 
         /** *
           * 注册一个Endpoint，其名称是name，返回该Endpoint对应的EndpointRef
+          *
           */
         rpcEnv.setupEndpoint(name, endpointCreator)
       } else {

@@ -148,9 +148,9 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     var i = 1
     while (true) { /**while循环，何时结束？**/
       val curKey = data(2 * pos) //数据Key位于2*pos处
-      if (k.eq(curKey) || k.equals(curKey)) {
+      if (k.eq(curKey) || k.equals(curKey)) { //如果curKey的值跟参数key相等，那么直接返回该key的下一个位置的值(data(2*pos+1)
         return data(2 * pos + 1).asInstanceOf[V] //数据Value位于2*pos + 1处
-      } else if (curKey.eq(null)) { //data(2*pos)出的值为null，表示AppendOnlyMap中包含指定的Key，因此返回的value为null
+      } else if (curKey.eq(null)) { //data(2*pos)出的值为null，表示AppendOnlyMap中不包含指定的Key，因此返回的value为null
         return null.asInstanceOf[V]
       } else { /**解决碰撞，怎么解决的？*/
         val delta = i  /**解决碰撞过程：pos是累加delta**/
@@ -182,6 +182,9 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
       *    第N次碰撞， 就在前面pos的基础上加N，步长线性增加
       *
       *
+      *    通过上面的碰撞的解决，可以看出，步长是依次增加的
+      *
+      *
       *
       */
 
@@ -192,10 +195,17 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   /**
     * Set the value for a key
     * update if exists, put if not exists
+    *
+    * update方法的真实含义是saveOrUpdate，如果存在则更新；如果不存在则插入
+    *
+    * @param key
+    * @param value
     */
   def update(key: K, value: V): Unit = {
     assert(!destroyed, destructionMessage)
     val k = key.asInstanceOf[AnyRef]
+
+    //如果插入的是空值，那么首先判断是否有空值，如果还没有那么map的的长度首先加1，然后更新nullValue的值以及更新haveNullValue的值
     if (k.eq(null)) {
       if (!haveNullValue) { //如果AppendOnlyMap中还没有Key为null的键值对，为什么要调用incrementSize？首先元素个数需要增1
         incrementSize()
@@ -238,12 +248,18 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
    * Set the value for key to updateFunc(hadValue, oldValue), where oldValue will be the old value
    * for key, if any, or null otherwise. Returns the newly updated value.
     *
-    * 对key进行更新操作，更新逻辑由updateFunc指定
+    * 对key进行更新操作，更新逻辑由updateFunc指定,也就是说，不同于update方法，直接给定要更新的值
     * updateFunc的类型是(Boolean, V) => V): V
-   */
+    *
+    * @param key
+    * @param updateFunc
+    * @return
+    */
   def changeValue(key: K, updateFunc: (Boolean, V) => V): V = {
     assert(!destroyed, destructionMessage)
     val k = key.asInstanceOf[AnyRef]
+
+    //如果更新的key是null，第一个参数表示该key是否已经有值，第二个参数表示原始值(原来null key对应的null value)
     if (k.eq(null)) {
       if (!haveNullValue) {
         incrementSize()
@@ -261,16 +277,19 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     while (true) {
       val curKey = data(2 * pos)
       if (k.eq(curKey) || k.equals(curKey)) {
+        //已经有值，旧值为data(2*pos+1)
         val newValue = updateFunc(true, data(2 * pos + 1).asInstanceOf[V])
         data(2 * pos + 1) = newValue.asInstanceOf[AnyRef]
         return newValue
       } else if (curKey.eq(null)) {
+        //没有值，旧值为null
         val newValue = updateFunc(false, null.asInstanceOf[V])
         data(2 * pos) = k
         data(2 * pos + 1) = newValue.asInstanceOf[AnyRef]
         incrementSize()
         return newValue
       } else {
+        //解决冲突
         val delta = i
         pos = (pos + delta) & mask
         i += 1
@@ -284,6 +303,10 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     * Iterator method from Iterable
    *
    *  AppendOnlyMap返回一个Iterator， 遍历数据
+    *
+    *  AppendOnlyMap继承自Iterable，因此需要实现iterator方法
+    *
+    * @return
     */
   override def iterator: Iterator[(K, V)] = {
     assert(!destroyed, destructionMessage)
@@ -333,6 +356,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
        * @return
        */
       override def next(): (K, V) = {
+        //在hasNext方法已经调用了一遍nextValue，为什么next方法还要再调用一遍nextValue?
         val value = nextValue()
         if (value == null) {
           throw new NoSuchElementException("End of iterator")

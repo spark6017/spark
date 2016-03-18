@@ -61,7 +61,17 @@ import org.apache.spark.util.collection.ExternalAppendOnlyMap.HashComparator
   *
   * ExternalAppendOnlyMap继承自Iterable,它的底层数据结构是SizeTrackingAppendOnlyMap，而SizeTrackingAppendOnlyMap集成自AppendOnlyMap
  *
- */
+  *
+  * @param createCombiner Map中没有<Key，Value>则创建createCombiner
+  * @param mergeValue Map中如果有<Key,Value>，那么调用mergeValue
+  * @param mergeCombiners 将分区进行合并
+  * @param serializer
+  * @param blockManager
+  * @param context
+  * @tparam K
+  * @tparam V
+  * @tparam C
+  */
 @DeveloperApi
 class ExternalAppendOnlyMap[K, V, C](
     createCombiner: V => C,
@@ -185,7 +195,7 @@ class ExternalAppendOnlyMap[K, V, C](
 
     /***
       * update函数，类型是(Boolean,C)=>C
-      * 如果有旧值，那么调用mergeValue；如果没有旧值，那么调用createCombiner
+      * 如果有旧值，那么调用mergeValue进行合并操作；如果没有旧值，那么调用createCombiner创建初始值
       */
     val update: (Boolean, C) => C = (hadVal, oldVal) => {
       if (hadVal) mergeValue(oldVal, curEntry._2) else createCombiner(curEntry._2)

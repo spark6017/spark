@@ -46,6 +46,11 @@ public class JavaUtils {
    */
   public static final long DEFAULT_DRIVER_MEM_MB = 1024;
 
+  /***
+   * Spark On YARN, executor的内存默认是1G，通过--executor-memory指定
+   */
+  public static final long DEFAULT_EXECUTOR_MEM_MB = 1024;
+
   /** Closes the given object, ignoring IOExceptions. */
   public static void closeQuietly(Closeable closeable) {
     try {

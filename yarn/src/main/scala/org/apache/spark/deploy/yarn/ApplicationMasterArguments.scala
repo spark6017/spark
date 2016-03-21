@@ -17,6 +17,9 @@
 
 package org.apache.spark.deploy.yarn
 
+
+import org.apache.spark.network.util.JavaUtils
+
 import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.deploy.yarn.YarnSparkHadoopUtil._
@@ -24,7 +27,8 @@ import org.apache.spark.util.{IntParam, MemoryParam}
 
 /**
  * propertiesFile是如何传递给ApplicationMaster的？这个在ApplicationMaster进程中，是以--properties-file形式出现的(并且指向HDFS路径)
- * @param args
+  *
+  * @param args
  */
 class ApplicationMasterArguments(val args: Array[String]) {
   var userJar: String = null
@@ -32,7 +36,7 @@ class ApplicationMasterArguments(val args: Array[String]) {
   var primaryPyFile: String = null
   var primaryRFile: String = null
   var userArgs: Seq[String] = Nil
-  var executorMemory = 1024 /**在Spark on YARN模式下，如果不指定--executor-memory，则默认是1024*/
+  var executorMemory = JavaUtils.DEFAULT_EXECUTOR_MEM_MB /**在Spark on YARN模式下，如果不指定--executor-memory，则默认是1024*/
   var executorCores = 1 /**在Spark on YARN模式下，如果不指定--executor-cores，则默认是1*/
   var propertiesFile: String = null
 

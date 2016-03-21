@@ -113,7 +113,7 @@ private[spark] class ApplicationMaster(
     //expiry：过期，逾期，默认是120000毫秒，即2分钟
     val expiryInterval = yarnConf.getInt(YarnConfiguration.RM_AM_EXPIRY_INTERVAL_MS, 120000)
 
-    //过期时间默认是3秒
+    //心跳时间的默认值是3s，这个心跳时间决定了在YARN模式下，Executor挂了之后，多久才能重启
     math.max(0, math.min(expiryInterval / 2,
       sparkConf.getTimeAsMs("spark.yarn.scheduler.heartbeat.interval-ms", "3s")))
   }
@@ -419,7 +419,8 @@ private[spark] class ApplicationMaster(
   }
 
   /***
-    * ApplicationMaster启动了一个线程，可以用于Executor失败时重新启动？
+    * ApplicationMaster启动了一个线程，定时向
+    * 可以用于Executor失败时重新启动？
     * @return
     */
   private def launchReporterThread(): Thread = {

@@ -348,4 +348,16 @@ object UnifiedMemoryManager {
     val memoryFraction = conf.getDouble("spark.memory.fraction", 0.75)
     (usableMemory * memoryFraction).toLong
   }
+
+  /***
+    * 如果指定了512M，那么预留300M，得到usableMemory是512-300M=212M,
+    * 而可用的内存是0.75%，那么212*0.75%=53*3=159M
+    * 问题：为什么UI上显示的是143.6M？
+    *
+    * 如果指定了512M，那么预留300M，得到usableMemory是1024-300M=724M,
+    * 而可用的内存是0.75%，那么724*0.75%=181*3=543M
+    * 问题：为什么UI上显示的是511.5M？
+    *
+    */
+
 }

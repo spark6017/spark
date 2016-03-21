@@ -51,6 +51,26 @@ class ExecutorStageSummary private[spark](
     val memoryBytesSpilled : Long,
     val diskBytesSpilled : Long)
 
+/***
+  *
+  * @param id
+  * @param hostPort
+  * @param rddBlocks
+  * @param memoryUsed
+  * @param diskUsed
+  * @param maxTasks
+  * @param activeTasks
+  * @param failedTasks
+  * @param completedTasks
+  * @param totalTasks
+  * @param totalDuration
+  * @param totalGCTime
+  * @param totalInputBytes
+  * @param totalShuffleRead
+  * @param totalShuffleWrite
+  * @param maxMemory Executor UI上显示的Storage Memory的y值，Storage Memory的值是x/y形式，x表示使用的内存量；y表示executor的内存容量
+  * @param executorLogs
+  */
 class ExecutorSummary private[spark](
     val id: String,
     val hostPort: String,

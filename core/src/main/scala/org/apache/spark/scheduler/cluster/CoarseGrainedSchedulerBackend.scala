@@ -79,7 +79,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   protected val executorsPendingLossReason = new HashSet[String]
 
   /**
-   * Driver进程对应的RPC通信Endpoint，CoarseGrainedSchedulerBackend会给Driver发送ReviveOffers消息
+   * Driver进程对应的RPC通信Endpoint，
+    * CoarseGrainedSchedulerBackend会给Driver发送ReviveOffers消息
    * @param rpcEnv
    * @param sparkProperties
    */
@@ -167,6 +168,8 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
       /***
         * Driver收到RegisterExecutor消息才明确的知道，现在有Executor进程启动就绪可以分配任务了
+        * 问题：是谁给Driver发送了RegisterExecutor消息
+        * 答案：是CoarseGrainedExecutorBackend进程启动时，执行onStart方法时，向Driver发起RegisterExecutor的消息
         */
       case RegisterExecutor(executorId, executorRef, cores, logUrls) =>
         if (executorDataMap.contains(executorId)) {
@@ -357,7 +360,10 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
      * the loss reason still pending.
      *
      * @return Whether executor should be disabled
-     */
+      *
+      * @param executorId 要disable的executor的ID
+      * @return
+      */
     protected def disableExecutor(executorId: String): Boolean = {
       val shouldDisable = CoarseGrainedSchedulerBackend.this.synchronized {
         if (executorIsAlive(executorId)) {

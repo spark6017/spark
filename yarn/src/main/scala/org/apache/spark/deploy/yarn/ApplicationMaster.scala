@@ -70,9 +70,15 @@ private[spark] class ApplicationMaster(
     .asInstanceOf[YarnConfiguration]
   private val isClusterMode = args.userClass != null
 
-  // Default to twice the number of executors (twice the maximum number of executors if dynamic
-  // allocation is enabled), with a minimum of 3.
+  //
+  //
 
+  /***
+    *Default to twice the number of executors (twice the maximum number of executors if dynamic allocation is enabled), with a minimum of 3.
+    *
+    * 在非动态分配模式下，最大的失败数是spark.executor.instances，即是executor的数目
+    *
+    */
   private val maxNumExecutorFailures = {
     val defaultKey =
       if (Utils.isDynamicAllocationEnabled(sparkConf)) {
@@ -412,6 +418,10 @@ private[spark] class ApplicationMaster(
     reporterThread.join()
   }
 
+  /***
+    * ApplicationMaster启动了一个线程，可以用于Executor失败时重新启动？
+    * @return
+    */
   private def launchReporterThread(): Thread = {
     // The number of failures in a row until Reporter thread give up
     val reporterMaxFailures = sparkConf.getInt("spark.yarn.scheduler.reporterThread.maxFailures", 5)
@@ -421,6 +431,8 @@ private[spark] class ApplicationMaster(
         var failureCount = 0
         while (!finished) {
           try {
+            //如果失败数大于executor数，那么作业将停止？比如./spark-shell --master yarn-client --num-executors 2，那么杀死两次就会完蛋？不对！
+            //可以杀一个重启一个，重启后再杀，杀了在重启，作业依然存活
             if (allocator.getNumExecutorsFailed >= maxNumExecutorFailures) {
               finish(FinalApplicationStatus.FAILED,
                 ApplicationMaster.EXIT_MAX_EXECUTOR_FAILURES,

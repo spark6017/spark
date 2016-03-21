@@ -28,7 +28,12 @@ import org.apache.spark.annotation.DeveloperApi
  *
  * This class assumes BlockId and BlockStatus are immutable, such that the consumers of this
  * class cannot mutate the source of the information. Accesses are not thread-safe.
- */
+  *
+  * @param blockManagerId Storage Status关联一个BlockManagerId,而一个executor是与一个BlockManagerId相关联的，因此
+  *                       StorageStatus就的是Executor的存储状态，其中maxMem是该Executor的storage memory的最大值
+  *
+  * @param maxMem
+  */
 @DeveloperApi
 class StorageStatus(val blockManagerId: BlockManagerId, val maxMem: Long) {
 

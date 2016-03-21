@@ -114,7 +114,13 @@ private[yarn] class YarnAllocator(
     math.max((MEMORY_OVERHEAD_FACTOR * executorMemory).toInt, MEMORY_OVERHEAD_MIN))
   // Number of cores per executor.
   protected val executorCores = args.executorCores
-  // Resource capability requested for each executors
+
+  /***
+    * Resource capability requested for each executors
+    *
+    * 申请的内存量是指定的executor memory + memory overhead
+    *
+    */
   private[yarn] val resource = Resource.newInstance(executorMemory + memoryOverhead, executorCores)
 
   private val launcherPool = ThreadUtils.newDaemonCachedThreadPool(
@@ -498,7 +504,9 @@ private[yarn] class YarnAllocator(
               PMEM_EXCEEDED_PATTERN))
 
           /***
-            * bin/spark-shell --master yarn-client  --executor-memory 300M 会触发这个case _逻辑
+            * 1. bin/spark-shell --master yarn-client  --executor-memory 300M 会触发这个case _逻辑
+            * 2. bin/spark-shell --master yarn-client --num-executors 2 找到ExecutorBackend的进程ID，杀死它也会触发这个逻辑
+            *
             */
           case _ =>
             numExecutorsFailed += 1

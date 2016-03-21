@@ -55,9 +55,14 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
    */
   object CanBroadcast {
     def unapply(plan: LogicalPlan): Option[LogicalPlan] = plan match {
-      case BroadcastHint(p) => Some(p)
+      case BroadcastHint(p) => {
+        println("CanBroadcast#unapply1, " + System.identityHashCode(plan))
+        Some(p)}
       case p if sqlContext.conf.autoBroadcastJoinThreshold > 0 &&
-        p.statistics.sizeInBytes <= sqlContext.conf.autoBroadcastJoinThreshold => Some(p)
+        p.statistics.sizeInBytes <= sqlContext.conf.autoBroadcastJoinThreshold => {
+        println("CanBroadcast#unapply2, " + System.identityHashCode(plan))
+        Some(p)
+      }
       case _ => None
     }
   }
@@ -82,9 +87,12 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
 
       // --- Inner joins --------------------------------------------------------------------------
 
-      case ExtractEquiJoinKeys(Inner, leftKeys, rightKeys, condition, left, CanBroadcast(right)) =>
-        joins.BroadcastHashJoin(
-          leftKeys, rightKeys, BuildRight, condition, planLater(left), planLater(right)) :: Nil
+      case ExtractEquiJoinKeys(Inner, leftKeys, rightKeys, condition, left, CanBroadcast(rightSide)) =>
+        {
+          println("EquiJoinSelection#ExtractEquiJoinKeys,right:" + System.identityHashCode(rightSide));
+          joins.BroadcastHashJoin(
+            leftKeys, rightKeys, BuildRight, condition, planLater(left), planLater(rightSide)) :: Nil
+        }
 
       case ExtractEquiJoinKeys(Inner, leftKeys, rightKeys, condition, CanBroadcast(left), right) =>
         joins.BroadcastHashJoin(

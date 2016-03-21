@@ -883,6 +883,7 @@ object functions extends LegacyFunctions {
    *   // left and right are DataFrames
    *   left.join(broadcast(right), "joinKey")
    * }}}
+   *ame
    *
    * @group normal_funcs
    * @since 1.5.0

@@ -99,6 +99,7 @@ object ExtractEquiJoinKeys extends Logging with PredicateHelper {
 
   def unapply(plan: LogicalPlan): Option[ReturnType] = plan match {
     case join @ Join(left, right, joinType, condition) =>
+      println("ExtractEquiJoinKeys#unapply")
       logDebug(s"Considering join on: $condition")
       // Find equi-join predicates that can be evaluated before the join, and thus can be used
       // as join keys.
@@ -126,6 +127,7 @@ object ExtractEquiJoinKeys extends Logging with PredicateHelper {
       if (joinKeys.nonEmpty) {
         val (leftKeys, rightKeys) = joinKeys.unzip
         logDebug(s"leftKeys:$leftKeys | rightKeys:$rightKeys")
+        println("ExtractEquiJoinKeys#unapply,right is " + System.identityHashCode(right))
         Some((joinType, leftKeys, rightKeys, otherPredicates.reduceOption(And), left, right))
       } else {
         None

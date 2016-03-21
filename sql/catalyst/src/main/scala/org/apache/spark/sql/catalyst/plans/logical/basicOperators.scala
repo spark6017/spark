@@ -463,12 +463,20 @@ case class Pivot(
   }
 }
 
+/** *
+  * Limit不是Leaf Node，但是重写了statistics
+  * @param limitExpr
+  * @param child
+  */
 case class Limit(limitExpr: Expression, child: LogicalPlan) extends UnaryNode {
   override def output: Seq[Attribute] = child.output
 
   override lazy val statistics: Statistics = {
     val limit = limitExpr.eval().asInstanceOf[Int]
-    val sizeInBytes = (limit: Long) * output.map(a => a.dataType.defaultSize).sum
+    //child.out
+
+    val sum = output.map(a => a.dataType.defaultSize).sum
+    val sizeInBytes = (limit: Long) * sum
     Statistics(sizeInBytes = sizeInBytes)
   }
 }

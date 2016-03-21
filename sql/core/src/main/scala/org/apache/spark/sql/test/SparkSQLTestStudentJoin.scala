@@ -33,7 +33,7 @@ object SparkSQLTestStudentJoin {
 //    println(df2.rdd.partitions.length)
     println(df2.queryExecution)
     df2.show(20)
-    readLine()
+    scala.io.StdIn.readLine()
     sc.stop
   }
 }

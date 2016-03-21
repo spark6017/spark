@@ -63,7 +63,19 @@ private[spark] class BlockResult(
   *
   * BlockManager构造方法持有BlockManagerMaster，在成员变量中持有一个slaveEndpoint（BlockManagerSlaveEndpoint）
   *
- */
+  *
+  * @param executorId
+  * @param rpcEnv
+  * @param master
+  * @param defaultSerializer
+  * @param conf
+  * @param memoryManager
+  * @param mapOutputTracker
+  * @param shuffleManager
+  * @param blockTransferService
+  * @param securityManager
+  * @param numUsableCores
+  */
 private[spark] class BlockManager(
     executorId: String,
     rpcEnv: RpcEnv,

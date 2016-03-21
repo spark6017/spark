@@ -72,7 +72,10 @@ private[spark] class MapOutputTrackerMasterEndpoint(
 /**
  * Class that keeps track of the location of the map output of
  * a stage. This is abstract because different versions of MapOutputTracker
- * (driver and executor) use different HashMap to store its metadata.
+ * (driver and executor) use different HashMap to store its metadata
+ *
+ *  Driver的MapOutputTracker是MapOutputTrackerMaster，而Executor的MapOutputTracker是MapOutputTrackerWorker
+ *
   *
   * MapOutputTracker分为MapOutputTrackerMaster和MapOutputTrackerWorker
   *

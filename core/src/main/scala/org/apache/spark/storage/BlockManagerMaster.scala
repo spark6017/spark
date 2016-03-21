@@ -33,8 +33,13 @@ import org.apache.spark.util.{RpcUtils, ThreadUtils}
   *
   * 1. 对于Driver，BlockManagerMaster拥有BlockManagerMasterEndpoint的endpoint(使用blockManagerMasterEndpoint表示)
   * 2. 对于Executor，BlockManagerMaster拥有BlockManagerMasterEndpoint的endpoint ref(也使用blockManagerMasterEndpoint表示)
+ *
+ *  BlockManagerMaster的很多操作都是通过它持有的BlockManagerMaterEndpoint进行收发请求的
   *
   *
+  * @param blockManagerMasterEndpoint
+  * @param conf
+  * @param isDriver
   */
 private[spark]
 class BlockManagerMaster(

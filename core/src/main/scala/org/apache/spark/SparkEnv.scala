@@ -361,7 +361,7 @@ object SparkEnv extends Logging {
     }
 
     /**
-      * 如果是Driver，那么就创建MapOutputTrackerMaster,否则就是MapOutputTrackerWorker
+      * 如果是Driver，那么就创建MapOutputTrackerMaster,否则就是MapOutputTrackerWorker, Master和Worker的通信
       */
     val mapOutputTracker = if (isDriver) {
       new MapOutputTrackerMaster(conf)

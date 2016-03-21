@@ -496,6 +496,10 @@ private[yarn] class YarnAllocator(
             (true, memLimitExceededLogMessage(
               completedContainer.getDiagnostics,
               PMEM_EXCEEDED_PATTERN))
+
+          /***
+            * bin/spark-shell --master yarn-client  --executor-memory 300M 会触发这个case _逻辑
+            */
           case _ =>
             numExecutorsFailed += 1
             (true, "Container marked as failed: " + containerId + onHostStr +

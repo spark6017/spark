@@ -103,7 +103,11 @@ private[spark] class ApplicationMaster(
   // requests to RM.
   private val heartbeatInterval = {
     // Ensure that progress is sent before YarnConfiguration.RM_AM_EXPIRY_INTERVAL_MS elapses.
+
+    //expiry：过期，逾期，默认是120000毫秒，即2分钟
     val expiryInterval = yarnConf.getInt(YarnConfiguration.RM_AM_EXPIRY_INTERVAL_MS, 120000)
+
+    //过期时间默认是3秒
     math.max(0, math.min(expiryInterval / 2,
       sparkConf.getTimeAsMs("spark.yarn.scheduler.heartbeat.interval-ms", "3s")))
   }

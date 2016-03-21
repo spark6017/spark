@@ -72,8 +72,10 @@ private[spark] class ClientArguments(args: Array[String], sparkConf: SparkConf) 
   validateArgs()
 
   // Additional memory to allocate to containers
-  //给am分配的memory overhead最小MEMORY_OVERHEAD_MIN，为384M
+  //如果是YARN-Cluster，那么使用的是driverMemOverheadKey；如果是YARN-Client，那么使用的是amMemOverheadKey
   val amMemoryOverheadConf = if (isClusterMode) driverMemOverheadKey else amMemOverheadKey
+
+  //AM的Overhead是384M
   val amMemoryOverhead = sparkConf.getInt(amMemoryOverheadConf,
     math.max((MEMORY_OVERHEAD_FACTOR * amMemory).toInt, MEMORY_OVERHEAD_MIN))
 

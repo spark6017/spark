@@ -42,6 +42,7 @@ public class JavaUtils {
   /**
    * Define a default value for driver memory here since this value is referenced across the code
    * base and nearly all files already use Utils.scala
+   * Driver的默认内存是1G,在spark on yarn上，看到driver的memory是511M，这是为什么呢？难道overhead占用了一定的内存？
    */
   public static final long DEFAULT_DRIVER_MEM_MB = 1024;
 

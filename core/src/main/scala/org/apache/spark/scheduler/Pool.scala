@@ -50,6 +50,8 @@ private[spark] class Pool(
 
   // A pool's stage id is used to break the tie in scheduling.
   var stageId = -1
+
+  //Pool调度实体的名字
   var name = poolName
   var parent: Pool = null
 

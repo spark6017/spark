@@ -105,6 +105,7 @@ case class BroadcastHashJoin(
     }
     val numOutputRows = longMetric("numOutputRows")
 
+    //同步等待broadcastFuture执行结束
     val broadcastRelation = Await.result(broadcastFuture, timeout)
 
     streamedPlan.execute().mapPartitions { streamedIter =>

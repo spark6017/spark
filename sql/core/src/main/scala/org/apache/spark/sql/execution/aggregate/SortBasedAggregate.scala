@@ -99,7 +99,8 @@ case class SortBasedAggregate(
   }
 
   /**
-    * 输出结果按照分组表达式输出排序，也就是说group by class_Id，那么结果将按照class_id进行排序
+    * 输出结果按照分组表达式输出排序，也就是说group by class_Id，那么结果将按照class_id进行排序,
+    * 也就是group by操作的最终结果是以group by key进行排序
     * @return
     */
   override def outputOrdering: Seq[SortOrder] = {

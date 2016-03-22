@@ -34,17 +34,28 @@ private[spark] class FIFOSchedulingAlgorithm extends SchedulingAlgorithm {
     * @return
     */
   override def comparator(s1: Schedulable, s2: Schedulable): Boolean = {
+
+    //取两个调度实体的优先级
     val priority1 = s1.priority
     val priority2 = s2.priority
+
+
     var res = math.signum(priority1 - priority2)
+
+    //如果两个调度实体的优先级相同，那么比较两个调度实体的stageId
     if (res == 0) {
       val stageId1 = s1.stageId
       val stageId2 = s2.stageId
       res = math.signum(stageId1 - stageId2)
     }
+
+    //如果调度实体1的优先级小于调度实体2的优先级，那么返回true
     if (res < 0) {
       true
-    } else {
+    }
+
+    //如果调度实体2的优先级大于调度实体2的优先级，那么返回false
+    else {
       false
     }
   }

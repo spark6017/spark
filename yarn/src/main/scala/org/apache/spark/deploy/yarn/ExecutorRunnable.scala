@@ -155,7 +155,11 @@ class ExecutorRunnable(
     // to append to the existing value of the variable
     var prefixEnv: Option[String] = None
 
-    // Set the JVM memory
+    //
+    /**
+      * Set the JVM memory
+      * 在YARN模式下，启动Container时指定内存参数，最小内存和最大内存都是--executor-memory大小
+      */
     val executorMemoryString = executorMemory + "m"
     javaOpts += "-Xms" + executorMemoryString
     javaOpts += "-Xmx" + executorMemoryString

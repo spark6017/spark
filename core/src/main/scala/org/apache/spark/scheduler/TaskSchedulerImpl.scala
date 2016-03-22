@@ -155,6 +155,7 @@ private[spark] class TaskSchedulerImpl(
   def initialize(backend: SchedulerBackend) {
     this.backend = backend
     // temporarily set rootPool name to empty
+    //创建Pool对象，指定调度模式
     rootPool = new Pool("", schedulingMode, 0, 0)
     schedulableBuilder = {
       schedulingMode match {
@@ -391,6 +392,9 @@ private[spark] class TaskSchedulerImpl(
     /**
      * 此处是从调度队列中取出在队列中等待调度的TaskSetManager，
       * sortedTaskSets是元素类型为TaskSetManager的ArrayBuffer
+      *
+      * 问题：rootPool是什么？rootPool是Pool类型的资源池
+      *
      */
     val sortedTaskSetManagers = rootPool.getSortedTaskSetQueue
 

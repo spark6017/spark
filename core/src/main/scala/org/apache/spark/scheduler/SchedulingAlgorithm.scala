@@ -27,6 +27,12 @@ private[spark] trait SchedulingAlgorithm {
 }
 
 private[spark] class FIFOSchedulingAlgorithm extends SchedulingAlgorithm {
+  /***
+    * 公平调度对两个调度实体进行比较
+    * @param s1
+    * @param s2
+    * @return
+    */
   override def comparator(s1: Schedulable, s2: Schedulable): Boolean = {
     val priority1 = s1.priority
     val priority2 = s2.priority
@@ -45,6 +51,13 @@ private[spark] class FIFOSchedulingAlgorithm extends SchedulingAlgorithm {
 }
 
 private[spark] class FairSchedulingAlgorithm extends SchedulingAlgorithm {
+
+  /***
+    * 公平调度算法，对两个调度实体进行比较
+    * @param s1
+    * @param s2
+    * @return
+    */
   override def comparator(s1: Schedulable, s2: Schedulable): Boolean = {
     val minShare1 = s1.minShare
     val minShare2 = s2.minShare

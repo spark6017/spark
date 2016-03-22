@@ -27,8 +27,12 @@ import org.apache.spark.scheduler.SchedulingMode.SchedulingMode
 
 /**
  * An Schedulable entity that represent collection of Pools or TaskSetManagers
- */
-
+  *
+  * @param poolName
+  * @param schedulingMode
+  * @param initMinShare
+  * @param initWeight
+  */
 private[spark] class Pool(
     val poolName: String,
     val schedulingMode: SchedulingMode,
@@ -49,6 +53,9 @@ private[spark] class Pool(
   var name = poolName
   var parent: Pool = null
 
+  /***
+    * 公平调度、FIFO调度
+    */
   var taskSetSchedulingAlgorithm: SchedulingAlgorithm = {
     schedulingMode match {
       case SchedulingMode.FAIR =>

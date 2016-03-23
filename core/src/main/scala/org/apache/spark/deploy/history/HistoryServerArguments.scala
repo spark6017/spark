@@ -30,10 +30,21 @@ private[history] class HistoryServerArguments(conf: SparkConf, args: Array[Strin
   parse(args.toList)
 
   private def parse(args: List[String]): Unit = {
-    if (args.length == 1) {
+    /***
+      * 如果只有一个参数，那么这个参数是log directory
+      */
+
+    if (args.length == 0) {
+      if (conf.get("spark.history.fs.logDirectory") == null) {
+        printUsageAndExit(-1);
+      }
+    } else if (args.length == 1) {
       setLogDirectory(args.head)
     } else {
       args match {
+        /***
+          * 可以使用 --dir log directory方式指定log directory
+          */
         case ("--dir" | "-d") :: value :: tail =>
           setLogDirectory(value)
           parse(tail)

@@ -226,6 +226,8 @@ class HistoryServer(
  *
  *   export SPARK_HISTORY_OPTS="-Dspark.history.fs.logDirectory=/tmp/spark-events"
  *   ./sbin/start-history-server.sh
+  *
+  *   也可以使用/sbin/start-history-server.sh /tmp/spark-events启动
  *
  * This launches the HistoryServer as a Spark daemon.
  */
@@ -234,9 +236,17 @@ object HistoryServer extends Logging {
 
   val UI_PATH_PREFIX = "/history"
 
+  /***
+    * 启动History Server进程，
+    * @param argStrings
+    */
   def main(argStrings: Array[String]): Unit = {
     Utils.initDaemon(log)
     new HistoryServerArguments(conf, argStrings)
+
+    /***
+      * 初始化Kerberos认证
+      */
     initSecurity()
     val securityManager = new SecurityManager(conf)
 
@@ -247,6 +257,9 @@ object HistoryServer extends Logging {
       .newInstance(conf)
       .asInstanceOf[ApplicationHistoryProvider]
 
+    /***
+      * 可以指定UI端口号
+      */
     val port = conf.getInt("spark.history.ui.port", 18080)
 
     val server = new HistoryServer(conf, provider, securityManager, port)
@@ -259,10 +272,13 @@ object HistoryServer extends Logging {
   }
 
   def initSecurity() {
-    // If we are accessing HDFS and it has security enabled (Kerberos), we have to login
-    // from a keytab file so that we can access HDFS beyond the kerberos ticket expiration.
-    // As long as it is using Hadoop rpc (hdfs://), a relogin will automatically
-    // occur from the keytab.
+    /***
+      * If we are accessing HDFS and it has security enabled (Kerberos),
+      * we have to login from a keytab file so that we can access HDFS beyond the kerberos ticket expiration.
+      * As long as it is using Hadoop rpc (hdfs://), a relogin will automatically occur from the keytab.
+      *
+      * 如果history server启用了kerberos认证，那么使用history server的principal和keytab进行登陆
+      */
     if (conf.getBoolean("spark.history.kerberos.enabled", false)) {
       // if you have enabled kerberos the following 2 params must be set
       val principalName = conf.get("spark.history.kerberos.principal")

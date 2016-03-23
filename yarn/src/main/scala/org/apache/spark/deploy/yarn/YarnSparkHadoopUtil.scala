@@ -93,7 +93,12 @@ class YarnSparkHadoopUtil extends SparkHadoopUtil {
 
   /**
    * Get the list of namenodes the user may access.
-   */
+    *
+    * 获取Hadoop HDFS的namenode信息
+    *
+    * @param sparkConf
+    * @return
+    */
   def getNameNodesToAccess(sparkConf: SparkConf): Set[Path] = {
     sparkConf.get("spark.yarn.access.namenodes", "")
       .split(",")

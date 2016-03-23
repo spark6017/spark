@@ -25,6 +25,8 @@ private[spark] object SamplingUtils {
   /**
    * Reservoir sampling implementation that also returns the input size.
    *
+    * 水塘采样的算法实现，返回值是(Array[T], Long)
+    *
    * @param input input size
    * @param k reservoir size
    * @param seed random seed

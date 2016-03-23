@@ -180,10 +180,24 @@ class RangePartitioner[K : Ordering : ClassTag, V](
     if (partitions <= 1) {
       Array.empty
     } else {
-      // This is the sample size we need to have roughly balanced output partitions, capped at 1M.
+      /***
+        * This is the sample size we need to have roughly balanced output partitions, capped at 1M.
+        * 采样总数，最大值是10^6(100万)，通常情况下是20乘以分区数，比如分区数是10，那么采样数是200
+        */
       val sampleSize = math.min(20.0 * partitions, 1e6)
       // Assume the input partitions are roughly balanced and over-sample a little bit.
+
+      /***
+        * ceil是向上取整，每个分区的采样数。
+        * 父RDD每个分区需要采样的数据量应该是sampleSize/rdd.partitions.size，但是我们看代码的时候发现父RDD每个分区需要采样的数据量是正常数的3倍
+        * 因为父RDD各分区中的数据量可能会出现倾斜的情况，乘于3的目的就是保证数据量小的分区能够采样到足够的数据，而对于数据量大的分区会进行第二次采样
+        */
       val sampleSizePerPartition = math.ceil(3.0 * sampleSize / rdd.partitions.size).toInt
+
+
+      /***
+        * sketch
+        */
       val (numItems, sketched) = RangePartitioner.sketch(rdd.map(_._1), sampleSizePerPartition)
       if (numItems == 0L) {
         Array.empty
@@ -321,6 +335,8 @@ private[spark] object RangePartitioner {
 
   /**
    * Sketches the input RDD via reservoir sampling on each partition.
+    * reservoir sampling的意思是水塘采样
+    * Sketch的意思是速写、速描
    *
    * @param rdd the input RDD to sketch
    * @param sampleSizePerPartition max sample size per partition

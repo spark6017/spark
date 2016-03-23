@@ -34,7 +34,18 @@ import org.apache.spark.util.random.{SamplingUtils, XORShiftRandom}
  * Maps each key to a partition ID, from 0 to `numPartitions - 1`.
  */
 abstract class Partitioner extends Serializable {
+
+  /***
+    * 分区数
+    * @return
+    */
   def numPartitions: Int
+
+  /**
+    * 给定Key，计算它位于哪个分区
+    * @param key
+    * @return
+    */
   def getPartition(key: Any): Int
 }
 
@@ -93,18 +104,32 @@ object Partitioner {
  * so attempting to partition an RDD[Array[_]] or RDD[(Array[_], _)] using a HashPartitioner will
  * produce an unexpected or incorrect result.
  *
- * Hash分区
- */
+  *  Hash分区，构造HashPartitioner时需要指定分区数
+  *
+  * @param partitions 分区数
+  */
 class HashPartitioner(partitions: Int) extends Partitioner {
   require(partitions >= 0, s"Number of partitions ($partitions) cannot be negative.")
 
   def numPartitions: Int = partitions
 
+  /***
+    * 对key进行hash取摸
+    * @param key
+    * @return
+    */
   def getPartition(key: Any): Int = key match {
     case null => 0
     case _ => Utils.nonNegativeMod(key.hashCode, numPartitions)
   }
 
+  /***
+    * HashPartitioner的equals方法
+    *
+    * 如果两个分区器都是HashPartitioner并且两个分区器的分区数相同，那么就是equals，其它情况下equals返回false
+    * @param other
+    * @return
+    */
   override def equals(other: Any): Boolean = other match {
     case h: HashPartitioner =>
       h.numPartitions == numPartitions
@@ -112,6 +137,10 @@ class HashPartitioner(partitions: Int) extends Partitioner {
       false
   }
 
+  /***
+    * HashPartitioner的hashCode是分区数
+    * @return
+    */
   override def hashCode: Int = numPartitions
 }
 
@@ -122,7 +151,19 @@ class HashPartitioner(partitions: Int) extends Partitioner {
  * Note that the actual number of partitions created by the RangePartitioner might not be the same
  * as the `partitions` parameter, in the case where the number of sampled records is less than
  * the value of `partitions`.
- */
+  *
+  * RangePartitioner分区器的目标是将RDD[K,V]按照范围进行划分，使得每个分区的数据量大约相等。
+  * 分区范围是通过采样实现的
+  *
+  * 构造RangePartitioner，Key是需要可排序的，即存在Ordering[K],
+  * @param partitions 分区数
+  * @param rdd 元素类型为[K,V]的RDD
+  * @param ascending 是否是升序排序，默认是true，即默认是升序排序
+  * @param ev$1
+  * @param ev$2
+  * @tparam K
+  * @tparam V
+  */
 class RangePartitioner[K : Ordering : ClassTag, V](
     partitions: Int,
     rdd: RDD[_ <: Product2[K, V]],
@@ -176,10 +217,19 @@ class RangePartitioner[K : Ordering : ClassTag, V](
     }
   }
 
+  /***
+    * 虽然RangePartitioner构造时传入了分区数，但是实际分区数不是指定的分区数
+    * @return
+    */
   def numPartitions: Int = rangeBounds.length + 1
 
   private var binarySearch: ((Array[K], K) => Int) = CollectionsUtils.makeBinarySearch[K]
 
+  /***
+    * 给定Key获取其分区号
+    * @param key
+    * @return
+    */
   def getPartition(key: Any): Int = {
     val k = key.asInstanceOf[K]
     var partition = 0

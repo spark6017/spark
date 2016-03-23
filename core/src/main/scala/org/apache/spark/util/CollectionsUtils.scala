@@ -22,6 +22,13 @@ import java.util
 import scala.reflect.{classTag, ClassTag}
 
 private[spark] object CollectionsUtils {
+
+  /***
+    * 对不同的类型返回不同的二分查找方法，返回结果是一个函数，它的类型是(Array[K],K) => Int
+    * 这个函数的意思是给定一个元素，查找它在数组中的下标
+    * @tparam K
+    * @return
+    */
   def makeBinarySearch[K : Ordering : ClassTag] : (Array[K], K) => Int = {
     // For primitive keys, we can use the natural ordering. Otherwise, use the Ordering comparator.
     classTag[K] match {

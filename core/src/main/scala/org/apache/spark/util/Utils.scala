@@ -1519,15 +1519,27 @@ private[spark] object Utils extends Logging {
     buf
   }
 
- /* Calculates 'x' modulo 'mod', takes to consideration sign of x,
+ /**
+   *  Calculates 'x' modulo 'mod', takes to consideration sign of x,
   * i.e. if 'x' is negative, than 'x' % 'mod' is negative too
   * so function return (x % mod) + mod in that case.
   *
-  *  如果取出的模是负数，那么加上mod
-  */
+  *  对x按照mod进行取摸，结果保证是非负数
+   *  问题：什么时候能出现负数
+   *
+   *  比如:x = -1, mod = 3,那么 x%mod = -1?
+    *
+    * @param x
+    * @param mod
+    * @return
+    */
   def nonNegativeMod(x: Int, mod: Int): Int = {
     val rawMod = x % mod
-    rawMod + (if (rawMod < 0) mod else 0)
+    if (rawMod >= 0) {
+      rawMod
+    } else {
+      rawMod + mod
+    }
   }
 
   // Handles idiosyncracies with hash (add more as required)

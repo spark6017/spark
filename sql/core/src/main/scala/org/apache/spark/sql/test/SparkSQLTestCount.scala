@@ -1,5 +1,7 @@
 package org.apache.spark.sql.test
 
+import org.apache.hadoop.io.{Text, LongWritable}
+import org.apache.hadoop.mapred.TextInputFormat
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -21,7 +23,11 @@ object SparkSQLTestCount {
     val df = ssc.sql("select count(favorite_color)  from TBL_USER");
     println(df.printSchema())
     df.show(20)
+
+    val c = sc.hadoopFile(path, classOf[TextInputFormat], classOf[LongWritable], classOf[Text], 2)
+
     scala.io.StdIn.readLine()
+
     sc.stop
   }
 

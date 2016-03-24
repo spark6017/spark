@@ -13,7 +13,7 @@ object SparkSQLTestStudentBroadcastJoin {
   def main(args: Array[String]) {
     val conf = new SparkConf().setAppName("SparkSQLTestStudent").setMaster("local")
 //    addAdditionalConfigutions(conf, "spark.sql.TungstenAggregate.testFallbackStartsAt", "5")
-    conf.set("spark.sql.defaultSizeInBytes", SQLConf.AUTO_BROADCASTJOIN_THRESHOLD  - 1)
+//    conf.set("spark.sql.defaultSizeInBytes", SQLConf.AUTO_BROADCASTJOIN_THRESHOLD  - 1 )
     val sc = new SparkContext(conf);
     val ssc = new SQLContext(sc);
 

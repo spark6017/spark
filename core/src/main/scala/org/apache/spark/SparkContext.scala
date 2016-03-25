@@ -1875,7 +1875,7 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     *
     * @param rdd
     * @param func 分区计算函数，对于RDD的count函数，这个func就是Utils.getIteratorSize
-    * @param partitions
+    * @param partitions 为什么有partitions参数？
     * @tparam T
     * @tparam U
     * @return

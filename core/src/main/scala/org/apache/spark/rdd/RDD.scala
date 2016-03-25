@@ -1301,18 +1301,42 @@ abstract class RDD[T: ClassTag](
    *
    * @note due to complications in the internal implementation, this method will raise
    * an exception if called on an RDD of `Nothing` or `Null`.
-   */
+    *
+    * 从RDD中取num个元素，算法策略是：
+    *
+    * 1. 首先扫描一个分区，如果分区中的数据足够，那么就用它作为结果
+    * 2. 如果一个分区中的分区数据不够，那么num/分区数得到大约需要几个分区的数据(这是基于分区间数据比较均匀的情况)
+    *
+    * 极端情况是个所有的分区数据都不够
+    *
+    * @param num
+    * @return
+    */
   def take(num: Int): Array[T] = withScope {
     if (num == 0) {
       new Array[T](0)
     } else {
+      //buf用于存放num个结果数据，是一个ArrayBuffer，可以动态添加数据
       val buf = new ArrayBuffer[T]
+
+      //totalParts表示RDD的总分区个数
       val totalParts = this.partitions.length
+
+      //partsScanned表示已经扫描的记录数
       var partsScanned = 0
+
+      /***
+        * 循环条件：
+        * 1. 取出的元素个数少于num
+        * 2. 扫描的分区数小于总分区数
+        */
       while (buf.size < num && partsScanned < totalParts) {
         // The number of partitions to try in this iteration. It is ok for this number to be
         // greater than totalParts because we actually cap it at totalParts in runJob.
+
         var numPartsToTry = 1L
+
+        //第一遍遍历时，扫描的分区数0，因此不执行该if条件判断
         if (partsScanned > 0) {
           // If we didn't find any rows after the previous iteration, quadruple and retry.
           // Otherwise, interpolate the number of partitions we need to try, but overestimate
@@ -1326,7 +1350,10 @@ abstract class RDD[T: ClassTag](
           }
         }
 
+        //需要读取的数据量，放到left中
         val left = num - buf.size
+
+        //当numPartsToToTry=1,partsScanned=0是，那么p是Seq(0)
         val p = partsScanned.until(math.min(partsScanned + numPartsToTry, totalParts).toInt)
         val res = sc.runJob(this, (it: Iterator[T]) => it.take(left).toArray, p)
 

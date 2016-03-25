@@ -105,6 +105,7 @@ abstract class RDD[T: ClassTag](
   /**
    * :: DeveloperApi ::
    * Implemented by subclasses to compute a given partition.
+    * compute方法会在iterator方法中调用，iterator是模板方法，它调用的compute方法由RDD的子类实现
    */
   @DeveloperApi
   def compute(split: Partition, context: TaskContext): Iterator[T]
@@ -265,6 +266,10 @@ abstract class RDD[T: ClassTag](
     * @return
     */
   final def dependencies: Seq[Dependency[_]] = {
+
+    //如果checkpointRDD有数据，那么构造OneToOneDependency,
+    //如果checkpointRDD没有数据，那么调用getDependencies获取RDD的依赖
+    //因此，如果RDD做了checkpoint，那么它的parent只有一个是CheckpointRDD
     checkpointRDD.map(r => List(new OneToOneDependency(r))).getOrElse {
       if (dependencies_ == null) {
         dependencies_ = getDependencies
@@ -319,11 +324,17 @@ abstract class RDD[T: ClassTag](
   final def iterator(split: Partition, context: TaskContext): Iterator[T] = {
 
     /***
-      * 如果存储级别不是NONE，表示RDD被标记为Cache(如果已经实际缓存过那么读取缓存的数据；如果没有真正的cache过那么首先计算该RDD的数据再进行cache)
+      * 如果存储级别不是NONE，表示RDD被标记为Cache(可能存放在BlockManager的memory block中，也可能存放在BlockManager的disk block中。
+      * 如果已经实际缓存过那么读取缓存的数据；如果没有真正的cache过那么首先计算该RDD的数据再进行cache)
       */
     if (storageLevel != StorageLevel.NONE) {
       SparkEnv.get.cacheManager.getOrCompute(this, split, context, storageLevel)
-    } else {
+    }
+
+    /***
+      * 如果没有cache，那么读取Checkpoint
+      */
+    else {
       computeOrReadCheckpoint(split, context)
     }
   }
@@ -359,8 +370,11 @@ abstract class RDD[T: ClassTag](
   {
     /***
       * 如果已经checkpoint，那么调用firstParent的iterator方法
+      * isCheckpointedAndMaterialized方法返回RDD的isCheckpointed函数的值，isCheckpointed函数用于检查该RDD关联的check point data已经checkpointed
       */
     if (isCheckpointedAndMaterialized) {
+
+      //如果该RDD已经checkpoint，那么直接查找firstParent的iterator方法,firstParent就是ReliableCheckpointRDD
       firstParent[T].iterator(split, context)
     } else {
       /***
@@ -1506,14 +1520,24 @@ abstract class RDD[T: ClassTag](
    * RDDs will be removed. This function must be called before any job has been
    * executed on this RDD. It is strongly recommended that this RDD is persisted in
    * memory, otherwise saving it on a file will require recomputation.
+    *
+    * 将该RDD的checkpoint状态置为ReliableRDDCheckpointData.当action触发RDD的compute方法执行时，会检查每个RDD所关联的checkpointData变量是否已经定义
+    * 如果没有定义，那么表示该RDD没有调用checkpoint
+    *
    */
   def checkpoint(): Unit = RDDCheckpointData.synchronized {
     // NOTE: we use a global lock here due to complexities downstream with ensuring
     // children RDD partitions point to the correct parent partitions. In the future
     // we should revisit this consideration.
+    //调用RDD的checkpoint必须通过SparkContext设置Checkpoint Directory
     if (context.checkpointDir.isEmpty) {
       throw new SparkException("Checkpoint directory has not been set in the SparkContext")
-    } else if (checkpointData.isEmpty) {
+    }
+
+    //对一个RDD可以调用多次checkpoint，只有第一次有效
+    //创建checkpointData实例，它是ReliableRDDCheckpointData类型的对象，localcheckpoint方法创建的是LocalRDDCheckpointData
+    //ReliableRDDCheckpointData有一个成员变量cpState,构造时的初始值是Initialized
+    else if (checkpointData.isEmpty) {
       checkpointData = Some(new ReliableRDDCheckpointData(this))
     }
   }
@@ -1653,7 +1677,10 @@ abstract class RDD[T: ClassTag](
     Option(sc.getLocalProperty(RDD.CHECKPOINT_ALL_MARKED_ANCESTORS))
       .map(_.toBoolean).getOrElse(false)
 
-  /** Returns the first parent RDD */
+  /** Returns the first parent RDD
+    * @tparam U
+    * @return
+    */
   protected[spark] def firstParent[U: ClassTag]: RDD[U] = {
     dependencies.head.rdd.asInstanceOf[RDD[U]]
   }
@@ -1690,6 +1717,8 @@ abstract class RDD[T: ClassTag](
    * Performs the checkpointing of this RDD by saving this. It is called after a job using this RDD
    * has completed (therefore the RDD has been materialized and potentially stored in memory).
    * doCheckpoint() is called recursively on the parent RDDs.
+    *
+    * 对RDD进行checkpoint操作，checkpoint的结果是RDD Lineage被打断
    */
   private[spark] def doCheckpoint(): Unit = {
     RDDOperationScope.withScope(sc, "checkpoint", allowNesting = false, ignoreParent = true) {
@@ -1699,8 +1728,7 @@ abstract class RDD[T: ClassTag](
           if (checkpointAllMarkedAncestors) {
             // TODO We can collect all the RDDs that needs to be checkpointed, and then checkpoint
             // them in parallel.
-            // Checkpoint parents first because our lineage will be truncated after we
-            // checkpoint ourselves
+            // Checkpoint parents first because our lineage will be truncated after we checkpoint ourselves
             dependencies.foreach(_.rdd.doCheckpoint())
           }
           checkpointData.get.checkpoint()

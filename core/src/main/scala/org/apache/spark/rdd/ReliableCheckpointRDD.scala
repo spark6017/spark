@@ -30,7 +30,13 @@ import org.apache.spark.util.{SerializableConfiguration, Utils}
 
 /**
  * An RDD that reads from checkpoint files previously written to reliable storage.
- */
+  *
+  * @param sc
+  * @param checkpointPath 存放checkpoint数据的路径
+  * @param _partitioner
+  * @param ev$1
+  * @tparam T
+  */
 private[spark] class ReliableCheckpointRDD[T: ClassTag](
     sc: SparkContext,
     val checkpointPath: String,
@@ -132,6 +138,8 @@ private[spark] object ReliableCheckpointRDD extends Logging {
     val broadcastedConf = sc.broadcast(
       new SerializableConfiguration(sc.hadoopConfiguration))
     // TODO: This is expensive because it computes the RDD again unnecessarily (SPARK-8582)
+
+    //将RDD写到CheckpointFile是通过触发spark Job
     sc.runJob(originalRDD,
       writePartitionToCheckpointFile[T](checkpointDirPath.toString, broadcastedConf) _)
 

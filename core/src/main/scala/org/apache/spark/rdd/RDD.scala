@@ -1392,15 +1392,31 @@ abstract class RDD[T: ClassTag](
         // Priority keeps the largest elements, so let's reverse the ordering.
         val queue = new BoundedPriorityQueue[T](num)(ord.reverse)
         queue ++= util.collection.Utils.takeOrdered(items, num)(ord)
+
+        /***
+          * queue构造得到的Iterator
+          */
         Iterator.single(queue)
       }
+
+      /***
+        * 如果没有元素，返回空数组
+        */
       if (mapRDDs.partitions.length == 0) {
         Array.empty
-      } else {
-        mapRDDs.reduce { (queue1, queue2) =>
+      }
+
+      /***
+        * mapRDD是n个BoundedPriorityQueue，每个队列是num个元素，
+        * 通过reduce操作将n*num个元素合并成top num个元素，然后调用队列的toArray方法返回队列的元素(返回的队列的元素是不保证排序的，因此需要执行sorted操作)
+        *
+        */
+      else {
+        val x = mapRDDs.reduce { (queue1, queue2) =>
           queue1 ++= queue2
           queue1
-        }.toArray.sorted(ord)
+        }
+        x.toArray.sorted(ord)
       }
     }
   }

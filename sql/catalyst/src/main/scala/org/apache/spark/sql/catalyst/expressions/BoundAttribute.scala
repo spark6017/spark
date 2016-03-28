@@ -97,20 +97,24 @@ object BindReferences extends Logging {
     /**
       * 递归遍历表达式树，遇到AttributeReference就转换为BoundReference
       */
-    expression.transform { case a: AttributeReference =>
-      attachTree(a, "Binding attribute") {
-        val ordinal = input.indexWhere(_.exprId == a.exprId)
-        val attribute = input(ordinal)
-        if (ordinal == -1) {
-          if (allowFailures) {
-            a
+    val expr = expression.transform {
+      //如果节点是AttributeReference，那么将AttributeReference转换为BoundReference
+      case attr: AttributeReference =>
+        attachTree(attr, "Binding attribute") {
+          val ordinal = input.indexWhere(_.exprId == attr.exprId)
+          val attribute = input(ordinal)
+          if (ordinal == -1) {
+            if (allowFailures) {
+              attr
+            } else {
+              sys.error(s"Couldn't find $attr in ${input.mkString("[", ",", "]")}")
+            }
           } else {
-            sys.error(s"Couldn't find $a in ${input.mkString("[", ",", "]")}")
+            BoundReference(ordinal, attr.dataType, attribute.nullable)
           }
-        } else {
-          BoundReference(ordinal, a.dataType, attribute.nullable)
         }
-      }
-    }.asInstanceOf[A] // Kind of a hack, but safe.  TODO: Tighten return type when possible.
+    }
+
+      expr.asInstanceOf[A] // Kind of a hack, but safe.  TODO: Tighten return type when possible.
   }
 }

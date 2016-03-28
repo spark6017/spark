@@ -79,10 +79,10 @@ final class UnsafeExternalRowSorter {
    *
    * 调用UnsafeExternalSorter的create方法创建UnsafeExternalSorter
    *
-   * @param schema
-   * @param ordering
+   * @param schema Row的schema信息
+   * @param ordering 排序
    * @param prefixComparator
-   * @param prefixComputer
+   * @param prefixComputer prefix计算器
    * @param pageSizeBytes
      * @throws IOException
      */
@@ -275,6 +275,8 @@ final class UnsafeExternalRowSorter {
   /***
    * RecordComparator的Record的含义在这里有一定的体现，Record是广泛意义上的数据记录，而不仅仅单指Row
    * Row只是Record的一种情况
+   *
+   * 首先进行prefix比较，再进行row比较？
    */
   private static final class RowComparator extends RecordComparator {
     private final Ordering<InternalRow> ordering;
@@ -282,6 +284,11 @@ final class UnsafeExternalRowSorter {
     private final UnsafeRow row1;
     private final UnsafeRow row2;
 
+    /***
+     *
+     * @param ordering
+     * @param numFields
+     */
     public RowComparator(Ordering<InternalRow> ordering, int numFields) {
       this.numFields = numFields;
       this.row1 = new UnsafeRow(numFields);

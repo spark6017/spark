@@ -103,6 +103,13 @@ public class UnsafeRowWriter {
     return startingOffset + nullBitsSize + 8 * ordinal;
   }
 
+  /***
+   * 虽然size是long类型，实际上调用者给它赋予的是int类型的值
+   * 问题：为什么没有类型转换的问题？？
+   *
+   * @param ordinal
+   * @param size
+   */
   public void setOffsetAndSize(int ordinal, long size) {
     setOffsetAndSize(ordinal, holder.cursor, size);
   }
@@ -120,6 +127,7 @@ public class UnsafeRowWriter {
     final long fieldOffset = getFieldOffset(ordinal);
 
     //relativeOffset左移动32位，表示数据从低四位移动到高四位，然后与size取或操作
+    //size是int类型的数据，因此只占低四位
     final long offsetAndSize = (relativeOffset << 32) | size;
 
     Platform.putLong(holder.buffer, fieldOffset, offsetAndSize);
@@ -141,15 +149,34 @@ public class UnsafeRowWriter {
     }
   }
 
+  /***
+   * 往UnsafeRow中写入boolean类型的数据
+   * @param ordinal
+   * @param value
+   */
   public void write(int ordinal, boolean value) {
+    //取出第ordinal列的offset
     final long offset = getFieldOffset(ordinal);
+
+    //是将hold.buffer的offset位置的数据清零？
     Platform.putLong(holder.buffer, offset, 0L);
+
+    //往hold.buffer的offset位置的数据写入boolean类型的value
     Platform.putBoolean(holder.buffer, offset, value);
   }
 
+  /***
+   * 往UnsafeRow中写入字节类型的数据
+   * @param ordinal
+   * @param value
+   */
   public void write(int ordinal, byte value) {
     final long offset = getFieldOffset(ordinal);
+
+    //将holder.buffer的offset位置的数据清零？
     Platform.putLong(holder.buffer, offset, 0L);
+
+    //往hold.buffer的offset位置的数据写入byte类型的value
     Platform.putByte(holder.buffer, offset, value);
   }
 
@@ -179,6 +206,11 @@ public class UnsafeRowWriter {
     Platform.putFloat(holder.buffer, offset, value);
   }
 
+  /***
+   * double类型的数据需要8个字节
+   * @param ordinal
+   * @param value
+   */
   public void write(int ordinal, double value) {
     if (Double.isNaN(value)) {
       value = Double.NaN;
@@ -186,6 +218,13 @@ public class UnsafeRowWriter {
     Platform.putDouble(holder.buffer, getFieldOffset(ordinal), value);
   }
 
+  /***
+   *  Spark SQL定义的Decimal类型的数据需要16个字节
+   * @param ordinal
+   * @param input
+   * @param precision 精度
+   * @param scale
+   */
   public void write(int ordinal, Decimal input, int precision, int scale) {
     if (precision <= Decimal.MAX_LONG_DIGITS()) {
       // make sure Decimal object has the same scale as DecimalType
@@ -224,14 +263,18 @@ public class UnsafeRowWriter {
   }
 
   /***
-   * 写入UTF8String字符串
+   * 往UnsafeRow中写入UTF8String字符串
+   *
+   *
    * @param ordinal
    * @param input
      */
   public void write(int ordinal, UTF8String input) {
+
+    //字符串占用多少个字节
     final int numBytes = input.numBytes();
 
-    //求不小于numBytes且是8的倍数的最小值
+    //不小于numBytes且是8的倍数的最小值
     final int roundedSize = ByteArrayMethods.roundNumberOfBytesToNearestWord(numBytes);
 
     // grow the global buffer before writing data.
@@ -240,7 +283,7 @@ public class UnsafeRowWriter {
     zeroOutPaddingBytes(numBytes);
 
     // Write the bytes to the variable length portion.
-    //写入内存
+    //将input字符串写入到内存，写入的位置是holder.buffer和holder.cursor
     input.writeToMemory(holder.buffer, holder.cursor);
 
     //更新offset和size
@@ -272,6 +315,11 @@ public class UnsafeRowWriter {
     holder.cursor += roundedSize;
   }
 
+  /***
+   * 为什么CalendarInterval占用16个字节？8个字节记录int类型的月数，8个字节记录long类型的微秒数
+   * @param ordinal
+   * @param input
+   */
   public void write(int ordinal, CalendarInterval input) {
     // grow the global buffer before writing data.
     holder.grow(16);

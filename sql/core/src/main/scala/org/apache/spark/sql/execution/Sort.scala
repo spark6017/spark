@@ -55,7 +55,7 @@ case class Sort(
 
   /**
    * 如果是全量排序，那么要求孩子物理计划的数据分布是OrderedDistribution，那么在插入Exchange物理计划时，需要插入Exchange(range-partitioning)
-   * 如果是布局排序(分区内排序)，那么对孩子物理计划的数据分布是UnspecifiedDistribution,那么在插入Exchange物理计划是，需要插入Exchange(hash-partitioning)
+   * 如果是局部排序(分区内排序)，那么对孩子物理计划的数据分布是UnspecifiedDistribution,那么在插入Exchange物理计划是，需要插入Exchange(hash-partitioning)
    *
    * @return
    */
@@ -98,24 +98,34 @@ case class Sort(
         */
     val ordering = newOrdering(sortOrder, childOutput)
 
-      // The comparator for comparing prefix,为什么只取sortOrder的第一个元素？
+      // The comparator for comparing prefix,
+      // 为什么只取sortOrder的第一个元素？比如select salary from person order by name ASC, age DESC，那么
+      //返回的是SortOrder对象name ASC，而childOutput是salary，只对第一个排序表达式使用按照prefix排序
       val boundSortExpression : SortOrder = BindReferences.bindReference(sortOrder.head, childOutput)
 
-      // 创建prefix comparator
+      // 根据sortOrder获取prefix comparator
       val prefixComparator = SortPrefixUtils.getPrefixComparator(boundSortExpression)
 
       // The generator for prefix
       val sortPrefixes = Seq(SortPrefix(boundSortExpression))
+
+      //prefixProjection得到的是一个函数，可以调用它的apply方法
       val prefixProjection = UnsafeProjection.create(sortPrefixes)
 
       /***
         * 实现UnsafeExternalRowSorter.PrefixComputer接口
         */
       val prefixComputer = new UnsafeExternalRowSorter.PrefixComputer {
+
+        /** *
+          * 计算row的prefix
+          * @param row
+          * @return
+          */
         override def computePrefix(row: InternalRow): Long = {
-          val prefix = prefixProjection.apply(row)
-          val ret = prefix.getLong(0)
-          ret
+          val prefixUnsafeRow = prefixProjection.apply(row)
+          val prefix = prefixUnsafeRow.getLong(0)
+          prefix
         }
       }
 
@@ -140,9 +150,6 @@ case class Sort(
 
       /**
         * 调用UnsafeExternalRowSorter的sort方法完成排序
-        * 问题：
-        * 1. 当内存空间不足时，spill到磁盘的逻辑是在哪里执行的？
-        *
         */
       val sortedIterator = sorter.sort(iter.asInstanceOf[Iterator[UnsafeRow]])
 

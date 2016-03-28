@@ -42,7 +42,10 @@ case object Descending extends SortDirection {
   * SortOrder记录了排序的列以及是升序，还是降序
   *
   * 如： order by abc ASC, def DESC定义了两个SortOrder
- */
+  *
+ *  @param child SortOrder表达式是一元表达式，也就是说每个SortOrder表达式包含一个孩子表达式
+  * @param direction
+  */
 case class SortOrder(child: Expression, direction: SortDirection)
   extends UnaryExpression with Unevaluable {
 
@@ -57,6 +60,12 @@ case class SortOrder(child: Expression, direction: SortDirection)
     }
   }
 
+  /** *
+    * SortOrder表达式的数据类型，一个SortOrder表达式关联一个Child表达式。
+    * SortOrder表达式的数据类型是它包含的child表达式的数据类型，也就是说，SortOrder表达式并不改变child表达式的数据类型
+    *
+    * @return
+    */
   override def dataType: DataType = child.dataType
   override def nullable: Boolean = child.nullable
 
@@ -68,7 +77,9 @@ case class SortOrder(child: Expression, direction: SortDirection)
 /**
  * An expression to generate a 64-bit long prefix used in sorting.
   *
-  * 表达式，用于排序用的prefix
+  * 排序前缀生成器？
+ *
+ * 表达式，用于排序用的prefix
   *
   * @param child
   */
@@ -76,6 +87,12 @@ case class SortPrefix(child: SortOrder) extends UnaryExpression {
 
   override def eval(input: InternalRow): Any = throw new UnsupportedOperationException
 
+  /** *
+    * genCode的代码长什么样？
+    * @param ctx a [[CodegenContext]]
+    * @param ev an [[ExprCode]] with unique terms.
+    * @return Java source code
+    */
   override def genCode(ctx: CodegenContext, ev: ExprCode): String = {
     val childCode = child.child.gen(ctx)
     val input = childCode.value

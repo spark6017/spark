@@ -50,13 +50,22 @@ import static org.apache.spark.unsafe.Platform.BYTE_ARRAY_OFFSET;
  * The bit set is used for null tracking and is aligned to 8-byte word boundaries.  It stores
  * one bit per field.
  *
+ * 存放null tracking bit sets的是8个字节的整数
+ *
  * In the `values` region, we store one 8-byte word per field. For fields that hold fixed-length
  * primitive types, such as long, double, or int, we store the value directly in the word. For
  * fields with non-primitive or variable-length values, we store a relative offset (w.r.t. the
  * base address of the row) that points to the beginning of the variable-length field, and length
  * (they are combined into a long).
  *
+ * 对于定长数据，比如Boolean、Int、Long、Double，采用8个字节存储，也就是说，对于Boolean类型的数据，会浪费大量的数据空间
+ *
+ * 对于变长数据，使用8个字节存放数据的位置+数据的长度,分别使用4个字节
+ *
+ *
  * Instances of `UnsafeRow` act as pointers to row data stored in this format.
+ *
+ *
  */
 public final class UnsafeRow extends MutableRow implements Externalizable, KryoSerializable {
 
@@ -67,9 +76,12 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
 
   /***
    * 用于track row中null列的bitset的字节数，它的长度是8的整数倍
-   * 1-64列是8个字节
-   * 65-127列是16个字节
-   * @param numFields
+   * 1-64列是8个字节(一个Long的长度)
+   * 65-127列是16个字节(两个Long的长度)
+   * BitSetWidth是WORD的整数倍，参见BitSetMethods.WORD_SIZE
+   *
+   * 问题：第21列是否为null如何计算？
+   * @param numFields 列数，返回字节数
    * @return
      */
   public static int calculateBitSetWidthInBytes(int numFields) {
@@ -156,6 +168,10 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
     return baseOffset + bitSetWidthInBytes + ordinal * 8L;
   }
 
+  /**
+   * 列的下标从0开始计算
+   * @param index
+   */
   private void assertIndexIsValid(int index) {
     assert index >= 0 : "index (" + index + ") should >= 0";
     assert index < numFields : "index (" + index + ") should < " + numFields;
@@ -220,13 +236,17 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
   }
 
   /**
-   * 设置第i列为空：
+   * 设置第i列为空，i从0开始计算
    *    BitSet需要设置，同时数据本身需要设置为null(其实是设置为0，是否为空，由bit set控制)
    * @param i
      */
   @Override
   public void setNullAt(int i) {
     assertIndexIsValid(i);
+
+    /***
+     * 将第i列设置为null
+     */
     BitSetMethods.set(baseObject, baseOffset, i);
     // To preserve row equality, zero out the value when setting the column to null.
     // Since this row does does not currently support updates to variable-length values, we don't
@@ -272,10 +292,22 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
     Platform.putDouble(baseObject, getFieldOffset(ordinal), value);
   }
 
+  /***
+   * 对于boolean、short、int等占用字节数不足8个的数据类型，存储到UnsafeRow中是否占据8个字节？
+   * @param ordinal
+   * @param value
+   */
   @Override
   public void setBoolean(int ordinal, boolean value) {
     assertIndexIsValid(ordinal);
+    /***
+     * 首先设置第ordinal列不为null
+     */
     setNotNullAt(ordinal);
+
+    /***
+     *  通过getFieldOffset(ordinal)取出第ordinal列的offset，在这里写上Boolean值，这个Boolean值占用8个字节？
+     */
     Platform.putBoolean(baseObject, getFieldOffset(ordinal), value);
   }
 

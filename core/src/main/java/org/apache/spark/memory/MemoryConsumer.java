@@ -84,6 +84,8 @@ public abstract class MemoryConsumer {
    * LongArray的构造函数是MemoryBlock
    */
   public LongArray allocateArray(long size) {
+
+    //字节数是size*8
     long required = size * 8L;
     //申请MemoryBlock
     MemoryBlock page = taskMemoryManager.allocatePage(required, this);

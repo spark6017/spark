@@ -42,11 +42,15 @@ object SortPrefixUtils {
     * 5. Float
     * 6. Double
     *
-    * @param sortOrder
+    * @param sortOrder 对于指定的SortOrder，获取其Prefix Comparator. 一个SortOrder表达式对应一个PrefixComparator
     * @return
     */
   def getPrefixComparator(sortOrder: SortOrder): PrefixComparator = {
     val dataType = sortOrder.dataType
+
+    //不同数据类型的SortOrder表达式，使用不同的前缀比较器
+    //比如升序的字符串前缀比较器：PrefixComparators.STRING
+    //比如升序的布尔、整数、长整型、日期类型、时间戳类型的前缀比较器:  PrefixComparators.LONG
     dataType match {
       case StringType =>
         if (sortOrder.isAscending) PrefixComparators.STRING else PrefixComparators.STRING_DESC

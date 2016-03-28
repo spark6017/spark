@@ -252,6 +252,12 @@ public final class CalendarInterval implements Serializable {
   public final int months;
   public final long microseconds;
 
+  /***
+   * CalendarInterval构造参数是months和microseconds
+   * 这是什么表示法？诡异！
+   * @param months
+   * @param microseconds 1 second  = 10^6 microseconds
+   */
   public CalendarInterval(int months, long microseconds) {
     this.months = months;
     this.microseconds = microseconds;

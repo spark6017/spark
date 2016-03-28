@@ -40,31 +40,37 @@ public final class BitSetMethods {
   /**
    * Sets the bit at the specified index to {@code true}.
    *
-   * 在BitSet，需要找到
+   * 为index列对应的null tracking bitset设置值。这里仅仅是设置bitset的值，
+   *
+   * 算法：
+   * 1. 求出存放数据的offset
+   * 2. 计算要存入什么值
    */
   public static void set(Object baseObject, long baseOffset, int index) {
     assert index >= 0 : "index (" + index + ") should >= 0";
 
-    /**index & 0x3f结果是index对64取模？不是的，因为64&64的结果不是0，而是64*/
-    /**1<<1的结果是2,1<<2结果是4，即1<<n的结果是2^n*/
-
-    /**新值**/
-    final long mask = 1L << (index & 0x3f);  // mod 64 and shift
-
-    /**1>>6是0， 2>>6是0*/
-    final long wordOffset = baseOffset + (index >> 6) * WORD_SIZE;
-
-      /***
-       * 取出wordOffset处的8个字节构成的long数值
-       * 旧值
-       */
-    final long word = Platform.getLong(baseObject, wordOffset);
-
 
     /***
-     * 在wordOffset写入一个Long类型的值，也就是在wordOffset之后占用8个字节
-     * 这个值是word（旧值）和mask(新值)进行或运算的结果
+     *  index是整数类型，index&0x3f表示对64取模，index&0x3f的取值区间是[0,63]
+     *  如果index<=63,那么index&0x3f就等于index;如果index>63，那么index&0x3f表示index%64
+     *
+     *
+     * 如果index<=63,那么mask的值是1向左移动index个位置。也就是说，mask=2^index
+     * mask的最大值是1<<63,这是整数表示的最大范围。index有很多值使得index&0x3f=63
      */
+    final long mask = 1L << (index & 0x3f);  // mod 64 and shift
+
+    /***
+     *  index向右移动6位，如果index=64，即2^6,那么index>>64=1
+     *  如果index [0,63),那么index>>6=0,
+     *  这表示wordOffset的值
+     */
+    final long wordOffset = baseOffset + (index >> 6) * WORD_SIZE;
+
+    //取出原始值
+    final long word = Platform.getLong(baseObject, wordOffset);
+
+    //将mask值写入
     Platform.putLong(baseObject, wordOffset, word | mask);
   }
 
@@ -76,12 +82,15 @@ public final class BitSetMethods {
     final long mask = 1L << (index & 0x3f);  // mod 64 and shift
     final long wordOffset = baseOffset + (index >> 6) * WORD_SIZE;
     final long word = Platform.getLong(baseObject, wordOffset);
+
+    //set的操作是word|mask, unset的操作是wor&~mask
     Platform.putLong(baseObject, wordOffset, word & ~mask);
   }
 
   /**
    * Returns {@code true} if the bit is set at the specified index.
-   * 与set配对操作
+   *
+   * 判断index列是否为null
    */
   public static boolean isSet(Object baseObject, long baseOffset, int index) {
     assert index >= 0 : "index (" + index + ") should >= 0";
@@ -90,16 +99,29 @@ public final class BitSetMethods {
     final long mask = 1L << (index & 0x3f);  // mod 64 and shift
     final long wordOffset = baseOffset + (index >> 6) * WORD_SIZE;
 
-    /**旧值*/
     final long word = Platform.getLong(baseObject, wordOffset);
+
+    //如果设置了，那么word的值是word | mask,
+    //(word | mask) & mask是否一定不为0？
+    //(word & mask)的结果应该是mask
     return (word & mask) != 0;
   }
 
   /**
    * Returns {@code true} if any bit is set.
+   *
+   * UnsafeRow中是否有值为NULL的列
+   *
+   * @param baseObject
+   * @param baseOffset
+   * @param bitSetWidthInWords bitsetWidthInWords,它是UnsafeRow#calculateBitSetWidthInBytes/8
+   * @return
    */
   public static boolean anySet(Object baseObject, long baseOffset, long bitSetWidthInWords) {
+    //add是baseOffset,offset的偏移量是WORD_SIZE为单位
     long addr = baseOffset;
+
+    //一共循环bitSetWidthInWords次
     for (int i = 0; i < bitSetWidthInWords; i++, addr += WORD_SIZE) {
       if (Platform.getLong(baseObject, addr) != 0) {
         return true;

@@ -82,6 +82,9 @@ public class PrefixComparators {
     }
   }
 
+  /***
+   * Long前缀比较器
+   */
   public static final class LongPrefixComparator extends PrefixComparator {
     @Override
     public int compare(long a, long b) {

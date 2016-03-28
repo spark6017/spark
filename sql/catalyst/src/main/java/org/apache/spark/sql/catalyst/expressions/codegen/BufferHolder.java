@@ -33,8 +33,11 @@ import org.apache.spark.unsafe.Platform;
  * Generally we should call `UnsafeRow.setTotalSize` and pass in `BufferHolder.totalSize` to update
  * the size of the result row, after writing a record to the buffer. However, we can skip this step
  * if the fields of row are all fixed-length, as the size of result row is also fixed.
+ *
+ * BufferHolder是对UnsafeRow的封装
  */
 public class BufferHolder {
+
   public byte[] buffer;
   public int cursor = Platform.BYTE_ARRAY_OFFSET;
   private final UnsafeRow row;
@@ -65,7 +68,11 @@ public class BufferHolder {
         tmp,
         Platform.BYTE_ARRAY_OFFSET,
         totalSize());
+
+      //tmp指向新的内存空间，将它赋值给buffer
       buffer = tmp;
+
+      //row指向新的内存空间
       row.pointTo(buffer, buffer.length);
     }
   }
@@ -74,6 +81,10 @@ public class BufferHolder {
     cursor = Platform.BYTE_ARRAY_OFFSET + fixedSize;
   }
 
+  /***
+   * 该BufferHolder实际占用的字节数
+   * @return
+   */
   public int totalSize() {
     return cursor - Platform.BYTE_ARRAY_OFFSET;
   }

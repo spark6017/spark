@@ -19,6 +19,7 @@ package org.apache.spark.sql.execution.aggregate
 
 import org.apache.spark.TaskContext
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.SQLConf
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.errors._
 import org.apache.spark.sql.catalyst.expressions._
@@ -65,6 +66,7 @@ case class TungstenAggregate(
   /** *
     * TungstenAggregate物理计划输出的数据的结构(由Seq[Attribute]表达)
     * 它是根据resultExpression表示的
+ *
     * @return
     */
   override def output: Seq[Attribute] = resultExpressions.map(_.toAttribute)
@@ -295,7 +297,6 @@ case class TungstenAggregate(
    *
    * 由动态生成的Java Class调用，是哪个Java Class，调用时需要提供TungsgtenAggregate的实例，在什么地方调用？搜索下
    *
-    *
     * @return 返回UnsafeFixedWidthAggregationMap （固定长度的Aggregation，何解？只用于类型固定的Aggregation）
     */
   def createHashMap(): UnsafeFixedWidthAggregationMap = {
@@ -473,9 +474,9 @@ case class TungstenAggregate(
        """
     }
 /**
-    println("=================================>Output Code Begin<===============================")
-    println(outputCode)
-    println("=================================>Output Code End<===============================")
+    *println("=================================>Output Code Begin<===============================")
+    *println(outputCode)
+    *println("=================================>Output Code End<===============================")
 
     **/
     val doAgg = ctx.freshName("doAggregateWithKeys")
@@ -553,6 +554,7 @@ case class TungstenAggregate(
 
   /** *
     * TunstenAggregate物理计划的字符串表示
+ *
     * @return
     */
   override def simpleString: String = {
@@ -604,5 +606,8 @@ object TungstenAggregate {
       */
     val supportsAggregate = UnsafeFixedWidthAggregationMap.supportsAggregationBufferSchema(aggregationBufferSchema)
     supportsAggregate
+
+    //强制SortBasedAggregation
+    false
   }
 }

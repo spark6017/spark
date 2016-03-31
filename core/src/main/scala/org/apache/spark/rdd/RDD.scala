@@ -901,10 +901,21 @@ abstract class RDD[T: ClassTag](
 
   /**
    * Applies a function f to all elements of this RDD.
+   * 对RDD的所有元素应用函数f，函数f的类型是T=>Unit,foreach这个action的
+   * 返回值是Unit,也就是说，foreach的功能是产生副作用的
+   *
+   * foreach是在executor上对每个分区的数据进行遍历处理，而不是将数据返回到Driver再处理
+   * @param f
    */
   def foreach(f: T => Unit): Unit = withScope {
     val cleanF = sc.clean(f)
-    sc.runJob(this, (iter: Iterator[T]) => iter.foreach(cleanF))
+
+    //runJob的第二个参数processPartitionData函数的类型是(iter: Iterator[T]) => iter.foreach(cleanF)
+    val processPartitionDataFunc = (iter: Iterator[T]) => iter.foreach(cleanF)
+
+    //jobResult的类型是Array[Unit]，也就是说每个分区返回的分区计算结果是Unit
+    val jobResult = sc.runJob(this, processPartitionDataFunc)
+    jobResult
   }
 
   /**
@@ -1416,6 +1427,7 @@ abstract class RDD[T: ClassTag](
 
   /**
    * Return the first element in this RDD.
+   * first操作调用的是top(1)操作
    */
   def first(): T = withScope {
     take(1) match {

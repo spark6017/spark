@@ -1913,7 +1913,8 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     * @param func 计算函数，将分区数据Iterator[T]转换为类型为U的函数
     * @tparam T
     * @tparam U
-    * @return 每个分区的计算结果类型U的数组
+    * @return 每个分区的计算结果类型U的数组,RDD.foreach函数中U的类型是Unit, 也就是说，RDD.foreach的结果是
+   *         Array[Unit]
     */
   def runJob[T, U: ClassTag](rdd: RDD[T], func: Iterator[T] => U): Array[U] = {
     runJob(rdd, func, 0 until rdd.partitions.length)

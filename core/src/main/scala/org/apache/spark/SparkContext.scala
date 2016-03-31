@@ -1847,6 +1847,8 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     *
     * 调用runJob的另一个版本的函数，传入的参数体是(index, res) => results(index) = res，将res写入result(index)中
     *
+    * 因为该runJob依然返回Array，参数中并没有指定分区计算结果的处理函数
+    *
     * @param rdd
     * @param func
     * @param partitions
@@ -1862,9 +1864,14 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     /***
       * results数据用于接收数据，(index, res) => results(index) = res是DAGScheduler用到的resultHandler函数(Int,U)=>Unit
       */
-    val results = new Array[U](partitions.size)
-    runJob[T, U](rdd, func, partitions, (index, res) => results(index) = res)
-    results
+    val jobResult = new Array[U](partitions.size)
+
+    /***
+      * 调用返回值为Unit的runJob方法，因为返回为Unit，因此需要指定分区结果处理函数
+      * 这里的分区结果处理函数是将分区计算结果放到数组中，分区结果在数组中的下标是分区的ID,index
+      */
+    runJob[T, U](rdd, func, partitions, (index, taskResult) => jobResult(index) = taskResult)
+    jobResult
   }
 
   /***
@@ -1897,6 +1904,10 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
 
   /**
    * Run a job on all partitions in an RDD and return the results in an array.
+    *
+    *　参看RDD.collect方法，在这个方法中,U的类型是数组
+    *
+    * 对于返回类型为数组的runJob，可以不指定分区结果处理函数，因为它直接返回了
     *
     * @param rdd
     * @param func 计算函数，将分区数据Iterator[T]转换为类型为U的函数

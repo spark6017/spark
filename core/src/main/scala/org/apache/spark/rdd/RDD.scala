@@ -917,8 +917,18 @@ abstract class RDD[T: ClassTag](
 
   /**
    * Return an array that contains all of the elements in this RDD.
-   */
+    *
+    * 该方法调用的是返回类型为Array[U]的SparkContext.runJob方法.
+    * 对于collect,返回的Array[U]中的每个元素是一个集合，
+    * 所以调用Array.concat(results: _*)将每个元素对应的集合进行连接，类似于flatMap
+    *
+    *
+    * @return 返回RDD中所有分区的数据
+    */
   def collect(): Array[T] = withScope {
+    /***
+      * 分区数据处理函数是把分区数据(Iterator[T]类型)转换为数组
+      */
     val results = sc.runJob(this, (iter: Iterator[T]) => iter.toArray)
     Array.concat(results: _*)
   }

@@ -1921,7 +1921,14 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
 
   /**
    * Run a job on all partitions in an RDD and pass the results to a handler function.
-   */
+    *
+    * @param rdd
+    * @param processPartition 分区内数据处理函数，函数的类型是Iterator[T]=>U
+    * @param resultHandler　分区结果处理函数，函数类型是(Int,U)=>Unit，　第一个入参表示分区的ID，第二个参数表示
+    *                     分区计算结果，分区结果处理函数的返回值是Unit。参考RDD.reduce方法，它是使用闭包的方式将所有分区的结果进行最后的reduce
+    * @tparam T
+    * @tparam U
+    */
   def runJob[T, U: ClassTag](
       rdd: RDD[T],
       processPartition: Iterator[T] => U,

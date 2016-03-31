@@ -58,6 +58,13 @@ private[spark] class JobWaiter[T](
     dagScheduler.cancelJob(jobId)
   }
 
+  /***
+    * 任务执行结束时
+    * 1. 执行resultHandler处理分区计算结果
+    * 2. 如果所有的任务都执行完成，那么job执行完，JobWaiter解除等待状态
+    * @param index
+    * @param result
+    */
   override def taskSucceeded(index: Int, result: Any): Unit = {
     // resultHandler call must be synchronized in case resultHandler itself is not thread safe.
     synchronized {

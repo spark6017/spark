@@ -990,25 +990,63 @@ abstract class RDD[T: ClassTag](
   /**
    * Reduces the elements of this RDD using the specified commutative and
    * associative binary operator.
-   */
+    *
+    * reduce是一个Action，它的参数是一个高阶函数，函数类型是(T,T)=>T，
+    * 也就是说，reduce操作不改变数据的类型
+    *
+    * @param f
+    * @return
+    */
   def reduce(f: (T, T) => T): T = withScope {
     val cleanF = sc.clean(f)
+
+    /**
+      * reducePartition是分区内的函数，它是一个函数，函数类型是Iterator[T] => Option[T]
+      * 入参是分区数据形成的Iterator,返回结果是对分区数据集合Iterator进行reduce的结果
+      */
     val reducePartition: Iterator[T] => Option[T] = iter => {
       if (iter.hasNext) {
+        //问题：Iterator的reduceLeft是什么操作？跟reduceRight什么分别
         Some(iter.reduceLeft(cleanF))
       } else {
         None
       }
     }
+
+    /***
+      * jobResult记录的是reduce这个job的最终结果(不是分区内的中间结果),结果是一个Option[T]
+      *
+      * 此处使用闭包的方式更新jobResult
+      */
     var jobResult: Option[T] = None
+
+    /***
+      * mergeResult是一个函数，它是SparkContext的第三个参数，
+      * 参数的入参是(index:Int, taskResult: Option[T])
+      * index参数指的是partition id, taskResult是处理index这个partition的task的结果
+      *
+      */
     val mergeResult = (index: Int, taskResult: Option[T]) => {
+
+      /***
+        * 如果taskResult有值(以为着index分区有数据)
+        */
       if (taskResult.isDefined) {
+
+        /***
+          * 如果jobResult为None,表示index　partition对应的任务是一个完成的，将jobResult首先
+          * 赋值为taskResult
+          * 如果jobResult不为None,则表示index partition对应的任务不是第一个完成的，所以需要跟之前完成
+          * 的任务结果进行比较(所有之前的计算结果只保留唯一值存放在jobResult中)，这个比较逻辑就是使用ｆ函数实现的
+          */
         jobResult = jobResult match {
           case Some(value) => Some(f(value, taskResult.get))
           case None => taskResult
         }
       }
     }
+
+    //SparkContext的runJob是否都是返回值为Unit的？不是的，结果可能是Array[T]，数据记录了每个个分区的
     sc.runJob(this, reducePartition, mergeResult)
     // Get the final result out of our Option, or throw an exception if the RDD was empty
     jobResult.getOrElse(throw new UnsupportedOperationException("empty collection"))
@@ -1454,6 +1492,9 @@ abstract class RDD[T: ClassTag](
    * @return the maximum element of the RDD
    * */
   def max()(implicit ord: Ordering[T]): T = withScope {
+    /**
+      * 调用reduce action，　reduce　action的参数是Ordering.max
+      */
     this.reduce(ord.max)
   }
 

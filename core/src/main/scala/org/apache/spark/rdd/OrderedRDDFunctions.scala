@@ -66,8 +66,12 @@ class OrderedRDDFunctions[K : Ordering : ClassTag,
    *      2. 又因为是sortByKey，那么分区内继续排序？会继续根据Key排序，这也正是sortByKey的含义： 首先在Shuffle Write阶段实现分区间有序(分区内不保证有序)，在Shuffle Read
    *      阶段再实现分区内有序
    *
-   *
-   */
+    * 注意：sortByKey可以指定分区数，但是不能指定分区算法，因为分区算法是固定的RangePartitioner
+    *
+    * @param ascending
+    * @param numPartitions sortByKey可以指定分区数，默认的分区数是调用该方法的RDD的分区数
+    * @return
+    */
   // TODO: this currently doesn't work on P other than Tuple2!
   def sortByKey(ascending: Boolean = true, numPartitions: Int = self.partitions.length)
       : RDD[(K, V)] = self.withScope
@@ -94,8 +98,11 @@ class OrderedRDDFunctions[K : Ordering : ClassTag,
    * This is more efficient than calling `repartition` and then sorting within each partition
    * because it can push the sorting down into the shuffle machinery.
    *
-   * 分区内有序？
-   */
+    *  根据partitioner进行数据重新Repartition，能够保证分区内数据有序，但不保证分区间的数据有序
+    *
+    * @param partitioner
+    * @return
+    */
   def repartitionAndSortWithinPartitions(partitioner: Partitioner): RDD[(K, V)] = self.withScope {
     new ShuffledRDD[K, V, V](self, partitioner).setKeyOrdering(ordering)
   }
@@ -108,18 +115,35 @@ class OrderedRDDFunctions[K : Ordering : ClassTag,
    */
   def filterByRange(lower: K, upper: K): RDD[P] = self.withScope {
 
+    /***
+      * 判断元素ｋ是否在lower和upper之间
+      * @param k
+      * @return
+      */
     def inRange(k: K): Boolean = ordering.gteq(k, lower) && ordering.lteq(k, upper)
 
     val rddToFilter: RDD[P] = self.partitioner match {
+        //如果原始RDD使用的是RangePartitioner，那么得到lower和upper所在的partition id，因为不知道RangePartitioner是升序分区，还是降序分区
+        //所以，l和u的值谁大谁小不确定
       case Some(rp: RangePartitioner[K, V]) => {
         val partitionIndicies = (rp.getPartition(lower), rp.getPartition(upper)) match {
           case (l, u) => Math.min(l, u) to Math.max(l, u)
         }
+
+        /***
+          * PartitionPruningRDD的Pruning表示裁剪的意思，
+          * create方法的两个参数：原始RDD以及要保留的分区ID
+          */
         PartitionPruningRDD.create(self, partitionIndicies.contains)
       }
       case _ =>
         self
     }
+
+    /***
+      * 如果原始RDD采用的是RangerPartitioner，那么rddToFilter这个RDD包含的分区是原始RDD的分区的子集
+      * 如果原始RDD采用的是其它的分区算法，那么rddToFilter这个RDD就是原始的RDD
+      */
     rddToFilter.filter { case (k, v) => inRange(k) }
   }
 

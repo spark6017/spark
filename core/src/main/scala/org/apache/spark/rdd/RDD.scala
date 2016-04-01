@@ -1475,7 +1475,13 @@ abstract class RDD[T: ClassTag](
    * elements in a partition. The index assigned to each element is therefore not guaranteed,
    * and may even change if the RDD is reevaluated. If a fixed ordering is required to guarantee
    * the same index assignments, you should sort the RDD with sortByKey() or save it to a file.
-   */
+    *
+    * 跟RDD的分区ID做zip，也就是给RDD的每个元素关联一个分区ID?
+    * 不是的，应该是数据元素的Index
+    *
+    *
+    * @return
+    */
   def zipWithIndex(): RDD[(T, Long)] = withScope {
     new ZippedWithIndexRDD(this)
   }

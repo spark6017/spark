@@ -810,11 +810,32 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    *
    * Warning: this doesn't return a multimap (so if you have multiple values to the same key, only
    *          one value per key is preserved in the map returned)
-   */
+   *
+   *          将RDD[K,V]转换为Map[K,V]，这是一个action。这个API意义不大，因为用户可以很方便的
+   *          将一个K,V集合转换为Map[K,V]
+   *
+    *
+    * @return
+    */
   def collectAsMap(): Map[K, V] = self.withScope {
+    /** *
+      * 通过RDD.collect, 收集数据
+      */
     val data = self.collect()
+
+    /** *
+      * 可变的HashMap
+      */
     val map = new mutable.HashMap[K, V]
+
+
     map.sizeHint(data.length)
+
+    /** *
+      *  调用foreach而不是map方法的原因是，map操作虽然能得到结果，但是却将data转换成一个Array[Unit]集合
+      *  显然这是不合理的
+      *  data.map{pair => map.put(pair._1, pair._2)}
+      */
     data.foreach { pair => map.put(pair._1, pair._2) }
     map
   }
@@ -822,10 +843,21 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
   /**
    * Pass each value in the key-value pair RDD through a map function without changing the keys;
    * this also retains the original RDD's partitioning.
-   */
+    *
+   *  将RDD[K,V]转换成RDD[K,U]，K保持不变。
+   *  同时，RDD[K,V]的分区算法保持不变，也就是说，RDD[K,U]的分区算法仍然是RDD[K,V]的分区算法
+   *
+    * @param f
+    * @tparam U
+    * @return
+    */
   def mapValues[U](f: V => U): RDD[(K, U)] = self.withScope {
     val cleanF = self.context.clean(f)
     new MapPartitionsRDD[(K, U), (K, V)](self,
+
+      /** *
+        * iter是分区内的[K,V]元素集合，通过(k,v)=>(k,cleanF(v)将v转换为cleanedF(v)
+        */
       (context, pid, iter) => iter.map { case (k, v) => (k, cleanF(v)) },
       preservesPartitioning = true)
   }
@@ -833,10 +865,25 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
   /**
    * Pass each value in the key-value pair RDD through a flatMap function without changing the
    * keys; this also retains the original RDD's partitioning.
-   */
+   *
+   * 将RDD[K,V]转换为RDD[K,U]，分区算法保持不变。每个value V会转换成一个U的集合，然后再flat操作
+    *
+    * @param f
+    * @tparam U
+    * @return
+    */
   def flatMapValues[U](f: V => TraversableOnce[U]): RDD[(K, U)] = self.withScope {
     val cleanF = self.context.clean(f)
     new MapPartitionsRDD[(K, U), (K, V)](self,
+
+      /** *
+        * iter是RDD[(K,V)]的分区元素集合。
+        * iter.flatMap的高阶函数的含义是
+        * 1. 首先通过函数f将V转换为集合，结果是cleanedF(v)
+        * 2. 然后对cleanedF(v)集合进行map操作，将集合内的每个元素转换为(k,x)
+        *
+        * 也就是说，flatMap的参数将(K,V)转换为了(K,U)集合，再通过flatMap将(K,U)集合拉平
+        */
       (context, pid, iter) => iter.flatMap { case (k, v) =>
         cleanF(v).map(x => (k, x))
       },

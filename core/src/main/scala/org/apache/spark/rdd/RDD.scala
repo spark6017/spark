@@ -446,14 +446,32 @@ abstract class RDD[T: ClassTag](
 
   /**
    * Return a new RDD containing the distinct elements in this RDD.
-   */
+    * distinct的实现思路是word count(单词计数)
+    * @param numPartitions
+    * @param ord 这个参数是干啥的？
+    * @return
+    */
   def distinct(numPartitions: Int)(implicit ord: Ordering[T] = null): RDD[T] = withScope {
-    map(x => (x, null)).reduceByKey((x, y) => x, numPartitions).map(_._1)
+    val pairRDD = map(x => (x, null))
+
+
+    //reduceByKey的参数是(v,v)=>v,
+    //也就是说此处针对相同Key的两个Value(都是null),返回一个null
+    val reduce = pairRDD.reduceByKey((v1, v2) => v1, numPartitions)
+
+    //reduce是(K,null)集合，因此通过_._1取出key
+
+    reduce.map(_._1)
   }
 
   /**
    * Return a new RDD containing the distinct elements in this RDD.
-   */
+    *
+    * RDD去重
+    * 对于RDD[Person]，根据什么去重？
+    *
+    * @return
+    */
   def distinct(): RDD[T] = withScope {
     distinct(partitions.length)
   }

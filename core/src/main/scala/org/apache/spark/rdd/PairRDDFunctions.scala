@@ -720,7 +720,20 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    * Return an RDD containing all pairs of elements with matching keys in `this` and `other`. Each
    * pair of elements will be returned as a (k, (v1, v2)) tuple, where (k, v1) is in `this` and
    * (k, v2) is in `other`. Performs a hash join across the cluster.
-   */
+   *
+   *
+   *  两个类型分别为RDD[K,V]和RDD[K,W]的RDD按照Key进行内连接，得到的结果是RDD[K,(V,W)]
+   *
+   *  第一个RDD的元素是(1,2),(1,3)
+   *  第二个RDD的元素是(1,4,),(1,5)
+   *
+   *  得到的结果是
+   *  (1,(2,4)),(1,(2,5)),(1,(3,4)),(1,(3,5))
+    *
+    * @param other
+    * @tparam W
+    * @return
+    */
   def join[W](other: RDD[(K, W)]): RDD[(K, (V, W))] = self.withScope {
     join(other, defaultPartitioner(self, other))
   }

@@ -1265,11 +1265,23 @@ abstract class RDD[T: ClassTag](
     /***
       * runJob返回一个数组，表示每个分区的计算数据(分区的数据是调用Utils.getIteratorSize进行计算的)，调用数组的sum，对所有的数据进行求和
       *
+      * Utils.getIteratorSize _是分区内计算函数，它接收类型为Iterator，返回Iterator集合的元素个数
+      *
+      * 问题：Utils.getIteratorSize后面的下划线为什么是必须的？因为Utils.getIteratorSize是一个方法，而runJob的第二个参数是一个函数，
+      * 这是是将方法转换为函数的做法
+      *
       *
       */
-    val arr = sc.runJob(this, Utils.getIteratorSize _)
+//    val arr = sc.runJob(this, Utils.getIteratorSize _)
+    val arr = sc.runJob(this, iteratorSize _);
     arr.sum
   }
+
+  def iteratorSize[T](iter: Iterator[T]) :Long = {
+    Utils.getIteratorSize(iter)
+  }
+
+
 
   /**
    * Approximate version of count() that returns a potentially incomplete result
@@ -1662,7 +1674,14 @@ abstract class RDD[T: ClassTag](
 
   /**
    * Creates tuples of the elements in this RDD by applying `f`.
-   */
+    *
+    * 将RDD[T]转换为RDD[K,T]，通过函数f将T类型的元素转换为K类型的元素
+    *
+    *
+    * @param f
+    * @tparam K
+    * @return
+    */
   def keyBy[K](f: T => K): RDD[(K, T)] = withScope {
     val cleanedF = sc.clean(f)
     map(x => (cleanedF(x), x))

@@ -397,11 +397,13 @@ abstract class RDD[T: ClassTag](
 
   /**
    * Return a new RDD by applying a function to all elements of this RDD.
-    * 构造preservesPartitioning使用的是false，为什么分区算法丢失？
-    *
-    * 比如rdd1的partitioner是HashPartitioner，而rdd2的partitioner是None
-    * val rdd1 = rdd.reduceByKey(_+_,3)
-    * val rdd2 = rdd1.map(identity)
+    * 构造MapPartitionsRDD时， preservesPartitioning使用的是false，为什么分区算法不保留？
+    * 比如rdd1两个分区，按照奇偶进行分区，那么
+   *  rdd2 = rdd1.map(_ * 2),那么rdd2的所有元素都是偶数，如果分区算法保持，那么rdd2的所有数据都会集中到
+   *  同一个分区(偶数)
+   *
+   *  map返回的是RDD的类型是MapPartitionsRDD，
+   *  Task任务函数是(context, pid, iter) => iter.map(cleanF)，分别表示TaskContext、partitionId以及分区数据集合对应的Iteratorss
    */
   def map[U: ClassTag](f: T => U): RDD[U] = withScope {
     val cleanF = sc.clean(f)
@@ -411,6 +413,20 @@ abstract class RDD[T: ClassTag](
   /**
    *  Return a new RDD by first applying a function to all elements of this
    *  RDD, and then flattening the results.
+   *
+   *  Scala的flatMap是一个首先将集合中的每个元素转换为集合(此时的结果为二维集合)，然后将每个元素集合中的所有元素
+   *  展开得到一维集合
+   *  比如
+   *  val lines = Seq("Hello World","How Are You");
+   *  lines.flatMap(_.split(" "));
+   *  最后得到：
+   *
+   *  words= Seq("Hello","World","How","Are","You")
+   *
+   *
+   * @param f 将RDD中的每个元素(元素类型为T)转换为一个集合，集合的元素的类型是U
+   * @tparam U
+   * @return
    */
   def flatMap[U: ClassTag](f: T => TraversableOnce[U]): RDD[U] = withScope {
     val cleanF = sc.clean(f)
@@ -788,7 +804,17 @@ abstract class RDD[T: ClassTag](
    *
    * `preservesPartitioning` indicates whether the input function preserves the partitioner, which
    * should be `false` unless this is a pair RDD and the input function doesn't modify the keys.
-   */
+    *
+   *  mapPartitions操作是在对整个分区数据集合(Iterator)应用函数f，结果仍然是一个数据集合(Iterator)
+   *
+   *  从Iterator转换到另一个Iterator，mapPartitions直接
+   *
+   *
+    * @param f
+    * @param preservesPartitioning
+    * @tparam U
+    * @return
+    */
   def mapPartitions[U: ClassTag](
       f: Iterator[T] => Iterator[U],
       preservesPartitioning: Boolean = false): RDD[U] = withScope {
@@ -920,7 +946,15 @@ abstract class RDD[T: ClassTag](
 
   /**
    * Applies a function f to each partition of this RDD.
-   */
+   *
+   *  foreachPartition也是一个action，它接受一个函数，该函数类型是Iterator[T] => Unit
+   *  也就是说，f函数的入参是整个分区的数据集合，然后对该集合应用f得到一个Unit结果
+   *  跟foreach类似，foreachPartition也是一个带有副作用的action，他的结果在worker端
+   *
+   *  foreachPartition的效率通常要高于foreach
+    *
+    * @param f
+    */
   def foreachPartition(f: Iterator[T] => Unit): Unit = withScope {
     val cleanF = sc.clean(f)
     sc.runJob(this, (iter: Iterator[T]) => cleanF(iter))

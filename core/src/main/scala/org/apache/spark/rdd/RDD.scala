@@ -847,6 +847,8 @@ abstract class RDD[T: ClassTag](
    * [performance] Spark's internal mapPartitions method which skips closure cleaning. It is a
    * performance API to be used carefully only if we are sure that the RDD elements are
    * serializable and don't require closure cleaning.
+    *
+    * 什么是closure cleaning？
    *
    * @param preservesPartitioning indicates whether the input function preserves the partitioner,
    * which should be `false` unless this is a pair RDD and the input function doesn't modify
@@ -867,7 +869,12 @@ abstract class RDD[T: ClassTag](
    *
    * `preservesPartitioning` indicates whether the input function preserves the partitioner, which
    * should be `false` unless this is a pair RDD and the input function doesn't modify the keys.
-   */
+    *
+    * @param f f函数有两个参数，Int和Iterator[T],第一个表示正在处理的Partition的ID，第二个参数表示分区的数据集合
+    * @param preservesPartitioning
+    * @tparam U f函数处理结果类型
+    * @return
+    */
   def mapPartitionsWithIndex[U: ClassTag](
       f: (Int, Iterator[T]) => Iterator[U],
       preservesPartitioning: Boolean = false): RDD[U] = withScope {

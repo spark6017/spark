@@ -883,8 +883,19 @@ abstract class RDD[T: ClassTag](
    * second element in each RDD, etc. Assumes that the two RDDs have the *same number of
    * partitions* and the *same number of elements in each partition* (e.g. one was made through
    * a map on the other).
+    *
+    * zip操作只能对分区内的数据个数相同的RDD进行zip,zip操作的含义是将两个RDD[T]和RDD[U]合并为RDD[(T,U)]
+    * 问题：
+    * 1. 如何两个RDD的分区个数不同，zip结果如何？(1,2,3...9)分成三个分区，每个分区3个数据；（1,2,3..6)分成两个分区，每个分区3个数据
    */
   def zip[U: ClassTag](other: RDD[U]): RDD[(T, U)] = withScope {
+
+    /***
+      * 调用zipPartitions操作，zipPartitions是一个柯里化的函数，最后一个参数是对两个RDD的相同id的分区进行操作
+      * zip函数要求zipPartitions的f函数需要有相同的分区数并且每个分区都有相同的元素个数
+      *
+      *
+      */
     zipPartitions(other, preservesPartitioning = false) { (thisIter, otherIter) =>
       new Iterator[(T, U)] {
         def hasNext: Boolean = (thisIter.hasNext, otherIter.hasNext) match {
@@ -893,6 +904,11 @@ abstract class RDD[T: ClassTag](
           case _ => throw new SparkException("Can only zip RDDs with " +
             "same number of elements in each partition")
         }
+
+        /***
+          * 合并为一个二元组元素
+          * @return
+          */
         def next(): (T, U) = (thisIter.next(), otherIter.next())
       }
     }
@@ -903,37 +919,102 @@ abstract class RDD[T: ClassTag](
    * applying a function to the zipped partitions. Assumes that all the RDDs have the
    * *same number of partitions*, but does *not* require them to have the same number
    * of elements in each partition.
-   */
+    *
+    * Zip两个RDD，要求是两个RDD具有相同的分区数，但是不要求每个分区的元素个数相同，
+    * 有函数f决定两个分区的元素个数是否相同（对于zip函数而言，该函数f是由Spark提供的，且要求两个分区的元素个数相同）
+    *
+    * @param rdd2
+    * @param preservesPartitioning
+    * @param f zip函数
+    * @tparam B
+    * @tparam V
+    * @return 类型为ZippedPartitionsRDD2的RDD
+    */
   def zipPartitions[B: ClassTag, V: ClassTag]
       (rdd2: RDD[B], preservesPartitioning: Boolean)
       (f: (Iterator[T], Iterator[B]) => Iterator[V]): RDD[V] = withScope {
     new ZippedPartitionsRDD2(sc, sc.clean(f), this, rdd2, preservesPartitioning)
   }
 
+  /***
+    * 两个RDD进行zip
+    * @param rdd2
+    * @param f
+    * @tparam B
+    * @tparam V
+    * @return
+    */
   def zipPartitions[B: ClassTag, V: ClassTag]
       (rdd2: RDD[B])
       (f: (Iterator[T], Iterator[B]) => Iterator[V]): RDD[V] = withScope {
     zipPartitions(rdd2, preservesPartitioning = false)(f)
   }
 
+  /***
+    * 三个RDD进行zip
+    * @param rdd2
+    * @param rdd3
+    * @param preservesPartitioning
+    * @param f
+    * @tparam B
+    * @tparam C
+    * @tparam V
+    * @return
+    */
   def zipPartitions[B: ClassTag, C: ClassTag, V: ClassTag]
       (rdd2: RDD[B], rdd3: RDD[C], preservesPartitioning: Boolean)
       (f: (Iterator[T], Iterator[B], Iterator[C]) => Iterator[V]): RDD[V] = withScope {
     new ZippedPartitionsRDD3(sc, sc.clean(f), this, rdd2, rdd3, preservesPartitioning)
   }
 
+  /***
+    *
+    * 三个RDD进行zip
+    * @param rdd2
+    * @param rdd3
+    * @param f
+    * @tparam B
+    * @tparam C
+    * @tparam V
+    * @return
+    */
   def zipPartitions[B: ClassTag, C: ClassTag, V: ClassTag]
       (rdd2: RDD[B], rdd3: RDD[C])
       (f: (Iterator[T], Iterator[B], Iterator[C]) => Iterator[V]): RDD[V] = withScope {
     zipPartitions(rdd2, rdd3, preservesPartitioning = false)(f)
   }
 
+  /***
+    * 四个RDD进行zip
+    * @param rdd2
+    * @param rdd3
+    * @param rdd4
+    * @param preservesPartitioning
+    * @param f
+    * @tparam B
+    * @tparam C
+    * @tparam D
+    * @tparam V
+    * @return
+    */
   def zipPartitions[B: ClassTag, C: ClassTag, D: ClassTag, V: ClassTag]
       (rdd2: RDD[B], rdd3: RDD[C], rdd4: RDD[D], preservesPartitioning: Boolean)
       (f: (Iterator[T], Iterator[B], Iterator[C], Iterator[D]) => Iterator[V]): RDD[V] = withScope {
     new ZippedPartitionsRDD4(sc, sc.clean(f), this, rdd2, rdd3, rdd4, preservesPartitioning)
   }
 
+  /***
+    * 四个RDD进行zip
+    * @param rdd2
+    * @param rdd3
+    * @param rdd4
+    * @param f 将四个RDD进行转换的函数
+    * @tparam B 第二个RDD的元素类型
+    * @tparam C 第三个RDD的元素类型
+    * @tparam D 第四个RDD的元素类型
+    * @tparam V 结果RDD的数据类型
+    * @return
+    */
   def zipPartitions[B: ClassTag, C: ClassTag, D: ClassTag, V: ClassTag]
       (rdd2: RDD[B], rdd3: RDD[C], rdd4: RDD[D])
       (f: (Iterator[T], Iterator[B], Iterator[C], Iterator[D]) => Iterator[V]): RDD[V] = withScope {

@@ -58,10 +58,13 @@ import org.apache.spark.launcher.{LauncherBackend, SparkAppHandle, YarnCommandBu
 import org.apache.spark.util.Utils
 
 /**
- *  SPARK YARN CLUSTER模式下运行在提交作业进程(SparkSubmit)中用于向YARN集群提交作业
- * @param args
- * @param hadoopConf
- * @param sparkConf
+ *  SPARK YARN CLUSTER模式下运行在提交作业进程(SparkSubmit)中用于向YARN集群提交作业，
+ *  object Client的main函数执行提交作业的逻辑，这个代码逻辑在SparkSubmit中
+ *
+ *  问题：
+ * @param args ClientArgument
+ * @param hadoopConf Hadoop Configuration，
+ * @param sparkConf Spark Configuration
  */
 private[spark] class Client(
     val args: ClientArguments,
@@ -81,7 +84,7 @@ private[spark] class Client(
     this(clientArgs, SparkHadoopUtil.get.newConfiguration(spConf), spConf)
 
   /**
-   * 访问RM的Client
+   * 访问RM的Client, 这是YARN API
    */
   private val yarnClient = YarnClient.createYarnClient
 
@@ -1214,6 +1217,10 @@ private[spark] class Client(
  */
 object Client extends Logging {
 
+  /** *
+    *
+    * @param argStrings argStrings是构造Client对象的第一个参数ClientArguments类的构造参数
+    */
   def main(argStrings: Array[String]) {
     /**
      * SparkSubmit中专门为YARN_CLUSTER模式设置了这个系统变量
@@ -1237,11 +1244,14 @@ object Client extends Logging {
     val args = new ClientArguments(argStrings, sparkConf)
     // to maintain backwards-compatibility
     if (!Utils.isDynamicAllocationEnabled(sparkConf)) {
+      /** *
+        * 如果不是动态分配，那么为spark.executor.instances配置选项
+        */
       sparkConf.setIfMissing("spark.executor.instances", args.numExecutors.toString)
     }
 
     /**
-     * 创建Client实例
+     * 创建Client实例并调用run方法
      */
     new Client(args, sparkConf).run()
   }

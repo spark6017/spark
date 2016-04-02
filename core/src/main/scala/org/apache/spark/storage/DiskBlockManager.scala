@@ -40,7 +40,7 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon
     * 子目录是64个二级目录
     */
   private[spark]
-  val subDirsPerLocalDir = blockManager.conf.getInt("spark.diskStore.subDirectories", 64)
+  val subDirNumberPerLocalDir = blockManager.conf.getInt("spark.diskStore.subDirectories", 64)
 
 
   var printFileLocation = true
@@ -59,15 +59,18 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon
   }
   // The content of subDirs is immutable but the content of subDirs(i) is mutable. And the content
   // of subDirs(i) is protected by the lock of subDirs(i)
-  private val subDirs = Array.fill(localDirs.length)(new Array[File](subDirsPerLocalDir))
+  /**
+   * 每个local dir目录下的子目录集合，一共subDirNumberPerLocalDir个，默认64
+   * subDirsUnderLocalDir是一个二维数组，第一维表示由下标标识的local dir，第二维表示该local dir下的子目录
+   */
+  private val subDirsUnderLocalDir= Array.fill(localDirs.length)(new Array[File](subDirNumberPerLocalDir))
 
   private val shutdownHook = addShutdownHook()
 
-  /** Looks up a file by hashing it into one of our local subdirectories. */
   // This method should be kept in sync with
   // org.apache.spark.network.shuffle.ExternalShuffleBlockResolver#getFile().
-
   /** *
+    * Looks up a file by hashing it into one of our local subdirectories.
     * 根据文件名获取文件，Spark对文件名进行hash，以决定该filename存放在哪个子目录下
     *
     * @param filename 磁盘上真实存在的文件名，它位于哪个目录下，有它的hash值进行控制
@@ -81,24 +84,61 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon
       * 3. 算法是(hash / localDirs.length) % subDirsPerLocalDir
       */
     val hash = Utils.nonNegativeHash(filename)
-    val dirId = hash % localDirs.length
-    val subDirId = (hash / localDirs.length) % subDirsPerLocalDir
 
-    // Create the subdirectory if it doesn't already exist
-    val subDir = subDirs(dirId).synchronized {
-      val old = subDirs(dirId)(subDirId)
-      if (old != null) {
-        old
+    /** *
+      * dirId表示该文件位于local dirs的那个目录下
+      */
+    val dirId = hash % localDirs.length
+
+    /** *
+      * subDirId表示该文件位于local dir的那个子目录下
+      */
+    val subDirId = (hash / localDirs.length) % subDirNumberPerLocalDir
+
+
+    /** *
+      * subDirs表示dirId标识的local dir下的子目录集合，它是Array[File]
+      */
+    val subDirs =  subDirsUnderLocalDir(dirId)
+
+    /** *
+      *  Create the subdirectory if it doesn't already exist
+      *  subDir表示该文件的绝对路径，如果该路径不存在，那么首先创建
+      *  subDir由dirId和subDirId共同决定
+      */
+    val subDir =subDirs.synchronized {
+      /** *
+        * 通过dirId和subDirId从subDirsUnderLocalDir获取出该数据文件所处的子目录
+        * old是File类型，它是一个目录
+        */
+      val oldDir = subDirsUnderLocalDir(dirId)(subDirId)
+      if (oldDir != null) {
+        oldDir
       } else {
+        /** *
+          * 如果还不存在，那么首先构造出该newDir，创建规则是父目录是local dir目录 ，目录名是"%02x".format(subDirId)
+          * 如果subDirId是18，那么"%02x".format(subDirId)为12
+          * 如果subDirId是51，那么"%02x".format(subDirId)为36
+          * 如果subDirId是512， 那么"%02x".format(subDirId)为1000,截断得到00
+          */
         val newDir = new File(localDirs(dirId), "%02x".format(subDirId))
+
+        //创建目录
         if (!newDir.exists() && !newDir.mkdir()) {
           throw new IOException(s"Failed to create local dir in $newDir.")
         }
-        subDirs(dirId)(subDirId) = newDir
+
+        /** *
+          * 将newDir保存到subDirsUnderLocalDir二维数组中
+          */
+        subDirsUnderLocalDir(dirId)(subDirId) = newDir
         newDir
       }
     }
 
+    /** *
+      * 返回数据文件
+      */
     new File(subDir, filename)
   }
 
@@ -121,7 +161,7 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon
   /** List all the files currently stored on disk by the disk manager. */
   def getAllFiles(): Seq[File] = {
     // Get all the files inside the array of array of directories
-    subDirs.flatMap { dir =>
+    subDirsUnderLocalDir.flatMap { dir =>
       dir.synchronized {
         // Copy the content of dir because it may be modified in other threads
         dir.clone()

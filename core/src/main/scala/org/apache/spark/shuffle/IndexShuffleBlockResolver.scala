@@ -88,14 +88,29 @@ private[spark] class IndexShuffleBlockResolver(
     blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
   }
 
+  /** *
+    * 和 data file一样，index file也可以由shuffleId和mapId唯一确定，因此此处给定的reduce id 为NOOP_REDUCE_ID(0)
+    *
+    * 这也就以为着，sort based shuffle在将数据文件和索引文件写入到磁盘时，指定的reduce id 为NOOP_REDUCE_ID
+    * @param shuffleId
+    * @param mapId
+    * @return
+    */
   private def getIndexFile(shuffleId: Int, mapId: Int): File = {
     blockManager.diskBlockManager.getFile(ShuffleIndexBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
   }
 
   /**
-   * Remove data file and index file that contain the output data from one map.
-   * */
+   * Remove data file and index file that contain the output data from one map task.
+    * 删除一个MapTask写到磁盘上的数据文件和索引文件，
+   * 这里所谓的ByMap，其实指的是ByMapTask
+    * @param shuffleId
+    * @param mapId
+    */
   def removeDataByMap(shuffleId: Int, mapId: Int): Unit = {
+    /** *
+      * 获取然后删除数据文件
+      */
     var file = getDataFile(shuffleId, mapId)
     if (file.exists()) {
       if (!file.delete()) {
@@ -103,6 +118,9 @@ private[spark] class IndexShuffleBlockResolver(
       }
     }
 
+    /** *
+      * 获取并删除索引文件
+      */
     file = getIndexFile(shuffleId, mapId)
     if (file.exists()) {
       if (!file.delete()) {
@@ -114,14 +132,38 @@ private[spark] class IndexShuffleBlockResolver(
   /**
    * Check whether the given index and data files match each other.
    * If so, return the partition lengths in the data file. Otherwise return null.
-   */
-  private def checkIndexAndDataFile(index: File, data: File, blocks: Int): Array[Long] = {
-    // the index file should have `block + 1` longs as offset.
-    if (index.length() != (blocks + 1) * 8) {
+   *
+   *   检查给定的索引文件和数据文件是否包含blocks个数据segment，
+   *   如果匹配，那么返回每个segment的偏移量
+   *
+   *   这里只返回每个reducer的数据长度，并没有返回每个reducer在数据文件中的起始位置，
+   *   目测是读取数据文件一次： 依次读取指定个数的字节，然后就可以把数据文件读完，从一个数组存放每个reducer所属的数据
+    *
+    * @param index
+    * @param data
+    * @param reducerNumber
+    * @return
+    */
+  private def checkIndexAndDataFile(index: File, data: File, reducerNumber: Int): Array[Long] = {
+    /** *
+      *  the index file should have `reducerNumber + 1` longs as offset.
+      *  index文件的长度应该是(reducerNumber+1)个字节？ 不是的，index.length返回的就是字节数
+      *  index.length()=(reducerNumber+1）*8表示index文件写入了reducerNumber+1个long数字
+      *  那么每个数字表达什么含义？
+      */
+    if (index.length() != (reducerNumber + 1) * 8) {
       return null
     }
-    val lengths = new Array[Long](blocks)
-    // Read the lengths of blocks
+
+    /** *
+      * 返回的数组的长度是blocks，也就是说，reducerNumber指的是reducer的个数
+      */
+    val lengths = new Array[Long](reducerNumber)
+    /** *
+      * Read the length of  the data belonging to each reducer
+      * 此处是读取index文件的逻辑，可以用于index文件的可视化(或者文本化)
+      * index文件是通过DataOutputStream写入的二进制文件
+      */
     val in = try {
       new DataInputStream(new BufferedInputStream(new FileInputStream(index)))
     } catch {
@@ -129,16 +171,32 @@ private[spark] class IndexShuffleBlockResolver(
         return null
     }
     try {
-      // Convert the offsets into lengths of each block
+      /**
+       *  Convert the offsets into lengths of each block
+       *  index文件的第一个long值是0
+       */
       var offset = in.readLong()
       if (offset != 0L) {
         return null
       }
+
+      /** *
+        * index文件的值是递增的，算法是：
+        * 1. 第N个值-第N-1个值就是第N个reducer的数据长度(N >=0)
+        * 2. 第N个值=前N-1个reducer的总的数据长度+第N个reducer的数据长度(N>=1)，第0个值是0
+        */
       var i = 0
-      while (i < blocks) {
-        val off = in.readLong()
-        lengths(i) = off - offset
-        offset = off
+      while (i < reducerNumber) {
+        /** *
+          * 读取index文件中的第(i+1)个long值，
+          */
+        val current = in.readLong()
+
+        /** *
+          * 第i个reducer的数据长度=
+          */
+        lengths(i) = current - offset
+        offset = current
         i += 1
       }
     } catch {
@@ -148,7 +206,10 @@ private[spark] class IndexShuffleBlockResolver(
       in.close()
     }
 
-    // the size of data file should match with index file
+    /** *
+      * the size of data file should match with index file
+      * 数据文件的长度应该等于所有reducer的长度之和
+      */
     if (data.length() == lengths.sum) {
       lengths
     } else {
@@ -157,6 +218,8 @@ private[spark] class IndexShuffleBlockResolver(
   }
 
   /**
+   *  问题：这里的Commit是个什么含义？何为Commit？
+   *
    * Write an index file with the offsets of each block, plus a final offset at the end for the
    * end of the output file. This will be used by getBlockData to figure out where each block
    * begins and ends.
@@ -165,7 +228,12 @@ private[spark] class IndexShuffleBlockResolver(
    * replace them with new ones.
    *
    * Note: the `lengths` will be updated to match the existing index file if use the existing ones.
-   * */
+    *
+    * @param shuffleId shuffleId
+    * @param mapId mapId
+    * @param lengths 一个long类型的数组，每个元素记录了属于每个reducer的数据长度
+    * @param dataTmp 这是什么？
+    */
   def writeIndexFileAndCommit(
       shuffleId: Int,
       mapId: Int,
@@ -223,21 +291,53 @@ private[spark] class IndexShuffleBlockResolver(
   }
 
   /** *
-    * 根据指定的ShuffleBlockId(也就是对应一个Block)，返回ManagedBuffer,
+    * 根据指定的ShuffleBlockId(也就是对应一个Block)，返回ManagedBuffer(此处的ManagedBuffer是一个FileSegmentManagedBuffer)
     * ManagedBuffer是一个抽象类，本Resolver实现的FileSegmentManagedBuffer
-    * @param blockId
+    *
+    *  The block is actually going to be a range of a single map output file for this map, so find out the consolidated file, then the offset within that from our index
+    * 对于sort based shuffle而言，ShuffleBlockId对应的数据文件是一个，需要从索引文件中找到reduceId所在的offset，然后从数据文件中
+    * 读取之
+    * @param blockId 此处的blockId是一个ShuffleBlockId，而不是ShuffleDataBlockId或者ShuffleIndexBlockId,
+    *                也就是说，ShuffleBlockId中的reduceId是真实的，需要根据该reduceId以及索引文件中获取数据
+    *
+    *
     * @return
     */
   override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer = {
-    // The block is actually going to be a range of a single map output file for this map, so
-    // find out the consolidated file, then the offset within that from our index
+
+    /** *
+      * 获取索引文件
+      */
     val indexFile = getIndexFile(blockId.shuffleId, blockId.mapId)
 
+    /** *
+      * 打开索引文件
+      */
     val in = new DataInputStream(new FileInputStream(indexFile))
     try {
+      /** *
+        * 索引文件是reducer number + 8个long型数据，第一个long值是0
+        * reduceId从0开始计算
+        * 首先根据reduceId跳过reduceId*8个字节，
+        * 如果reduceId为0，则无需跳过；如果reducerId = 1，那么跳过第一个long值，读取该long值A，再跳到下一个long值B，B-A就是改reduceId的数据长度
+        */
       ByteStreams.skipFully(in, blockId.reduceId * 8)
+      /**
+       * offset记录该reducer的数据在数据文件中的起始位置
+       */
       val offset = in.readLong()
+
+      /** *
+        * nextOffset记录该reducer的数据在数据文件中的结束位置
+        */
       val nextOffset = in.readLong()
+
+      /** *
+        * 创建FileSegmentManagedBuffer，参数包括
+        * 1. 数据在数据文件中的起始位置，数据长度
+        * 2. 数据文件
+        * 3. 用于Netty数据传输的配置对象transportConf
+        */
       new FileSegmentManagedBuffer(
         transportConf,
         getDataFile(blockId.shuffleId, blockId.mapId),

@@ -51,7 +51,10 @@ public class JavaUtils {
    */
   public static final long DEFAULT_EXECUTOR_MEM_MB = 1024;
 
-  /** Closes the given object, ignoring IOExceptions. */
+  /** Closes the given object, ignoring IOExceptions.
+   *    以静默方式关闭Closable资源
+   * @param closeable
+   */
   public static void closeQuietly(Closeable closeable) {
     try {
       if (closeable != null) {

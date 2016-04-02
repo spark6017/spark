@@ -131,17 +131,21 @@ private[spark] class SortShuffleWriter[K, V, C](
     val tmp = Utils.tempFileWith(output)
 
     /***
-      * 构造ShuffleBlockId，output文件名和路径是与blockId相关的
+      * 构造ShuffleBlockId，output文件名和路径是与blockId的name相关的
+      * blockId只有shuffleId，mapId，而reducerId的值为0，这是因为在Shuffle Write中，所有的reducer数据都写在一个文件中，
+      * 因此Shuffle Writer不需要关心ReducerID，
+      * 而Shuffle Reader时则需要ReducerID
       */
     val blockId = ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID)
 
     /**
-     * 将通过ExternalSorter.insertAll方法写入的数据全部写入到分区文件中，如果insertAll过程中有spill，那么需要归并排序
-      *返回每个分区的长度的集合
+     * 调用ExternalSorter的writePartitionedFile方法完成Shuffle数据写入磁盘的操作，所有这些Shuffle数据会写到要给数据文件中，
+     * 写入时，会按照partitionID进行排序(优先按照分区ID排序，也有可能进行分区内按照Key排序)
+     * 如果insertAll过程中有spill，那么需要归并排序返回每个分区的长度的集合
      *
      * PartitionedFile指的是一个Mapper output文件中记录了所有Reducer需要的数据，这个数据需要记录分段信息
      *
-     * 注意：写入的是临时文件
+     * 注意：数据写入到临时文件tmp中
      */
     val partitionLengths = sorter.writePartitionedFile(blockId, tmp)
 

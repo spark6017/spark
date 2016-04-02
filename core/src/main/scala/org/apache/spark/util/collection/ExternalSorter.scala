@@ -271,6 +271,8 @@ private[spark] class ExternalSorter[K, V, C](
   /**
    * Number of files this sorter has spilled so far.
    * Exposed for testing.
+   *
+   * 该Map Task总共进行了多少次spill操作
    */
   private[spark] def numSpills: Int = spills.size
 
@@ -499,11 +501,11 @@ private[spark] class ExternalSorter[K, V, C](
       * 1. 文件
       * 2. BlockId(有blockId)也可以拿到这个文件
       * 3. 一共spill多少字节的数据，它是一个数组，每个元素记录的是一个batch的字节数
-      * 4. 每个Partition的字节数
+      * 4. 每个Partition的元素个数
       *
       * 问题：此时并不知道每个字节spill了多少字节，仅仅知道元素个数
       *
-      * 最后将该spill写到spills集合中，最后做最后的归并排序
+      * 最后将该spill写到spills集合中，最后做归并排序
       */
     spills.append(SpilledFile(file, blockId, batchSizes.toArray, elementsPerPartition))
   }
@@ -512,6 +514,9 @@ private[spark] class ExternalSorter[K, V, C](
    * Merge a sequence of sorted files, giving an iterator over partitions and then over elements
    * inside each partition. This can be used to either write out a new file or return data to
    * the user.
+   *
+   * 1. 每个spill文件都是排序的
+   * 2. 返回结果是一个Iterator,这个Iterator的元素类型(partitionId, 分区数据Iterator)
    *
    * Returns an iterator over all the data written to this object, grouped by partition. For each
    * partition we then have an iterator over its contents, and these are expected to be accessed
@@ -526,12 +531,35 @@ private[spark] class ExternalSorter[K, V, C](
     */
   private def merge(spills: Seq[SpilledFile], inMemory: Iterator[((Int, K), C)])
       : Iterator[(Int, Iterator[Product2[K, C]])] = {
-    //将spills中的每个元素SpillFile构造为SpillReader，SpillReader的构造参数是SpillFile
+
+    /** *
+      * 将spills中的每个元素SpillFile构造为SpillReader，SpillReader的构造参数是SpillFile
+      */
     val readers = spills.map(new SpillReader(_))
+
+    /** *
+      * Iterator.buffered是什么操作？返回BufferedIterator
+      */
     val inMemBuffered = inMemory.buffered
+
+    /** *
+      * iterator是Seq定义的函数，是将Seq集合转换为迭代器
+      */
     (0 until numPartitions).iterator.map { p =>
+
+      /** *
+        * 针对每个分区ID，构造一个IteratorForPartition,传入partitionId以及inMemBuffered
+        */
       val inMemIterator = new IteratorForPartition(p, inMemBuffered)
+
+      /** *
+        * readers是一个集合，每个元素是一个SpillReader，SpillReader的readNextPartition用于读取下一个分区
+        *
+        * 最后结果是，iterators是内存中属于分区p的数据以及每个spill属于分区p的数据
+        */
       val iterators = readers.map(_.readNextPartition()) ++ Seq(inMemIterator)
+
+
       if (aggregator.isDefined) {
         // Perform partial aggregation across partitions
         (p, mergeWithAggregation(
@@ -669,6 +697,7 @@ private[spark] class ExternalSorter[K, V, C](
     // Track which partition and which batch stream we're in. These will be the indices of
     // the next element we will read. We'll also store the last partition read so that
     // readNextPartition() can figure out what partition that was from.
+    // 我们正在处理的partition ID
     var partitionId = 0
     var indexInPartition = 0L
     var batchId = 0
@@ -764,11 +793,23 @@ private[spark] class ExternalSorter[K, V, C](
 
     var nextPartitionToRead = 0
 
+    /** *
+      * 读取下一个分区的数据，返回的数据类型是Iterator[(K,C)]
+      * @return
+      */
     def readNextPartition(): Iterator[Product2[K, C]] = new Iterator[Product2[K, C]] {
       val myPartition = nextPartitionToRead
       nextPartitionToRead += 1
 
+      /** *
+        * 检查是否还有元素
+        * @return
+        */
       override def hasNext: Boolean = {
+        /** *
+          * 第一次调用hasNext，主动调用readNextItem方法，如果没有读到元素，那么返回false；
+          * 否则判断当前partition(由myPartition标识)
+          */
         if (nextItem == null) {
           nextItem = readNextItem()
           if (nextItem == null) {
@@ -828,7 +869,10 @@ private[spark] class ExternalSorter[K, V, C](
         groupByPartition(collection.partitionedDestructiveSortedIterator(Some(keyComparator)))
       }
     } else {
-      // Merge spilled and in-memory data
+      /**
+       *  Merge spilled and in-memory data
+       *  如果有数据spill到磁盘(可能经历过多次Spill)，那么联通内存内的shuffle数据一起做归并排序
+        */
       merge(spills, collection.partitionedDestructiveSortedIterator(comparator))
     }
   }
@@ -836,7 +880,7 @@ private[spark] class ExternalSorter[K, V, C](
   /**
    * Return an iterator over all the data written to this object, aggregated by our aggregator.
    * partitionedIterator会对spill到磁盘的数据进行merge
-   * ExternalSorter具有iterator方法，
+   * ExternalSorter具有iterator方法，该方法的调用点貌似只有一处就是BlockStoreShuffleReader的read
    */
   def iterator: Iterator[Product2[K, C]] = partitionedIterator.flatMap(pair => pair._2)
 
@@ -844,8 +888,12 @@ private[spark] class ExternalSorter[K, V, C](
    * Write all the data added into this ExternalSorter into a file in the disk store. This is
    * called by the SortShuffleWriter.
    *
-   * @param blockId block ID to write to. The index file will be blockId.name + ".index".
-   * @return array of lengths, in bytes, of each partition of the file (used by map output tracker)
+   * 将Shuffle数据写到磁盘文件，这些数据在文件中是按照分区进行排序的
+   *
+   * @param blockId block ID to write to. The index file will be blockId.name + ".index". 一个Shuffle Output file由shuffleId,mapId唯一确定，与reducerId无关
+   * @return array of lengths, in bytes, of each partition of the file (used by map output tracker) 每个分区的数据长度，
+   *
+   *         因为每个分区的数据长度记录在索引文件中了，为什么还需要将各个分区的数据长度存放到MapStatus中呢？
    */
   def writePartitionedFile(
       blockId: BlockId,
@@ -859,35 +907,47 @@ private[spark] class ExternalSorter[K, V, C](
 
     /***
       * spills是类型为SpilledFile的ArrayBuffer， ArrayBuffer[SpilledFile]
+      * 如果Shuffle没有进行spill，那么spills.isEmpty为true
       */
     if (spills.isEmpty) {
       // Case where we only have in-memory data
       /**
         * 如果定义了aggregator，那么使用map（PartitionedAppendOnlyMap），否则使用buffer（PartitionedAppendOnlyBuffer）
-        *
+       * 定义了aggregate表示要进行aggregate操作，而这个操作是借助于Map实现的
         */
       val collection = if (aggregator.isDefined) map else buffer
 
-
       /***
         * 对集合进行排序
+        * 优先按照分区ID进行排序，其次对分区内的数据按照comparator指定的排序算法进行排序
         */
       val it = collection.destructiveSortedWritablePartitionedIterator(comparator)
+
+      /** *
+        * 排序后，遍历每个元素
+        */
       while (it.hasNext) {
         /**
          * 每次都获取一次Writer？ 不是的，根据下面的循环逻辑，是每个Partition获取一次Writer
          *
-         * 这个Writer是啥？DiskBlockObjectWriter
+         * 这个Writer是DiskBlockObjectWriter类型的对象，用于往磁盘文件写数据。
+         * BlockManager的getDiskWriter方法的参数有blockId, outputFile以及fileBufferSize等参数
          */
         val writer = blockManager.getDiskWriter(
           blockId, outputFile, serInstance, fileBufferSize, writeMetrics)
 
-        //循环写入本Partition的数据
+          /** *
+            *  首先获取出当前元素所属的分区，然后循环写入属于本Partition的数据(通过it.writeNext(writer)方法)
+            */
         val partitionId = it.nextPartition()
         while (it.hasNext && it.nextPartition() == partitionId) {
           it.writeNext(writer)
         }
         writer.commitAndClose()
+
+        /** *
+          *  segment是FileSegment类型的对象
+          */
         val segment = writer.fileSegment()
 
         /** *
@@ -896,7 +956,13 @@ private[spark] class ExternalSorter[K, V, C](
         lengths(partitionId) = segment.length
       }
     } else {
-      // We must perform merge-sort; get an iterator by partition and write everything directly.
+      /** *
+        *  We must perform merge-sort; get an iterator by partition and write everything directly.
+        *  partitionedIterator方法返回一个对spill到磁盘的文件以及内存内的数据进行merge sort。
+        *
+        *  partitionedIterator方法返回的数据类型是(partitionId,(K,V))
+        *
+        */
       for ((id, elements) <- this.partitionedIterator) {
         if (elements.hasNext) {
           val writer = blockManager.getDiskWriter(
@@ -943,12 +1009,25 @@ private[spark] class ExternalSorter[K, V, C](
    * An iterator that reads only the elements for a given partition ID from an underlying buffered
    * stream, assuming this partition is the next one to be read. Used to make it easier to return
    * partitioned iterators from our in-memory collection.
-   */
+    *
+    * @param partitionId
+    * @param data 定义成BufferedIterator的目的何在？有几个分区就有几个IteratorForPartition,那么
+   *             这几个分区共享这个类型为BufferedIterator的data，每个分区都会读取一遍BufferedIterator相应的数据
+   *             因此，可以将data遍历完
+    */
   private[this] class IteratorForPartition(partitionId: Int, data: BufferedIterator[((Int, K), C)])
     extends Iterator[Product2[K, C]]
   {
+    /** *
+      * data的第一个元素(元组)的partitionId是指定的partitionId
+      * @return
+      */
     override def hasNext: Boolean = data.hasNext && data.head._1._1 == partitionId
 
+    /** *
+      * 获取数据(K,C)，丢弃partitionId
+      * @return
+      */
     override def next(): Product2[K, C] = {
       if (!hasNext) {
         throw new NoSuchElementException

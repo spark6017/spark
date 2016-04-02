@@ -103,7 +103,7 @@ import org.apache.spark.storage.{BlockId, DiskBlockObjectWriter}
   * @param context
   * @param aggregator
   * @param partitioner 通过该分区器确立ShuffledRDD有多少个分区，这个分区数目用于创建索引文件和数据分段
-  * @param ordering
+  * @param ordering Ordering[K]，对类型为K的元素进行比较
   * @param serializer
   * @tparam K
   * @tparam V
@@ -220,6 +220,7 @@ private[spark] class ExternalSorter[K, V, C](
   /**
    *  keyComparator，默认是ordering，如果没有指定ordering，那么比较Key的hashCode值
    *  也就是说keyComparator是一定有值的
+   *  按照Key的hashCode进行排序，是什么套路？
    */
   private val keyComparator: Comparator[K] = ordering.getOrElse(new Comparator[K] {
     override def compare(a: K, b: K): Int = {
@@ -231,7 +232,7 @@ private[spark] class ExternalSorter[K, V, C](
 
   /**
    *
-   * 如果定义了ordering，不管是否定义ordering，都使用ordering进行排序
+   * 如果定义了ordering，不管是否定义aggregator，都使用ordering进行排序
    * 如果没有定义ordering而定义了aggregator，那么使用自定义的排序器（基于Hash值排序）
    *
    * 如果既没有定义ordering，也没有定义aggregator，那么返回None
@@ -283,17 +284,30 @@ private[spark] class ExternalSorter[K, V, C](
       val mergeValue = aggregator.get.mergeValue
       val createCombiner = aggregator.get.createCombiner
       var kv: Product2[K, V] = null
+      /** *
+        * 对相同Key进行创建或者更新
+        * 问题：update操作返回的结果的类型是什么？update操作的类型是(Boolean,C)=>C
+        */
       val update = (hadValue: Boolean, oldValue: C) => {
+        /** *
+          * 如果当前Key已经有值，那么调用mergeValue进行合并
+          * 如果当前Key还没有值，那么调用createCombiner创建
+          */
         if (hadValue) mergeValue(oldValue, kv._2) else createCombiner(kv._2)
       }
+
+
       while (records.hasNext) {
         addElementsRead()
         kv = records.next()
 
         /** *
-          * 调用changeValue进行combine
+          * 调用changeValue进行combine，要么创建，要么更新
+          * 第一个参数是(partitionId,K)
           */
         map.changeValue((getPartition(kv._1), kv._1), update)
+
+
         maybeSpillCollection(usingMap = true)
       }
     } else { /**如果没有定义aggregator，则使用PartitionedPairBuffer记录数据**/
@@ -314,24 +328,35 @@ private[spark] class ExternalSorter[K, V, C](
   /**
    * Spill the current in-memory collection to disk if needed.
    *
-   * @param usingMap whether we're using a map or buffer as our current in-memory collection
-   */
+   * @param usingMap whether we're using a map or buffer as our current in-memory collection usingMap为true表示使用PartitionedAppendOnlyMap作为
+   *                 内存的数据存储，否则表示使用PartitionedPairBuffer作为内存的数据存储
+   *
+   *  判断是否需要spill，
+   *
+    */
   private def maybeSpillCollection(usingMap: Boolean): Unit = {
     var estimatedSize = 0L
     if (usingMap) {
 
       //对PartitionedAppendOnlyMap的大小进行采样评估
       estimatedSize = map.estimateSize()
+
+      //如果需要spill，那么重建map
       if (maybeSpill(map, estimatedSize)) {
         map = new PartitionedAppendOnlyMap[K, C]
       }
     } else {
+      //对buffer已经使用的内存空间进行评估
+
       estimatedSize = buffer.estimateSize()
+
+      //如果需要spill，那么重建buffer
       if (maybeSpill(buffer, estimatedSize)) {
         buffer = new PartitionedPairBuffer[K, C]
       }
     }
 
+    //如果预估的大小大于当前内存使用量，那么更新内存使用量
     if (estimatedSize > _peakMemoryUsedBytes) {
       _peakMemoryUsedBytes = estimatedSize
     }
@@ -341,24 +366,40 @@ private[spark] class ExternalSorter[K, V, C](
    * Spill our in-memory collection to a sorted file that we can merge later.
    * We add this file into `spilledFiles` to find it later.
    *
-   * @param collection whichever collection we're using (map or buffer)
+   * @param collection whichever collection we're using (map or buffer)，它有两个实现类，PartitionedAppendOnlyMap以及PartitionedPairBuffer
+   *                   它们都是按照分区ID优先，其次按照Key排序
    */
   override protected[this] def spill(collection: WritablePartitionedPairCollection[K, C]): Unit = {
-    // Because these files may be read during shuffle, their compression must be controlled by
-    // spark.shuffle.compress instead of spark.shuffle.spill.compress, so we need to use
-    // createTempShuffleBlock here; see SPARK-3426 for more context.
+    /** *
+      * Because these files may be read during shuffle, their compression must be controlled by
+      *  spark.shuffle.compress instead of spark.shuffle.spill.compress, so we need to use
+      *  createTempShuffleBlock here; see SPARK-3426 for more context.
+      *
+      *  创建临时的Block(blockId为temp_shuffle_ + UUID)以及临时的文件
+      */
     val (blockId, file) = diskBlockManager.createTempShuffleBlock()
 
     // These variables are reset after each flush
     var objectsWritten: Long = 0
     var spillMetrics: ShuffleWriteMetrics = null
+
+    /** *
+      * 通过DiskBlockObjectWriter写文件，此处可以查看写磁盘文件的方式
+      * 进行还原以查看写入的数据
+      */
     var writer: DiskBlockObjectWriter = null
+
+    /** *
+      * 打开指定文件的Writer
+      */
     def openWriter(): Unit = {
+      //没被打开过
       assert (writer == null && spillMetrics == null)
+
       spillMetrics = new ShuffleWriteMetrics
 
       /**
-        * BlockManager的DiskWriter
+        * BlockManager的DiskWriter，传入blockId，文件，序列化实例，以及文件缓冲大小
         */
       writer = blockManager.getDiskWriter(blockId, file, serInstance, fileBufferSize, spillMetrics)
     }

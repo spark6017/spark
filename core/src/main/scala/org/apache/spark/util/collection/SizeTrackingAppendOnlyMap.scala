@@ -35,6 +35,11 @@ private[spark] class SizeTrackingAppendOnlyMap[K, V]
     * @return
     */
   override def changeValue(key: K, updateFunc: (Boolean, V) => V): V = {
+
+    /**
+     * 调用AppendOnlyMap的changeValue方法，也就是说，
+     * update操作是针对AppendOnlyMap实施的
+     */
     val newValue = super.changeValue(key, updateFunc)
     super.afterUpdate()
     newValue

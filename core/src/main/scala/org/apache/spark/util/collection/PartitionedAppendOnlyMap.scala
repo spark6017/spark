@@ -34,16 +34,35 @@ private[spark] class PartitionedAppendOnlyMap[K, V]
   extends SizeTrackingAppendOnlyMap[(Int, K), V] with WritablePartitionedPairCollection[K, V] {
 
   /***
-    * 调用destructiveSortedIterator获得排序的Iterator
-    * @param keyComparator
+    * 调用partitionedDestructiveSortedIterator获得分区优先排序的Iterator
+    *
+    *
+    * @param keyComparator 按照Key排序的比较器，可能为None，如果为None，则表示仅进行按分区ID排序；如果不为None，则首先进行分区
+    *                      内排序，而后按照Key进行排序
     * @return
     */
   def partitionedDestructiveSortedIterator(keyComparator: Option[Comparator[K]])
     : Iterator[((Int, K), V)] = {
+    /** *
+      * 如果keyComparator为None，那么comparator就是调用partitionComparator方法返回的Comparator
+      * 如果keyComparator不为None，那么通过 keyComparator.map(partitionKeyComparator)语句调用partitionKeyComparator方法，参数是keyComparator
+      */
     val comparator = keyComparator.map(partitionKeyComparator).getOrElse(partitionComparator)
+
+    /** *
+      * 获取到comparator，对数据进行排序(破坏了底层的数据结构）
+      * 注意：排序的数据类型是(Int,K)，也就是说调用destructiveSortedIterator时，destructiveSortedIterator需要的K是这里的(Int,K)
+      *
+      */
     destructiveSortedIterator(comparator)
   }
 
+  /** *
+    * 实现了WritablePartitionedPairCollection的insert方法，它的实现是调用AppendOnlyMap的update方法(Key的类型是(Int,K))
+    * @param partition
+    * @param key
+    * @param value
+    */
   def insert(partition: Int, key: K, value: V): Unit = {
     update((partition, key), value)
   }

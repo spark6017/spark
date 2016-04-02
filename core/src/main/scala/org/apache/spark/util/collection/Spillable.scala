@@ -27,6 +27,7 @@ import org.apache.spark.memory.{MemoryMode, TaskMemoryManager}
 private[spark] trait Spillable[C] extends Logging {
   /**
    * Spills the current in-memory collection to disk, and releases the memory.
+   * 只数将数据spill到磁盘，没说数据的排序情况
    *
    * @param collection collection to spill to disk
    */
@@ -51,8 +52,10 @@ private[spark] trait Spillable[C] extends Logging {
   private[this] val initialMemoryThreshold: Long =
     SparkEnv.get.conf.getLong("spark.shuffle.spill.initialMemoryThreshold", 5 * 1024 * 1024)
 
-  // Force this collection to spill when there are this many elements in memory
-  // For testing only
+  /** *
+    * Force this collection to spill when there are this many elements in memory（For testing only）
+    * 该配置可以用于测试spill，只要读取的元素个数超过这个值，则进行spill
+    */
   private[this] val numElementsForceSpillThreshold: Long =
     SparkEnv.get.conf.getLong("spark.shuffle.spill.numElementsForceSpillThreshold", Long.MaxValue)
 
@@ -122,15 +125,13 @@ private[spark] trait Spillable[C] extends Logging {
       */
     shouldSpill = shouldSpill || _elementsRead > numElementsForceSpillThreshold
     // Actually spill
-
-    //每读256个元素，则spill一次，
-    if (shouldSpill || elementsRead % 256 == 0) {
+    if (shouldSpill) {
       shouldSpill = true
       _spillCount += 1
       logSpillage(currentMemory)
 
       /***
-        * 将集合spill到磁盘
+        * 将集合spill到磁盘，spill前是否要进行集合的排序操作？即spill到磁盘是否是排序的
         */
       spill(collection)
 
@@ -140,7 +141,7 @@ private[spark] trait Spillable[C] extends Logging {
       _elementsRead = 0
 
       /**
-        * Spill到磁盘的字节数
+        * Spill到磁盘的字节数，从内存spill到磁盘的字节数
         */
       _memoryBytesSpilled += currentMemory
 

@@ -155,7 +155,12 @@ private[spark] class BlockManager(
 
   // Whether to compress broadcast variables that are stored
   private val compressBroadcast = conf.getBoolean("spark.broadcast.compress", true)
-  // Whether to compress shuffle output that are stored
+  //
+
+  /** *
+    *  Whether to compress shuffle output that are stored
+    *  默认情况下是要压缩shuffle数据的
+    */
   private val compressShuffle = conf.getBoolean("spark.shuffle.compress", true)
   // Whether to compress RDD partitions that are stored serialized
   private val compressRdds = conf.getBoolean("spark.rdd.compress", false)
@@ -843,15 +848,29 @@ private[spark] class BlockManager(
    * A short circuited method to get a block writer that can write data directly to disk.
    * The Block will be appended to the File specified by filename. Callers should handle error
    * cases.
-   */
+    * @param blockId
+    * @param file
+    * @param serializerInstance
+    * @param bufferSize
+    * @param writeMetrics
+    * @return
+    */
   def getDiskWriter(
       blockId: BlockId,
       file: File,
       serializerInstance: SerializerInstance,
       bufferSize: Int,
       writeMetrics: ShuffleWriteMetrics): DiskBlockObjectWriter = {
+
+    /** *
+      * 将输出流进行压缩，函数字面量
+      */
     val compressStream: OutputStream => OutputStream = wrapForCompression(blockId, _)
     val syncWrites = conf.getBoolean("spark.shuffle.sync", false)
+
+    /** *
+      * 构造DiskBlockObjectWriter
+      */
     new DiskBlockObjectWriter(file, serializerInstance, bufferSize, compressStream,
       syncWrites, writeMetrics, blockId)
   }

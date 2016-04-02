@@ -75,7 +75,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   /** *
     * 对初始容量进行标准化，将capacity设置为比initialCapacity大的最小的2次幂数值
     *
-    * capacity记录的是元素个数容量
+    * capacity记录的是元素个数容量,AppendOnlyMap实际占用的空间是2*capacity
     */
   private var capacity = nextPowerOf2(initialCapacity)
 
@@ -101,7 +101,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   /**
    * Key和Value并排放，有利于内存本地性，这里数组大小为什么是2 * capacity？
    *
-   * 也就是说capacity是元素个数，每个元素有K和V，因此data这个数组的大小是2*capacity。
+   * 因为：capacity是元素个数，每个元素有K和V，因此data这个数组的大小是2*capacity。
     *
     * 也就是说，AppendOnlyMap的长度实际上是capacity*2
     *
@@ -256,14 +256,23 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     * @return
     */
   def changeValue(key: K, updateFunc: (Boolean, V) => V): V = {
+    /** *
+      * 确保AppendOnlyMap没被破坏
+      */
     assert(!destroyed, destructionMessage)
     val k = key.asInstanceOf[AnyRef]
 
     //如果更新的key是null，第一个参数表示该key是否已经有值，第二个参数表示原始值(原来null key对应的null value)
     if (k.eq(null)) {
+
+      //如果目前还没有Null值，那么需要增加一个k为null的entry
       if (!haveNullValue) {
         incrementSize()
       }
+
+      /** *
+        * 调用updateFunc方法，传入Key是否已经存在(haveNullValue)和旧的值(nullValue)
+        */
       nullValue = updateFunc(haveNullValue, nullValue) /**计算nullValue**/
       haveNullValue = true
       return nullValue
@@ -468,31 +477,41 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     * 在原来集合的基础上创建一个排序的集合
    *
    * 返回AppendOnlyMap中排序后的<K,V> pairs
-   */
+    *
+    * @param keyComparator
+    * @return
+    */
   def destructiveSortedIterator(keyComparator: Comparator[K]): Iterator[(K, V)] = {
     destroyed = true
     // Pack KV pairs into the front of the underlying array
     var keyIndex, newIndex = 0
 
     /***
-      * 将data中的数据向前移动，也就是说，将1_35_7改为1357
+      * 将data中的数据移动到数组顶端，数组中存放的KV的位置是通过对K进行哈希算法算出来的，因此可能有很多空巢位置
+      * 移动后，data中数据还是按照K，V并排放的，如何进行数组排序？
+      * 答案：Tim排序需要指定排序数据的格式，这里指定为KVArraySortDataFormat
+      *
+      *
       */
     while (keyIndex < capacity) {
       if (data(2 * keyIndex) != null) {
         data(2 * newIndex) = data(2 * keyIndex)
         data(2 * newIndex + 1) = data(2 * keyIndex + 1)
+        //newIndex表示实际元素个数计数器
         newIndex += 1
       }
+      //keyIndex是遍历数组的循环变量
       keyIndex += 1
     }
 
-    /**newIndex跟curSize最多只差1*/
+    /**newIndex跟curSize最多只差1，newIndex记录了元素个数*/
     assert(curSize == newIndex + (if (haveNullValue) 1 else 0))
 
 
     /**
      * 在data数组上执行排序操作(基于TimSort进行排序)，排序的
       * KVArraySortDataFormat的Buffer是Array[AnyRef]
+     * 为了实现数组排序，因此前面将所有的元素移动到了数组的顶端
       *
      */
     new Sorter(new KVArraySortDataFormat[K, AnyRef]).sort(data, 0, newIndex, keyComparator)

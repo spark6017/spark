@@ -102,6 +102,9 @@ private[spark] class Client(
   private var principal: String = null
   private var keytab: String = null
 
+  /** *
+    * 创建LauncherBackend对象
+    */
   private val launcherBackend = new LauncherBackend() {
     override def onStopRequest(): Unit = {
       if (isClusterMode && appId != null) {
@@ -112,9 +115,20 @@ private[spark] class Client(
       }
     }
   }
-  private val fireAndForget = isClusterMode &&
-    !sparkConf.getBoolean("spark.yarn.submit.waitAppCompletion", true)
 
+  /** *
+    * Client进程是否在Application启动后立即退出，判定条件是
+    * 1. 在Cluster模式下，
+    * 2. 需要将配置项spark.yarn.submit.waitAppCompletion配置为false(表示不等待Application运行结束)，
+    * spark.yarn.submit.waitAppCompletion默认配置为true，
+    * 所以，fireAndForget返回false，表示Client进程等待Application进程运行结束才推出
+    */
+  private val fireAndForget = isClusterMode && !sparkConf.getBoolean("spark.yarn.submit.waitAppCompletion", true)
+
+  /** *
+    * 该Application的ID，类型为ApplicationId
+    *
+    */
   private var appId: ApplicationId = null
 
   def reportLauncherState(state: SparkAppHandle.State): Unit = {
@@ -197,15 +211,41 @@ private[spark] class Client(
 
   /**
    * Cleanup application staging directory.
-   */
+   *
+   * 清除应用程序的工作目录？
+    *
+    * @param appId
+    */
   private def cleanupStagingDir(appId: ApplicationId): Unit = {
+    /** *
+      * 根据appId获取application的staging directory， appStagingDir是.sparkStaging + "/" + appId，
+      * 也就是说这是一个相对路径
+      */
     val appStagingDir = getAppStagingDir(appId)
     try {
+
+      /** *
+        * 是否要保留staging files
+        */
       val preserveFiles = sparkConf.getBoolean("spark.yarn.preserve.staging.files", false)
+
+      /** *
+        * 构造HDFS的Path对象
+        */
       val stagingDirPath = new Path(appStagingDir)
+
+      /** *
+        * 获取HDFS的FileSystem
+        * val fs = stagingDirPath.getFileSystem(hadoopConf)
+        */
       val fs = FileSystem.get(hadoopConf)
+
+      /** *
+        * 如果不保留并且stagingDirPath存在，那么将stagingDirPath递归删除
+        */
       if (!preserveFiles && fs.exists(stagingDirPath)) {
         logInfo("Deleting staging directory " + stagingDirPath)
+        //stagingDir本身不应该被删除吧，但是此处貌似被删了
         fs.delete(stagingDirPath, true)
       }
     } catch {
@@ -1058,7 +1098,8 @@ private[spark] class Client(
    * @param appId ID of the application to monitor.
    * @param returnOnRunning Whether to also return the application state when it is RUNNING.
    * @param logApplicationReport Whether to log details of the application report every iteration.
-   * @return A pair of the yarn application state and the final application state.
+   * @return A pair of the yarn application state and the final application state
+   *         返回值类型为(YarnApplicationState， FinalApplicationStatus)
    */
   def monitorApplication(
       appId: ApplicationId,
@@ -1107,6 +1148,9 @@ private[spark] class Client(
         }
       }
 
+      /** *
+        * 应用运行完成，那么首先清楚StagingDir，然后再返回state和final application status
+        */
       if (state == YarnApplicationState.FINISHED ||
         state == YarnApplicationState.FAILED ||
         state == YarnApplicationState.KILLED) {
@@ -1114,7 +1158,14 @@ private[spark] class Client(
         return (state, report.getFinalApplicationStatus)
       }
 
+      /** *
+        * 当YarnApplicationState进行运行态，并且returnOnRunning为true(即只要等待应用运行起来，而不是等到应用运行结束就返回)
+        */
       if (returnOnRunning && state == YarnApplicationState.RUNNING) {
+
+        /** *
+          * report对象包含了FinalApplicationStatus，应用程序的运行结果：成功、失败以及Killed(如果应用程序还没执行完，那么状态UNDEFINED)
+          */
         return (state, report.getFinalApplicationStatus)
       }
 
@@ -1163,7 +1214,7 @@ private[spark] class Client(
     this.appId = submitApplication()
 
     /**
-     * Client是否立即退出
+     * Client是否立即退出,默认配置下fireAndForget为false，因此Client进程不会立即退出
       */
     if (!launcherBackend.isConnected() && fireAndForget) {
       val report = getApplicationReport(appId)
@@ -1173,10 +1224,10 @@ private[spark] class Client(
       if (state == YarnApplicationState.FAILED || state == YarnApplicationState.KILLED) {
         throw new SparkException(s"Application $appId finished with status: $state")
       }
-    } else { //如果不是提交作立即结束Client
-
+    } else {
       /**
        * monitorApplication将循环等待应用程序结束，如果ApplicationState为FAILED或者KILLED或者UNDEFINED，则抛出SparkException
+       * monitorApplication是一个同步过程？何时返回？
        */
       val (yarnApplicationState, finalApplicationStatus) = monitorApplication(appId)
       if (yarnApplicationState == YarnApplicationState.FAILED ||
@@ -1263,7 +1314,10 @@ object Client extends Logging {
   // URI scheme that identifies local resources
   val LOCAL_SCHEME = "local"
 
-  // Staging directory for any temporary jars or files
+  /** *
+    * Staging directory for any temporary jars or files
+    * application的临时工作目录
+    */
   val SPARK_STAGING: String = ".sparkStaging"
 
   // Location of any user-defined Spark jars
@@ -1336,7 +1390,10 @@ object Client extends Logging {
    * Return the path to the given application's staging directory.
    *
    * getAppStagingDir的值是.sparkStaging/{appId},这是个相对路径，它的路径前缀是哪个？
-   */
+    *
+    * @param appId
+    * @return
+    */
   private def getAppStagingDir(appId: ApplicationId): String = {
     buildPath(SPARK_STAGING, appId.toString())
   }
@@ -1686,7 +1743,10 @@ object Client extends Logging {
 
   /**
    * Joins all the path components using Path.SEPARATOR.
-   */
+   *
+    * @param components 将components这个字符串数组的元素通过"/”连接起来
+    * @return
+    */
   def buildPath(components: String*): String = {
     components.mkString(Path.SEPARATOR)
   }

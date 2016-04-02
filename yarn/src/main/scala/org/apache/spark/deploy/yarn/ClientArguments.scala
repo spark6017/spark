@@ -23,7 +23,13 @@ import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.deploy.yarn.YarnSparkHadoopUtil._
 import org.apache.spark.util.{IntParam, MemoryParam, Utils}
 
-// TODO: Add code and support for ensuring that yarn resource 'tasks' are location aware !
+/** *
+  * TODO: Add code and support for ensuring that yarn resource 'tasks' are location aware !
+  *
+  * ClientArguments支持哪些参数(的解析)
+  * @param args
+  * @param sparkConf
+  */
 private[spark] class ClientArguments(args: Array[String], sparkConf: SparkConf) {
   var addJars: String = null
   var files: String = null
@@ -43,12 +49,24 @@ private[spark] class ClientArguments(args: Array[String], sparkConf: SparkConf) 
    * 默认的executor memory是1024M
    */
   var executorMemory = 1024 // MB
+
+  /** *
+    * 默认每个Executor使用1个Core
+    */
   var executorCores = 1
+
+  /** *
+    * 默认使用的Executor数目是2
+    */
   var numExecutors = DEFAULT_NUMBER_EXECUTORS
+
+  /** *
+    * 任务提交的队列
+    */
   var amQueue = sparkConf.get("spark.yarn.queue", "default")
 
   /**
-   * 默认的AM内存是512M
+   * YARN Cluster模式下，AM默认的内存是512M，如果指定了driver-memory则覆盖这个这个值
    */
   var amMemory: Int = 512 // MB
   var amCores: Int = 1
@@ -56,17 +74,40 @@ private[spark] class ClientArguments(args: Array[String], sparkConf: SparkConf) 
   var priority = 0
   var principal: String = null
   var keytab: String = null
+
+  /** *
+    *  判断是否是YARN Cluster模式的方法是判断userClass是否为null，对于Yarn Cluster模式那么userClass不为空；
+    * @return
+    */
   def isClusterMode: Boolean = userClass != null
 
   private var driverMemory: Int = Utils.DEFAULT_DRIVER_MEM_MB // MB
   private var driverCores: Int = 1
+
+  /** *
+    * driver memory在yarn上的overhead
+    */
   private val driverMemOverheadKey = "spark.yarn.driver.memoryOverhead"
   private val amMemKey = "spark.yarn.am.memory"
+
+  /** *
+    *  application master在yarn上的overhead
+    */
   private val amMemOverheadKey = "spark.yarn.am.memoryOverhead"
+
+
   private val driverCoresKey = "spark.driver.cores"
   private val amCoresKey = "spark.yarn.am.cores"
+
+  /**
+   * 是否启用Executor动态分配功能
+   */
   private val isDynamicAllocationEnabled = Utils.isDynamicAllocationEnabled(sparkConf)
 
+
+  /** *
+    * 在主构造器中调用parseArgs, loadEnvironmentArgs以及validateArgs
+    */
   parseArgs(args.toList)
   loadEnvironmentArgs()
   validateArgs()

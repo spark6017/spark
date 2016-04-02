@@ -37,8 +37,21 @@ private[spark] abstract class LauncherBackend {
   @volatile private var _isConnected = false
 
   def connect(): Unit = {
+
+    /** *
+      * 从环境变量中获取_SPARK_LAUNCHER_PORT值，如果没有定义，则返回None
+      */
     val port = sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT).map(_.toInt)
+
+    /** *
+      *从环境变量中获取 _SPARK_LAUNCHER_SECRET的值，如果没有定义，则返回None
+      */
     val secret = sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET)
+
+    /** *
+      * Option与None比较，如果port或者secret为None，那么connect不做任何事情直接返回了
+      * 因此，connection为null，并且_isConnected为false
+      */
     if (port != None && secret != None) {
       val s = new Socket(InetAddress.getLoopbackAddress(), port.get)
       connection = new BackendConnection(s)

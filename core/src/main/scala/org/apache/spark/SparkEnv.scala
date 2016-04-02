@@ -385,14 +385,22 @@ object SparkEnv extends Logging {
 
     // Let the user specify short names for shuffle managers
     /***
-      * ShuffleManager
+      * ShuffleManager,Spark提供了三种ShuffleManager的实现，默认是sort，可以通过spark.shuffle.manager配置项进行配置
       */
     val shortShuffleMgrNames = Map(
       "hash" -> "org.apache.spark.shuffle.hash.HashShuffleManager",
       "sort" -> "org.apache.spark.shuffle.sort.SortShuffleManager",
       "tungsten-sort" -> "org.apache.spark.shuffle.sort.SortShuffleManager")
     val shuffleMgrName = conf.get("spark.shuffle.manager", "sort")
+
+    /** *
+      * spark.shuffle.manager除了可以配置短名称外，也可以配置全类型名称
+      */
     val shuffleMgrClass = shortShuffleMgrNames.getOrElse(shuffleMgrName.toLowerCase, shuffleMgrName)
+
+    /** *
+      * 初始化ShuffleManager
+      */
     val shuffleManager = instantiateClass[ShuffleManager](shuffleMgrClass)
 
     /***

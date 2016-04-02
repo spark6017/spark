@@ -66,6 +66,13 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon
   /** Looks up a file by hashing it into one of our local subdirectories. */
   // This method should be kept in sync with
   // org.apache.spark.network.shuffle.ExternalShuffleBlockResolver#getFile().
+
+  /** *
+    * 根据文件名获取文件，Spark对文件名进行hash，以决定该filename存放在哪个子目录下
+    *
+    * @param filename 磁盘上真实存在的文件名，它位于哪个目录下，有它的hash值进行控制
+    * @return
+    */
   def getFile(filename: String): File = {
     // Figure out which local directory it hashes to, and which subdirectory in that
     /**
@@ -96,7 +103,9 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon
   }
 
   /***
-    * 根据BlockId的名称获得文件名
+    * 根据BlockId(的名称)获得文件
+    *  这个文件是存放在Executor所在的磁盘上，受Executor所对应的BlockManager管理
+    *
     * @param blockId
     * @return
     */

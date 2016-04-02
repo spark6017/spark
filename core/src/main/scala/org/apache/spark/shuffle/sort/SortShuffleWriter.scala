@@ -25,6 +25,16 @@ import org.apache.spark.storage.ShuffleBlockId
 import org.apache.spark.util.Utils
 import org.apache.spark.util.collection.ExternalSorter
 
+/** *
+  * 问题：K,V,C三个类型表示什么意思？K,V表示RDD[K,V]，C呢?
+  * @param shuffleBlockResolver
+  * @param handle ShuffleHandle
+  * @param mapId ShuffleMapTask的ID
+  * @param context
+  * @tparam K
+  * @tparam V
+  * @tparam C
+  */
 private[spark] class SortShuffleWriter[K, V, C](
     shuffleBlockResolver: IndexShuffleBlockResolver,
     handle: BaseShuffleHandle[K, V, C],

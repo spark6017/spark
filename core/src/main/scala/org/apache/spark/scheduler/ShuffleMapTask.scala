@@ -90,6 +90,13 @@ private[spark] class ShuffleMapTask(
     _executorDeserializeTime = System.currentTimeMillis() - deserializeStartTime
 
     metrics = Some(context.taskMetrics)
+
+    /** *
+      * ShuffleWriter用于ShuffleMapTask将数据写到磁盘上
+      * 问题：
+      * 1. Spark在将Shuffle数据落地到磁盘时，肯定会有一个内存缓冲区，这个内存缓冲区的大小多大？
+      * 2. ShuffleWriter的类型是ShuffleWriter[Any,Any]，这两个Any的含义是K，V，因为涉及到Shuffle，那么就是K，V类型的RDD
+      */
     var writer: ShuffleWriter[Any, Any] = null
     try {
 
@@ -100,16 +107,16 @@ private[spark] class ShuffleMapTask(
       //1. 获取ShuffleManager，默认是SortShuffleManager
       val manager = SparkEnv.get.shuffleManager
 
-      //2. 获取ShuffleWriter，ShuffleWriter是跟Partition相关的(由partitionId确定）,而partitionId是跟ShuffleMapTask相关的，即ShuffleMapTask处理的partition的ID
-
+      //2. 获取ShuffleWriter对象，ShuffleWriter是跟Partition相关的(由partitionId确定）,而partitionId是跟ShuffleMapTask相关的，即ShuffleMapTask处理的partition的ID
+      //dep.shuffleHandle是很关键的，因为这是链接两个ShuffleStage的纽带，下游的Stage就根据ShuffleHandle中的shuffleId获取上游的Stage的shuffle的数据
+      //问题：ShuffleHandle如何注入到ShuffleWriter中的？
       writer = manager.getWriter[Any, Any](dep.shuffleHandle, partitionId, context)
 
       //3. 执行写操作，因为只有(K,V)类型的数据才能够Shuffle，因此此处的rdd.iterator(partition)是Product2[Any,Any]类型的二元组
       //writer参数中的迭代器对象是去RDD的第partition个分区的数据
-
       writer.write(rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
 
-      //4. 数据写完后调用stop方法，并且传入succes=true
+      //4. 数据写完后调用stop方法，并且传入success=true
       val result = writer.stop(success = true)
       result.get
     } catch {

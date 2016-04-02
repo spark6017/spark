@@ -60,6 +60,12 @@ case class ShuffleBlockId(shuffleId: Int, mapId: Int, reduceId: Int) extends Blo
   override def name: String = "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId
 }
 
+/** *
+  * 在IndexShuffleBlockResolver的getDataFile中，reduceId恒为为0
+  * @param shuffleId
+  * @param mapId
+  * @param reduceId
+  */
 @DeveloperApi
 case class ShuffleDataBlockId(shuffleId: Int, mapId: Int, reduceId: Int) extends BlockId {
   override def name: String = "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId + ".data"

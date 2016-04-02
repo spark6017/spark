@@ -35,13 +35,15 @@ object SparkTransportConf {
    * Thus, this value should still retain maximum throughput and reduce wasted off-heap memory
    * allocation. It can be overridden by setting the number of serverThreads and clientThreads
    * manually in Spark's configuration.
+   *
+   * 基于NETTY数据传输的线程数最大值
    */
   private val MAX_DEFAULT_NETTY_THREADS = 8
 
   /**
    * Utility for creating a [[TransportConf]] from a [[SparkConf]].
    * @param _conf the [[SparkConf]]
-   * @param module the module name
+   * @param module the module name 在IndexShuffleBlockResolver中，module传入的是shuffle，而numUsableCores传入的是0
    * @param numUsableCores if nonzero, this will restrict the server and client threads to only
    *                       use the given number of cores, rather than all of the machine's cores.
    *                       This restriction will only occur if these properties are not already set.
@@ -52,10 +54,20 @@ object SparkTransportConf {
     // Specify thread configuration based on our JVM's allocation of cores (rather than necessarily
     // assuming we have all the machine's cores).
     // NB: Only set if serverThreads/clientThreads not already set.
+    /** *
+      * 获取数据传输的线程数，这个地方获取默认的线程数时，并没有指定module，而是所有的module公用相同的线程数
+      */
     val numThreads = defaultNumThreads(numUsableCores)
+
+    /** *
+      * 设置spark.shuffle.io.serverThreads和spark.shuffle.io.clientThreads个数
+      */
     conf.setIfMissing(s"spark.$module.io.serverThreads", numThreads.toString)
     conf.setIfMissing(s"spark.$module.io.clientThreads", numThreads.toString)
 
+    /** *
+      * 构造TransportConf时，传入了module名称
+      */
     new TransportConf(module, new ConfigProvider {
       override def get(name: String): String = conf.get(name)
     })
@@ -66,8 +78,16 @@ object SparkTransportConf {
    * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.
    */
   private def defaultNumThreads(numUsableCores: Int): Int = {
+
+    /** *
+      * 如果我对Executor指定了core个数，那么Runtime.getRuntime.availableProcessors表示的物理内核数，还是Executor指定的core个数？
+      */
     val availableCores =
       if (numUsableCores > 0) numUsableCores else Runtime.getRuntime.availableProcessors()
+
+    /** *
+      *
+      */
     math.min(availableCores, MAX_DEFAULT_NETTY_THREADS)
   }
 }

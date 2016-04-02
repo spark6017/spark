@@ -68,6 +68,9 @@ import org.apache.spark.shuffle._
  */
 private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager with Logging {
 
+  /** *
+    * spark.shuffle.spill在1.6+已经deprecated，即使设置了spark.shuffle.spill为false，Spark依赖会进行spill到磁盘
+    */
   if (!conf.getBoolean("spark.shuffle.spill", true)) {
     logWarning(
       "spark.shuffle.spill was set to false, but this configuration is ignored as of Spark 1.6+." +
@@ -76,11 +79,20 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
 
   /**
    * A mapping from shuffle ids to the number of mappers producing output for those shuffles.
-   */
+    *
+   * numMapsForShuffle的每个元素是Int-Int,Key是ShuffleId，value是该Shuffle的mapper的数目
+    */
   private[this] val numMapsForShuffle = new ConcurrentHashMap[Int, Int]()
 
+  /** *
+    * SortShuffleManager的短名称
+    */
   override val shortName: String = "sort"
 
+  /** *
+    * 问题：ShuffleBlockResolver的功能是什么？
+    * 对于SortShuffleManager来说，ShuffleBlockResolver的实现类是IndexShuffleBlockResolver
+    */
   override val shuffleBlockResolver = new IndexShuffleBlockResolver(conf)
 
   /**
@@ -146,7 +158,7 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
       mapId: Int,
       context: TaskContext): ShuffleWriter[K, V] = {
 
-    /**记录shuffleID有多少个mapper任务（ShuffleMapTask）*/
+    /**记录shuffleID对应有有多少个mapper任务（ShuffleMapTask）*/
     numMapsForShuffle.putIfAbsent(
       handle.shuffleId, handle.asInstanceOf[BaseShuffleHandle[_, _, _]].numMaps)
 
@@ -154,7 +166,8 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
     val env = SparkEnv.get
 
     /***
-      * 根据ShuffleHandle的类型，选择哪种ShuffleWriter
+      * 根据ShuffleHandle的类型，选定ShuffleWriter的类型。
+      * 同时各个ShuffleWriter构造时，都将handle作为构造参数传入到各个Writer中了
       */
     handle match {
       case unsafeShuffleHandle: SerializedShuffleHandle[K @unchecked, V @unchecked] =>
@@ -175,6 +188,10 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
           mapId,
           context,
           env.conf)
+
+      /** *
+        * other指向handle，因此此处将handle传入到SortShuffleWriter中
+        */
       case other: BaseShuffleHandle[K @unchecked, V @unchecked, _] => /**handle是getWriter的调用者，传入的参数**/
         new SortShuffleWriter(shuffleBlockResolver, other, mapId, context)
     }

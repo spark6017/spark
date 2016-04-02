@@ -30,30 +30,59 @@ import org.apache.spark.util.Utils
 
 /**
  * Create and maintain the shuffle blocks' mapping between logic block and physical file location.
+ *
+ *  两个概念：logical和physical，“local" block和”physical" file location,这里的logical和physical表达什么含义？
+ *
+ *  IndexShuffleBlockResolver用于创建和维护logical block和physical file location之间的对应关系
+ *
  * Data of shuffle blocks from the same map task are stored in a single consolidated data file.
  * The offsets of the data blocks in the data file are stored in a separate index file.
+ *
+ *
+ * 同一个map task产生的shuffle 数据存储在一个文件中，这个文件中的数据聚合了各个Reducer需要的数据片段。
+ * 每个Reducer数据在文件中的位置(或称为偏移量，offset)存放在index文件中
  *
  * We use the name of the shuffle data's shuffleBlockId with reduce ID set to 0 and add ".data"
  * as the filename postfix for data file, and ".index" as the filename postfix for index file.
  *
- */
-// Note: Changes to the format in this file should be kept in sync with
-// org.apache.spark.network.shuffle.ExternalShuffleBlockResolver#getSortBasedShuffleBlockData().
+ * 数据文件和索引文件的命名规则：
+ * 使用ShuffleBlockId(ReduceID从0开始计算)作为数据文件和索引文件的前缀，数据文件拼接.data,索引文件拼接.index
+ * ShuffleBlockId的命名是String shuffleBlockIdName= "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId
+ *
+ * Note: Changes to the format in this file should be kept in sync with org.apache.spark.network.shuffle.ExternalShuffleBlockResolver#getSortBasedShuffleBlockData().
+ *
+  *
+  * @param conf
+  * @param _blockManager BlockManager用于管理数据文件和索引文件？
+  */
 private[spark] class IndexShuffleBlockResolver(
     conf: SparkConf,
     _blockManager: BlockManager = null)
   extends ShuffleBlockResolver
   with Logging {
 
+  /** *
+    * 如果没有指定BlockManager，那么通过SparkEnv获取BlockManager，对于每个Executor而言，BlockManager是唯一的
+    * 也就是说，对于Executor(一个进程)而言，BlockManager是单例的
+    */
   private lazy val blockManager = Option(_blockManager).getOrElse(SparkEnv.get.blockManager)
 
+  /** *
+    * 传输用的配置？
+    */
   private val transportConf = SparkTransportConf.fromSparkConf(conf, "shuffle")
 
   /** *
-    * 调用BlockManager的DiskBlockManager来获取一个文件，获取文件的参数是ShuffleDataBlockId
-    * @param shuffleId
-    * @param mapId
-    * @return
+    * 根据shuffleId和mapId调用BlockManager的DiskBlockManager来获取一个文件，获取文件的参数是ShuffleDataBlockId
+    * 这里没有指定reduceId，而是使用了值为0的NOOP_REDUCE_ID，
+    * 也就是说，此处获取到的数据文件是(shuffleId,mapId,0)
+    *
+    *问题： 因为一个mapId产生一个唯一的文件，那么shuffleId和mapId可以唯一确定一个数据文件，为什么getFile方法需要一个reduceId？
+    * 答案：在NOOP_REDUCE_ID的注释中对此事进行了说明
+    *
+    * @param shuffleId shuffleId
+    * @param mapId mapId
+    * @return  从DiskBlockManager中获取"shuffle_" + shuffleId + "_" + mapId + "_" + 0 + ".data"标识的文件，该文件位于哪台机器上？
     */
   def getDataFile(shuffleId: Int, mapId: Int): File = {
     blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
@@ -193,6 +222,12 @@ private[spark] class IndexShuffleBlockResolver(
     }
   }
 
+  /** *
+    * 根据指定的ShuffleBlockId(也就是对应一个Block)，返回ManagedBuffer,
+    * ManagedBuffer是一个抽象类，本Resolver实现的FileSegmentManagedBuffer
+    * @param blockId
+    * @return
+    */
   override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer = {
     // The block is actually going to be a range of a single map output file for this map, so
     // find out the consolidated file, then the offset within that from our index
@@ -213,6 +248,9 @@ private[spark] class IndexShuffleBlockResolver(
     }
   }
 
+  /** *
+    * stop方法是空实现
+    */
   override def stop(): Unit = {}
 }
 
@@ -220,5 +258,10 @@ private[spark] object IndexShuffleBlockResolver {
   // No-op reduce ID used in interactions with disk store.
   // The disk store currently expects puts to relate to a (map, reduce) pair, but in the sort
   // shuffle outputs for several reduces are glommed into a single file.
+  /** *
+    * 对于sort based shuffle，同一个mapId的shuffle数据都在一个文件中，因此可以不需要reduceId信息定位一个数据文件
+    * 因此，对于ShuffleDataBlockId，统一赋值为0
+    *
+    */
   val NOOP_REDUCE_ID = 0
 }

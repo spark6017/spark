@@ -28,13 +28,16 @@ private[spark]
  * identifier (i.e. map, reduce, and shuffle). Implementations may use files or file segments to
  * encapsulate shuffle data. This is used by the BlockStore to abstract over different shuffle
  * implementations when shuffle data is retrieved.
- */
+  *
+  */
 trait ShuffleBlockResolver {
   type ShuffleId = Int
 
   /**
    * Retrieve the data for the specified block. If the data for that block is not available,
    * throws an unspecified exception.
+   *
+   * 根据ShuffleBlockId获取数据，得到的是ManagedBuffer结构的数据结果
    */
   def getBlockData(blockId: ShuffleBlockId): ManagedBuffer
 

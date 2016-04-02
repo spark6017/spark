@@ -90,12 +90,25 @@ import org.apache.spark.storage.{BlockId, DiskBlockObjectWriter}
  *    aggregator   ordering
  *    有                    有
  *    有                    无
- *    无                    有
  *    无                    无
+ *
+ *    解释：
+ *    1. 如果ShuffleDependency定义了mapSideCombine(比如reduceByKey，groupByKey和sortByKey没有定义mapSideCombine)，那么将
+ *    ShuffleDependency定义的Aggregator和KeyOrdering传给ExternalSorter
+ *    2. 如果ShuffleDependency没有定义mapSideCombine(比如groupByKey和sortByKey，其中groupyByKey定义了Aggregator，而sortByKey也没有定义Aggregator)，那么既不传Aggregator，也不传KeyOrdering
  *
  *
  *  - Users are expected to call stop() at the end to delete all the intermediate files.
- */
+  *
+  * @param context
+  * @param aggregator
+  * @param partitioner 通过该分区器确立ShuffledRDD有多少个分区，这个分区数目用于创建索引文件和数据分段
+  * @param ordering
+  * @param serializer
+  * @tparam K
+  * @tparam V
+  * @tparam C
+  */
 private[spark] class ExternalSorter[K, V, C](
     context: TaskContext,
     aggregator: Option[Aggregator[K, V, C]] = None,
@@ -109,28 +122,45 @@ private[spark] class ExternalSorter[K, V, C](
 
   private val conf = SparkEnv.get.conf
 
+  /** *
+    * map output文件给多少个分区使用
+    */
   private val numPartitions = partitioner.map(_.numPartitions).getOrElse(1)
+
+  /** *
+    * 判断是否需要分区
+    */
   private val shouldPartition = numPartitions > 1
+
+  /** *
+    * 给定Key获取其分区，如果需要分区，则调用partitioner的getPartition操作获取，否则返回0
+    * @param key
+    * @return
+    */
   private def getPartition(key: K): Int = {
     if (shouldPartition) partitioner.get.getPartition(key) else 0
   }
 
   /**
     * ExternalSorter在SortShuffleWriter中创建，SortShuffleWriter也通过SparkEnv.get.blockManager持有一个blockManager对象
-    * ExternalSorter页通过SparkEnv.get.blockManager持有了一个BlockerManager对象
+    * ExternalSorter也通过SparkEnv.get.blockManager持有了一个BlockerManager对象
+   *
+   * 因为对于一个Executor进程而言，BlockManager是单例，因此ExternalSorter和SortShuffleWriter实际上持有的是同一个BlockManager
     */
   private val blockManager = SparkEnv.get.blockManager
 
 
   /**
-    * 存储介质为磁盘的BlockManager
+    * 因为Shuffle操作仅涉及磁盘存储，因此获取磁盘Block管理器
     */
   private val diskBlockManager = blockManager.diskBlockManager
   private val ser = Serializer.getSerializer(serializer)
   private val serInstance = ser.newInstance()
 
-  // Use getSizeAsKb (not bytes) to maintain backwards compatibility if no units are provided
   /** *
+    * Use getSizeAsKb (not bytes) to maintain backwards compatibility if no units are provided
+    * 看注释，貌似spark.shuffle.file.buffer也接受不但单位的数字(自动识别为字节数)?
+    *
     * 写磁盘的缓存，每次向磁盘写32K
     */
   private val fileBufferSize = conf.getSizeAsKb("spark.shuffle.file.buffer", "32k").toInt * 1024
@@ -152,19 +182,32 @@ private[spark] class ExternalSorter[K, V, C](
     * PartitionedAppendOnlyMap<=SizeTrackingAppendOnlyMap<=AppendOnlyMap
     *
     * AppendOnlyMap的底层数据结构也是数组，但是AppendOnlyMap提供了change value的方法(用于聚合相同Key的元素)
+    *
+    * 问题：PartitionedAppendOnlyMap中的Partitioned如何理解？
+    * 同buffer一样，PartitionedAppendOnlyMap存储的是Key是(partitionId,Key), 从它继承的SizeTrackingAppendOnlyMap[(Int, K), V]的类型声明中可以
+    * 看出端倪
     */
   private var map = new PartitionedAppendOnlyMap[K, C]
 
   /** *
-    * PartitionedPairBuffer的底层数据结构是一个Array, PartitionedPairBuffer没有定义
+    * PartitionedPairBuffer的底层数据结构是一个Array, 这个Array将(partitionID,K)和V靠近存放，其存储格式为
+    * (partiionId, K1)|V1|(partitionId, K2)|V2|(partitionId, K3)|V3
+    * Partitioned何解？意思是带有Partition信息的PairBuffer？
     */
   private var buffer = new PartitionedPairBuffer[K, C]
 
-  // Total spilling statistics
+  /**
+   * 记录Shuffle到磁盘的字节数
+   */
   private var _diskBytesSpilled = 0L
+
+
   def diskBytesSpilled: Long = _diskBytesSpilled
 
-  // Peak size of the in-memory data structure observed so far, in bytes
+  /** *
+    * Peak size of the in-memory data structure observed so far, in bytes
+    * Shuffle过程需要内存缓冲，此处记录Shuffle过程使用的内存数
+    */
   private var _peakMemoryUsedBytes: Long = 0L
   def peakMemoryUsedBytes: Long = _peakMemoryUsedBytes
 

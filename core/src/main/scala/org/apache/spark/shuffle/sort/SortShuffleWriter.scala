@@ -27,8 +27,12 @@ import org.apache.spark.util.collection.ExternalSorter
 
 /** *
   * 问题：K,V,C三个类型表示什么意思？K,V表示RDD[K,V]，C呢?
+  *
+  * 因为这是SortShuffleWriter，那么Writer只需要mapId和shuffleId两方面的信息即可，通过这两方面的信息可以唯一确定一个
+  * map out file，在通过DiskBlockManager写磁盘时，指定的reducerId统一为0(参见IndexShuffleBlockResolver的NOOP_REDUCE_ID)
+  *
   * @param shuffleBlockResolver
-  * @param handle ShuffleHandle
+  * @param handle ShuffleHandle记录着ShuffleId
   * @param mapId ShuffleMapTask的ID
   * @param context
   * @tparam K
@@ -63,22 +67,26 @@ private[spark] class SortShuffleWriter[K, V, C](
   /**
    * Write a bunch of records to this task's output
     *
-    * records是本ShuffleWriter对应的RDD的Partition的数据集合，在Shufflem
+   * 问题：该map stage的下一个stage有多少个分区(或者task)是如何判定的？
+   *
     *
    * 调用ExternalSorter的insertAll方法写入数据注意点：
    *    1.  如果有map side combine，则如何将map端combine的数据写到磁盘
    *    2. 如果有排序，比如sortByKey，则如何将有序的数据写到磁盘 --- ExternalSorter.insertAll并没有进行排序处理？是的，排序的数据逻辑是在ShufflerReader中完成的
    *    3. 如果内存不够用，如何spill磁盘，最后如何做Merge？这个逻辑在ExternalSorter的writePartitionedFile方法中
    *
-   * */
+    *
+    * @param records records是该map task处理后得到的RDD分区数据通过该map task对应的ShuffleWrite进行shuffle到磁盘中
+    */
   override def write(records: Iterator[Product2[K, V]]): Unit = {
 
     /***
       * 使用ExternalSorter进行数据逻辑逻辑(sort、combine、spill)
       *
       * 创建ExternalSorter，
-      *     1. 如果定义了mapSideCombine(隐含着Aggregator必须定义)，那么将Aggregator传给ExternalSorter
-      *     2. 如果没有定义mapSideCombine，那么既不传Aggregator也不传keyOrdering给ExternalSorter，因为在reduce端会进行排序(如果RDD使用了sortByKey)
+      *     1. 如果定义了mapSideCombine(隐含着Aggregator必须定义)，比如reduceByKey， 那么将aggregator传给ExternalSorter(对于reduceByKey，keyOrdering为None)
+      *     2. 如果没有定义mapSideCombine，那么既不传Aggregator也不传keyOrdering给ExternalSorter,比如sortByKey就是没有定义mapSideCombine，但是定义了keyOrdering
+      *     3. 对于groupByKey而言，定义了Aggregator，但是没有定义mapSideCombine，那么既不传Aggregator也不传keyOrdering给ExternalSorter,
       *
       *   问题： 如果没有定义ShuffleDependency没有定义mapSideCombine，那么构造ExternalSorter时，既不传入Aggregator也不传入keyOrdering，
       *   那么Sort Based Shuffle这个Sort如何体现
@@ -89,11 +97,10 @@ private[spark] class SortShuffleWriter[K, V, C](
       new ExternalSorter[K, V, C](
         context, dep.aggregator, Some(dep.partitioner), dep.keyOrdering, dep.serializer)
     } else {
-      // In this case we pass neither an aggregator nor an ordering to the sorter, because we don't
-      // care whether the keys get sorted in each partition; that will be done on the reduce side
-      // if the operation being run is sortByKey.
       /** *
-        * 不指定aggregator和ordering，ExternalSorter只能保证分区间有序，即数据将按照分区ID排序
+        * In this case we pass neither an aggregator nor an ordering to the sorter, because we don't
+        * care whether the keys get sorted in each partition; that will be done on the reduce side
+        * if the operation being run is sortByKey
         */
       new ExternalSorter[K, V, V](
         context, aggregator = None, Some(dep.partitioner), ordering = None, dep.serializer)
@@ -139,7 +146,17 @@ private[spark] class SortShuffleWriter[K, V, C](
     val partitionLengths = sorter.writePartitionedFile(blockId, tmp)
 
     /***
-      * 将每个分区的数据长度写到Index文件中
+      * 每个Task都会执行IndexShuffleBlockResolver的writeIndexFileAndCommit方法，
+      * 因此在IndexShuffleBlockResolver的writeIndexFileAndCommit方法中进行了数据文件和索引文件的写同步操作？
+      * ----这个地方的理解是不对的，不同的map task写不同的是数据文件和索引文件，因此没有同步的问题，问题的关键是同一个map task，可能由于
+      * 推测执行等策略，导致一个map任务由多个task执行，为了防止这种情况，对IndexShuffleBlockResolver进行了加锁，也就是说，所有的map task
+      * 在写磁盘文件时进行了同步
+      *
+      *
+      * 不同的task写入到磁盘文件和数据文件中，细节是什么？
+      * map task 1先执行完写数据文件和磁盘，而后map task 3执行完写数据文件和磁盘，map task 2执行完而后又写数据文件和磁盘，
+      * 对于这三个task以这样的顺序写完，它们如何更新索引文件和数据文件？
+      * 答：这三个task会创建不同的索引文件和数据文件！
       */
     shuffleBlockResolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)
 

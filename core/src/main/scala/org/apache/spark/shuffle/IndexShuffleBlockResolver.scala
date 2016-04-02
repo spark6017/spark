@@ -224,15 +224,22 @@ private[spark] class IndexShuffleBlockResolver(
    * end of the output file. This will be used by getBlockData to figure out where each block
    * begins and ends.
    *
+   *  写索引文件，这里的操作其实就是创建索引文件，索引文件保存(reducerNumber + 1)个long数字，
+   *  因此索引文件的长度为(reducer + 1) * 8
+   *
    * It will commit the data and index file as an atomic operation, use the existing ones, or
    * replace them with new ones.
+   *
+   * 问题1： 数据文件和索引文件进行原子提交，如何做到的？
+   * 问题2： 对于一个索引文件，是否是一个任务一次性全部写完，还是说每个任务都会更新一次数据文件和索引文件？
+   * 按照索引文件的结构，貌似不是的，因为索引文件中的offset是按照reducer id进行排序的
    *
    * Note: the `lengths` will be updated to match the existing index file if use the existing ones.
     *
     * @param shuffleId shuffleId
     * @param mapId mapId
     * @param lengths 一个long类型的数组，每个元素记录了属于每个reducer的数据长度
-    * @param dataTmp 这是什么？
+    * @param dataTmp 这是什么？这个应该是已经写好的临时数据文件，也需要提交
     */
   def writeIndexFileAndCommit(
       shuffleId: Int,
@@ -241,13 +248,28 @@ private[spark] class IndexShuffleBlockResolver(
       dataTmp: File): Unit = {
 
     /***
-      * 创建indexFile
+      *  代码运行到此处，索引文件并没有创建，因此这里的getIndexFile将首先索引文件
       */
     val indexFile = getIndexFile(shuffleId, mapId)
+
+    /** *
+      * 创建索引文件的临时文件，indexFile拼接一个UUID
+      */
     val indexTmp = Utils.tempFileWith(indexFile)
+
+    /** *
+      *  打开临时文件准备写索引数据
+      */
     val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))
+
+    /** *
+      * tryWithSafeFinally是一个try {}finally{}构造块，第一个参数是try中执行的代码块，第二个参数是finally中执行的代码块
+      */
     Utils.tryWithSafeFinally {
-      // We take in lengths of each block, need to convert it to offsets.
+      /** *
+        *  We take in lengths of each block, need to convert it to offsets.
+        *  往临时索引文件中写入reducerNumber + 1个long值，写入的值是递增的
+        */
       var offset = 0L
       out.writeLong(offset)
       for (length <- lengths) {
@@ -258,28 +280,50 @@ private[spark] class IndexShuffleBlockResolver(
       out.close()
     }
 
+    /** *
+      * 获取数据文件，因此参数是dataTmp，目测此处将新建数据文件
+      */
     val dataFile = getDataFile(shuffleId, mapId)
-    // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
-    // the following check and rename are atomic.
+    /** *
+      * There is only one IndexShuffleBlockResolver per executor, this synchronization make sure the following check and rename are atomic.
+      *
+      * 同一个executor的shuffleId和mapId标识的数据文件和索引文件应该是executor进程独有的，因此此处加synchronized是能起到
+      * 线程安全目的的，问题是是否有必要进行同步操作？
+      *  要的，因为这个操作是任务级别的，也就是说writeIndexFileAndCommit可能被多个Task执行？
+      */
     synchronized {
+      /** *
+        *  检查是否已经写成功，如果是的吧
+        */
       val existingLengths = checkIndexAndDataFile(indexFile, dataFile, lengths.length)
       if (existingLengths != null) {
         // Another attempt for the same task has already written our map outputs successfully,
         // so just use the existing partition lengths and delete our temporary map outputs.
         System.arraycopy(existingLengths, 0, lengths, 0, lengths.length)
+
+        /** *
+          * 如果临时数据文件存在，则删除
+          */
         if (dataTmp != null && dataTmp.exists()) {
           dataTmp.delete()
         }
+
+        /** *
+          * 删除刚新建的临时索引文件
+          */
         indexTmp.delete()
       } else {
-        // This is the first successful attempt in writing the map outputs for this task,
-        // so override any existing index and data files with the ones we wrote.
+       /** *
+          * This is the first successful attempt in writing the map outputs for this task, so override any existing index and data files with the ones we wrote.
+         *  如果索引文件和数据文件不匹配(以为着有错)，那么将数据文件和索引文件删除
+          */
         if (indexFile.exists()) {
           indexFile.delete()
         }
         if (dataFile.exists()) {
           dataFile.delete()
         }
+        //因为索引文件和数据文件，刚才已经删除，因此此处可以重命名
         if (!indexTmp.renameTo(indexFile)) {
           throw new IOException("fail to rename file " + indexTmp + " to " + indexFile)
         }

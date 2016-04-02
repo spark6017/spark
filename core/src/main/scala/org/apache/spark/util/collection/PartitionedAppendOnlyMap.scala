@@ -24,7 +24,12 @@ import org.apache.spark.util.collection.WritablePartitionedPairCollection._
 /**
  * Implementation of WritablePartitionedPairCollection that wraps a map in which the keys are tuples
  * of (partition ID, K)
- */
+ *
+ *  从SizeTrackingAppendOnlyMap的泛型参数中可以看出，AppendOnlyMap中存放的键值类型是((Int,K),V)
+  *
+  * @tparam K
+  * @tparam V
+  */
 private[spark] class PartitionedAppendOnlyMap[K, V]
   extends SizeTrackingAppendOnlyMap[(Int, K), V] with WritablePartitionedPairCollection[K, V] {
 

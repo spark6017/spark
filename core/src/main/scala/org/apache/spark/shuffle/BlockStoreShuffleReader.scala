@@ -57,7 +57,7 @@ private[spark] class BlockStoreShuffleReader[K, C](
 
   /**
    *
-   *  Shuffle Read
+   *  Shuffle Read，如果读取的数据量比较大，那么需要进行Spill
     *
     */
   override def read(): Iterator[Product2[K, C]] = {
@@ -193,6 +193,8 @@ private[spark] class BlockStoreShuffleReader[K, C](
         context.taskMetrics().incMemoryBytesSpilled(sorter.memoryBytesSpilled)
         context.taskMetrics().incDiskBytesSpilled(sorter.diskBytesSpilled)
         context.taskMetrics().incPeakExecutionMemory(sorter.peakMemoryUsedBytes)
+
+
         CompletionIterator[Product2[K, C], Iterator[Product2[K, C]]](sorter.iterator, sorter.stop())
       case None =>
         aggregatedIter

@@ -237,6 +237,8 @@ private[spark] class ExternalSorter[K, V, C](
    *
    * 如果既没有定义ordering，也没有定义aggregator，那么返回None
    *
+   * 问题是：什么情况下会定义ordering或者aggregator？只有在定义了mapSideCombine的情况下会进行
+   *
    * @return
    */
   private def comparator: Option[Comparator[K]] = {
@@ -247,9 +249,14 @@ private[spark] class ExternalSorter[K, V, C](
     }
   }
 
-  // Information about a spilled file. Includes sizes in bytes of "batches" written by the
-  // serializer as we periodically reset its stream, as well as number of elements in each
-  // partition, used to efficiently keep track of partitions when merging.
+  /** *
+    *   Information about a spilled file. Includes sizes in bytes of "batches" written by the serializer as we periodically reset its stream, as well as number of elements in each
+    *   partition, used to efficiently keep track of partitions when merging.
+    * @param file
+    * @param blockId
+    * @param serializerBatchSizes
+    * @param elementsPerPartition
+    */
   private[this] case class SpilledFile(
     file: File,
     blockId: BlockId,
@@ -380,8 +387,9 @@ private[spark] class ExternalSorter[K, V, C](
     val (blockId, file) = diskBlockManager.createTempShuffleBlock()
 
     // These variables are reset after each flush
+    // objectsWritten记录本轮一共写入了多少个对象
     var objectsWritten: Long = 0
-    var spillMetrics: ShuffleWriteMetrics = null
+    var spillPerBatchMetrics: ShuffleWriteMetrics = null
 
     /** *
       * 通过DiskBlockObjectWriter写文件，此处可以查看写磁盘文件的方式
@@ -394,14 +402,15 @@ private[spark] class ExternalSorter[K, V, C](
       */
     def openWriter(): Unit = {
       //没被打开过
-      assert (writer == null && spillMetrics == null)
+      assert (writer == null && spillPerBatchMetrics == null)
 
-      spillMetrics = new ShuffleWriteMetrics
+      //新建spillPerBatchMetrics
+      spillPerBatchMetrics = new ShuffleWriteMetrics
 
       /**
         * BlockManager的DiskWriter，传入blockId，文件，序列化实例，以及文件缓冲大小
         */
-      writer = blockManager.getDiskWriter(blockId, file, serInstance, fileBufferSize, spillMetrics)
+      writer = blockManager.getDiskWriter(blockId, file, serInstance, fileBufferSize, spillPerBatchMetrics)
     }
     openWriter()
 
@@ -411,15 +420,24 @@ private[spark] class ExternalSorter[K, V, C](
     // How many elements we have in each partition
     val elementsPerPartition = new Array[Long](numPartitions)
 
-    // Flush the disk writer's contents to disk, and update relevant variables.
-    // The writer is closed at the end of this process, and cannot be reused.
+    /** *
+      * Flush the disk writer's contents to disk, and update relevant variables.
+      * The writer is closed at the end of this process, and cannot be reused.
+      */
     def flush(): Unit = {
       val w = writer
       writer = null
       w.commitAndClose()
-      _diskBytesSpilled += spillMetrics.bytesWritten
-      batchSizes.append(spillMetrics.bytesWritten)
-      spillMetrics = null
+      _diskBytesSpilled += spillPerBatchMetrics.bytesWritten
+
+      /** *
+        * 每次flush需要将本轮写操作写入的字节数记录下来，写到batchSizes中
+        */
+      batchSizes.append(spillPerBatchMetrics.bytesWritten)
+
+      //flush结束，将本轮spillPerBatchMetrics置为null
+      spillPerBatchMetrics = null
+
       objectsWritten = 0
     }
 
@@ -430,14 +448,22 @@ private[spark] class ExternalSorter[K, V, C](
         *  collection有可能是PartitionedAppendOnlyMap，可有可能是PartitionedPairBuffer
         *
         *  对于PartitionedPairBuffer，如果comparator是None，那么此时PartitionedPairBuffer会使用partitionComparator进行排序
+        *  得到的it是一个优先按照partition进行排序。如果Comparator不为None，则进行分区内排序的有序集合
         */
       val it = collection.destructiveSortedWritablePartitionedIterator(comparator)
       while (it.hasNext) {
+        //获取当前元素所属的分区
         val partitionId = it.nextPartition()
         require(partitionId >= 0 && partitionId < numPartitions,
           s"partition Id: ${partitionId} should be in the range [0, ${numPartitions})")
+
+        //调用writeNext写入数据
         it.writeNext(writer)
+
+        //因为当前元素属于partitionId表示的分区，因此该分区元素个数加1
         elementsPerPartition(partitionId) += 1
+
+        //写入的对象加1，elementsPerPartition是多轮累加的，而objectsWritten仅记录本轮的结果
         objectsWritten += 1
 
         if (objectsWritten == serializerBatchSize) {
@@ -468,6 +494,17 @@ private[spark] class ExternalSorter[K, V, C](
       }
     }
 
+    /** *
+      * SpilledFile构造时记录了不少信息
+      * 1. 文件
+      * 2. BlockId(有blockId)也可以拿到这个文件
+      * 3. 一共spill多少字节的数据，它是一个数组，每个元素记录的是一个batch的字节数
+      * 4. 每个Partition的字节数
+      *
+      * 问题：此时并不知道每个字节spill了多少字节，仅仅知道元素个数
+      *
+      * 最后将该spill写到spills集合中，最后做最后的归并排序
+      */
     spills.append(SpilledFile(file, blockId, batchSizes.toArray, elementsPerPartition))
   }
 

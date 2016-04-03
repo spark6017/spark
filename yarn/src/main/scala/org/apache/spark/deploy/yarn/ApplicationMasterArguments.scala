@@ -36,7 +36,7 @@ class ApplicationMasterArguments(val args: Array[String]) {
   var primaryPyFile: String = null
   var primaryRFile: String = null
   var userArgs: Seq[String] = Nil
-  var executorMemory = JavaUtils.DEFAULT_EXECUTOR_MEM_MB /**在Spark on YARN模式下，如果不指定--executor-memory，则默认是1024*/
+  var executorMemory = 1024 /**在Spark on YARN模式下，如果不指定--executor-memory，则默认是1024*/
   var executorCores = 1 /**在Spark on YARN模式下，如果不指定--executor-cores，则默认是1*/
   var propertiesFile: String = null
 

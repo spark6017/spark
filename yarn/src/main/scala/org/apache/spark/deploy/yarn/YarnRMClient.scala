@@ -40,7 +40,15 @@ import org.apache.spark.util.Utils
  */
 private[spark] class YarnRMClient(args: ApplicationMasterArguments) extends Logging {
 
-  private var amClient: AMRMClient[ContainerRequest] = _
+  /** *
+    * 定义AMRMClient，AMRMClient是一个泛型类型，此处指定的泛型类是ContainerRequest
+    * 问题：一个ContainerRequest包含哪些信息？包含资源量、资源位置信息
+    */
+  private var am2rmClient: AMRMClient[ContainerRequest] = _
+
+  /** *
+    * 问题：这个uiHistoryAddress，是Spark History Address的地址？
+    */
   private var uiHistoryAddress: String = _
   private var registered: Boolean = false
 
@@ -65,18 +73,19 @@ private[spark] class YarnRMClient(args: ApplicationMasterArguments) extends Logg
     /**
       * 初始化AM向RM发送RPC请求的Client
       */
-    amClient = AMRMClient.createAMRMClient()
-    amClient.init(conf)
-    amClient.start()
+    am2rmClient = AMRMClient.createAMRMClient()
+    am2rmClient.init(conf)
+    am2rmClient.start()
     this.uiHistoryAddress = uiHistoryAddress
 
     logInfo("Registering the ApplicationMaster")
 
     /**
-      * 向RM发送registerApplicationMaster请求
+      * AM向RM发送Application Master 注册请求，这是在Application Master Container将Application Master进程启动起来后，
+     * Application Master做的事情
       */
     synchronized {
-      amClient.registerApplicationMaster(Utils.localHostName(), 0, uiAddress)
+      am2rmClient.registerApplicationMaster(Utils.localHostName(), 0, uiAddress)
       registered = true
     }
 
@@ -84,7 +93,7 @@ private[spark] class YarnRMClient(args: ApplicationMasterArguments) extends Logg
       * 初始化一个YarnAllocator对象,args是一个关键对象,它是ApplicationMasterArguments类型的的对象
       * ApplicationMasterArguments包含了一个--properties-file参数，这个参数指定了要申请多少个executor
       */
-    new YarnAllocator(driverUrl, driverRef, conf, sparkConf, amClient, getAttemptId(), args,
+    new YarnAllocator(driverUrl, driverRef, conf, sparkConf, am2rmClient, getAttemptId(), args,
       securityMgr)
   }
 
@@ -96,7 +105,7 @@ private[spark] class YarnRMClient(args: ApplicationMasterArguments) extends Logg
    */
   def unregister(status: FinalApplicationStatus, diagnostics: String = ""): Unit = synchronized {
     if (registered) {
-      amClient.unregisterApplicationMaster(status, diagnostics, uiHistoryAddress)
+      am2rmClient.unregisterApplicationMaster(status, diagnostics, uiHistoryAddress)
     }
   }
 

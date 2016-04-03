@@ -41,7 +41,13 @@ import org.apache.spark.util._
  * Common application master functionality for Spark on Yarn.
   *
   * application	master starts	the	driver program	before	allocating	resources	for executors
- */
+ *
+ * 在Yarn Cluster模式下，Application Master首先将Driver启动起来，然后再向ResourceManager申请Container？
+ * 这个逻辑是什么
+  *
+  * @param args
+  * @param client
+  */
 private[spark] class ApplicationMaster(
     args: ApplicationMasterArguments,
     client: YarnRMClient)
@@ -757,16 +763,25 @@ object ApplicationMaster extends Logging {
   private var master: ApplicationMaster = _
 
   /**
-    * ApplicationMaster进程可用的参数包装在ApplicationMasterArguments类中
+    * ApplicationMaster进程的命令行参数包装在ApplicationMasterArguments类中
     *
     * @param args
     */
   def main(args: Array[String]): Unit = {
     SignalLogger.register(log)
     val amArgs = new ApplicationMasterArguments(args)
+
+    /** *
+      * runAsSparkUser的参数是一个函数字面量，该函数的参数是空，函数体是创建ApplicationMaster并执行ApplicationMaster的run方法
+      */
     SparkHadoopUtil.get.runAsSparkUser { () =>
-      master = new ApplicationMaster(amArgs, new YarnRMClient(amArgs))
-      System.exit(master.run())
+      val am2rmClient = new YarnRMClient(amArgs)
+      master = new ApplicationMaster(amArgs, am2rmClient)
+      /** *
+        * 执行ApplicationMaster的run方法，知道运行结束
+        */
+      val exitCode = master.run()
+      System.exit(exitCode)
     }
   }
 

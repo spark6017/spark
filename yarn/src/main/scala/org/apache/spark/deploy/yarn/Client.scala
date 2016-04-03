@@ -84,7 +84,8 @@ private[spark] class Client(
     this(clientArgs, SparkHadoopUtil.get.newConfiguration(spConf), spConf)
 
   /**
-   * 访问RM的Client, 这是YARN API
+   * 访问RM的Client, 这是YARN API，通过Hadoop YARN API创建。
+   * YARNClient，顾名思义，是访问YARN RPC Server的YARN RPC Client
    */
   private val yarnClient = YarnClient.createYarnClient
 
@@ -153,8 +154,10 @@ private[spark] class Client(
     var appId: ApplicationId = null
     try {
       launcherBackend.connect()
-      // Setup the credentials before doing anything else,
-      // so we have don't have issues at any point.
+
+      /** *
+        *  Setup the credentials before doing anything else,so we have don't have issues at any point.
+        */
       setupCredentials()
 
       /**
@@ -340,7 +343,12 @@ private[spark] class Client(
     amContainer.setTokens(ByteBuffer.wrap(dob.getData))
   }
 
-  /** Get the application report from the ResourceManager for an application we have submitted. */
+  /** *
+    * Get the application report from the ResourceManager for an application we have submitted.
+    * YarnClient是Spark提供的API，根据appId获取ApplicationReport
+    * @param appId
+    * @return
+    */
   def getApplicationReport(appId: ApplicationId): ApplicationReport =
     yarnClient.getApplicationReport(appId)
 
@@ -1105,10 +1113,20 @@ private[spark] class Client(
       appId: ApplicationId,
       returnOnRunning: Boolean = false,
       logApplicationReport: Boolean = true): (YarnApplicationState, FinalApplicationStatus) = {
+    /** *
+      * 每个一秒钟获取一次report信息
+      */
     val interval = sparkConf.getLong("spark.yarn.report.interval", 1000)
     var lastState: YarnApplicationState = null
     while (true) {
+      /** *
+        * 休息一秒钟，等待获取最新状态，记录到lastState中
+        */
       Thread.sleep(interval)
+
+      /** *
+        * 根据applicationId获取ApplicationReport
+        */
       val report: ApplicationReport =
         try {
           getApplicationReport(appId)
@@ -1120,6 +1138,8 @@ private[spark] class Client(
             logError(s"Failed to contact YARN for application $appId.", e)
             return (YarnApplicationState.FAILED, FinalApplicationStatus.FAILED)
         }
+
+
       val state = report.getYarnApplicationState
 
       if (logApplicationReport) {
@@ -1228,16 +1248,29 @@ private[spark] class Client(
       /**
        * monitorApplication将循环等待应用程序结束，如果ApplicationState为FAILED或者KILLED或者UNDEFINED，则抛出SparkException
        * monitorApplication是一个同步过程？何时返回？
+       * 因为monitorApplication方法的returnOnRunning使用了默认值，即false，因此该方法返回时，Application进入了Running状态
        */
       val (yarnApplicationState, finalApplicationStatus) = monitorApplication(appId)
+
+      /** *
+        * Yarn Application的state或者status为FAILED，那么抛出异常
+        */
       if (yarnApplicationState == YarnApplicationState.FAILED ||
         finalApplicationStatus == FinalApplicationStatus.FAILED) {
         throw new SparkException(s"Application $appId finished with failed status")
       }
+
+      /** *
+        * Yarn Application的state或者status为KILLED，那么抛出异常
+        */
       if (yarnApplicationState == YarnApplicationState.KILLED ||
         finalApplicationStatus == FinalApplicationStatus.KILLED) {
         throw new SparkException(s"Application $appId is killed")
       }
+
+      /** *
+        * application没有运行完则抛出异常，意味着代码运行此处应该运行完成
+        */
       if (finalApplicationStatus == FinalApplicationStatus.UNDEFINED) {
         throw new SparkException(s"The final status of application $appId is undefined")
       }

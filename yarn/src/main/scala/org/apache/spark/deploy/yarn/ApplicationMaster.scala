@@ -82,7 +82,9 @@ private[spark] class ApplicationMaster(
   /***
     *Default to twice the number of executors (twice the maximum number of executors if dynamic allocation is enabled), with a minimum of 3.
     *
-    * 在非动态分配模式下，最大的失败数是spark.executor.instances，即是executor的数目
+    * Executor失败的最大次数是executor个数的两倍
+    * 如果Spark Application启动了executor个数的动态分配，那么取spark.dynamicAllocation.maxExecutors
+    * 如果Spark Application使用executor个数静态分配，那么取spark.executor.instances
     *
     */
   private val maxNumExecutorFailures = {
@@ -234,7 +236,8 @@ private[spark] class ApplicationMaster(
       }
 
       /**
-        * 如果是Cluster Mode，那么在ApplicationMaster中启动Driver
+        * 如果是Cluster Mode，那么在ApplicationMaster中启动Driver，
+       * runDriver方法做的事情绝不仅仅是启动Driver
         */
       if (isClusterMode) {
         runDriver(securityMgr)
@@ -469,7 +472,7 @@ private[spark] class ApplicationMaster(
   }
 
   /***
-    * ApplicationMaster启动了一个线程，定时向
+    * ApplicationMaster启动汇报进程
     * 可以用于Executor失败时重新启动？
     * @return
     */

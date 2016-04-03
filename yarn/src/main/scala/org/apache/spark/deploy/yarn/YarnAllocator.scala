@@ -51,7 +51,16 @@ import org.apache.spark.util.ThreadUtils
  *
  * The public methods of this class are thread-safe.  All methods that mutate state are
  * synchronized.
- */
+  *
+  * @param driverUrl
+  * @param driverRef
+  * @param conf
+  * @param sparkConf
+  * @param amClient
+  * @param appAttemptId
+  * @param args
+  * @param securityMgr
+  */
 private[yarn] class YarnAllocator(
     driverUrl: String,
     driverRef: RpcEndpointRef,
@@ -70,7 +79,9 @@ private[yarn] class YarnAllocator(
     Logger.getLogger(classOf[RackResolver]).setLevel(Level.WARN)
   }
 
-  // Visible for testing.
+  /** *
+    * ContainerId有ApplicationAttemptId和getId方法
+    */
   val allocatedHostToContainersMap = new HashMap[String, collection.mutable.Set[ContainerId]]
   val allocatedContainerToHostMap = new HashMap[ContainerId, String]
 

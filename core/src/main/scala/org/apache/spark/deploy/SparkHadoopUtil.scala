@@ -312,6 +312,13 @@ class SparkHadoopUtil extends Logging {
    * Substitute variables by looking them up in Hadoop configs. Only variables that match the
    * ${hadoopconf- .. } pattern are substituted.
    */
+
+  /** *
+    * 替换文本中定义的Hadoop Configuration属性，属性名的命名规则是${hadoopconf-XXXXXX}，那么将以该属性名称对应的value进行替换
+    * @param text 要替换的文本
+    * @param hadoopConf
+    * @return
+    */
   def substituteHadoopVariables(text: String, hadoopConf: Configuration): String = {
     text match {
       case HADOOP_CONF_PATTERN(matched) => {

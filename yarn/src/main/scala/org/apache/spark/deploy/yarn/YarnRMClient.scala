@@ -100,6 +100,8 @@ private[spark] class YarnRMClient(args: ApplicationMasterArguments) extends Logg
   /**
    * Unregister the AM. Guaranteed to only be called once.
    *
+   * 注销Application Master
+   *
    * @param status The final status of the AM.
    * @param diagnostics Diagnostics message to include in the final status.
    */

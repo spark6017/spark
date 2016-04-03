@@ -149,12 +149,21 @@ private[spark] class ApplicationMaster(
     try {
       val appAttemptId = client.getAttemptId()
 
+      /** *
+        * 如果是Yarn Cluster Mode
+        */
       if (isClusterMode) {
-        // Set the web ui port to be ephemeral for yarn so we don't conflict with
-        // other spark processes running on the same box
+        /** *
+          *  Set the web ui port to be ephemeral for yarn so we don't conflict with other spark processes running on the same box
+          *
+          * 端口设置为0，表示什么意思？
+          */
         System.setProperty("spark.ui.port", "0")
 
-        // Set the master property to match the requested mode.
+        /** *
+          *  Set the master property to match the requested mode.
+          *  设置spark master为yarn-cluster
+          */
         System.setProperty("spark.master", "yarn-cluster")
 
         // Propagate the application ID so that YarnClusterSchedulerBackend can pick it up.
@@ -170,12 +179,23 @@ private[spark] class ApplicationMaster(
 
       val fs = FileSystem.get(yarnConf)
 
-      // This shutdown hook should run *after* the SparkContext is shut down.
+      /** *
+        *  This shutdown hook should run *after* the SparkContext is shut down.
+        *  优先级越高，priority的值越大？是的
+        */
       val priority = ShutdownHookManager.SPARK_CONTEXT_SHUTDOWN_PRIORITY - 1
+
+
+      /** *
+        * Application shut down时，
+        */
       ShutdownHookManager.addShutdownHook(priority) { () =>
         val maxAppAttempts = client.getMaxRegAttempts(sparkConf, yarnConf)
         val isLastAttempt = client.getAttemptId().getAttemptId() >= maxAppAttempts
 
+        /** *
+          * 如果还没有运行结束
+          */
         if (!finished) {
           // This happens when the user application calls System.exit(). We have the choice
           // of either failing or succeeding at this point. We report success to avoid
@@ -187,6 +207,9 @@ private[spark] class ApplicationMaster(
             "Shutdown hook called before final status was reported.")
         }
 
+        /** *
+          * 如果还没有执行注销操作，那么需要注销
+          */
         if (!unregistered) {
           // we only want to unregister if we don't want the RM to retry
           if (finalStatus == FinalApplicationStatus.SUCCEEDED || isLastAttempt) {
@@ -250,7 +273,10 @@ private[spark] class ApplicationMaster(
    * unregister is used to completely unregister the application from the ResourceManager.
    * This means the ResourceManager will not retry the application attempt on your behalf if
    * a failure occurred.
-   */
+    *
+    * @param status
+    * @param diagnostics
+    */
   final def unregister(status: FinalApplicationStatus, diagnostics: String = null): Unit = {
     synchronized {
       if (!unregistered) {
@@ -262,9 +288,22 @@ private[spark] class ApplicationMaster(
     }
   }
 
+  /** *
+    * 结束一个Application
+    * @param status
+    * @param code
+    * @param msg
+    */
   final def finish(status: FinalApplicationStatus, code: Int, msg: String = null): Unit = {
     synchronized {
+      /** *
+        * Application还没有运行完，
+        */
       if (!finished) {
+
+        /** *
+          * 检查JVM是否处于Shutting down状态
+          */
         val inShutdown = ShutdownHookManager.inShutdown()
         logInfo(s"Final app status: $status, exitCode: $code" +
           Option(msg).map(msg => s", (reason: $msg)").getOrElse(""))
@@ -318,6 +357,11 @@ private[spark] class ApplicationMaster(
 
     val appId = client.getAttemptId().getApplicationId().toString()
     val attemptId = client.getAttemptId().getAttemptId().toString()
+    /** *
+      * 历史服务器的地址，如果没有配置spark.yarn.historyServer.address，则返回null
+      *
+      * historyAddress的地址构成规则： http://localhost:19888/history/{appId}/{attemptId}
+      */
     val historyAddress =
       sparkConf.getOption("spark.yarn.historyServer.address")
         .map { text => SparkHadoopUtil.get.substituteHadoopVariables(text, yarnConf) }

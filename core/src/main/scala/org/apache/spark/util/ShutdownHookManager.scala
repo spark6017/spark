@@ -35,6 +35,9 @@ private[spark] object ShutdownHookManager extends Logging {
   /**
    * The shutdown priority of the SparkContext instance. This is lower than the default
    * priority, so that by default hooks are run before the context is shut down.
+   *
+   * 优先级有用吗?对于Shut Down Hook来说，Shut Down的优先级应该是有用的，因为
+   * Shut down Hook的优先级调度是语言和API层面的，而不是操作系统和CPU层面的
    */
   val SPARK_CONTEXT_SHUTDOWN_PRIORITY = 50
 
@@ -42,6 +45,8 @@ private[spark] object ShutdownHookManager extends Logging {
    * The shutdown priority of temp directory must be lower than the SparkContext shutdown
    * priority. Otherwise cleaning the temp directories while Spark jobs are running can
    * throw undesirable errors at the time of shutdown.
+   *
+   * 清理临时目录和文件需要在SparkContext关掉之后进行
    */
   val TEMP_DIR_SHUTDOWN_PRIORITY = 25
 
@@ -207,6 +212,12 @@ private [util] class SparkShutdownHookManager {
 
 }
 
+/**
+ * SparkShutdownHook按照优先级排序，值越大，优先级越高，
+ *
+ * @param priority
+ * @param hook
+ */
 private class SparkShutdownHook(private val priority: Int, hook: () => Unit)
   extends Comparable[SparkShutdownHook] {
 

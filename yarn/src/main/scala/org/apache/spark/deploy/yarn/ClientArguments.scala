@@ -66,7 +66,8 @@ private[spark] class ClientArguments(args: Array[String], sparkConf: SparkConf) 
   var amQueue = sparkConf.get("spark.yarn.queue", "default")
 
   /**
-   * YARN Cluster模式下，AM默认的内存是512M，如果指定了driver-memory则覆盖这个这个值
+   * YARN Cluster模式下，AM默认的内存是512M，如果指定了driver-memory则覆盖这个这个值。
+   * amMemory是个var，在代码逻辑中有对它进行修改的处理逻辑
    */
   var amMemory: Int = 512 // MB
   var amCores: Int = 1
@@ -116,7 +117,18 @@ private[spark] class ClientArguments(args: Array[String], sparkConf: SparkConf) 
   //如果是YARN-Cluster，那么使用的是driverMemOverheadKey；如果是YARN-Client，那么使用的是amMemOverheadKey
   val amMemoryOverheadConf = if (isClusterMode) driverMemOverheadKey else amMemOverheadKey
 
-  //AM的Overhead是384M
+  /** *
+    * AM的内存Overhead的计算算法：
+    *
+    * 1. 首先取overhead配置项的Key，在Yarn-Cluster模式下是spark.yarn.driver.memoryOverhead， 在Yarn-Client模式下
+    * 是spark.yarn.am.memoryOverhead，如果定义了这个配置就取它的值。
+    *
+    * 如果没有定义，那么取MEMORY_OVERHEAD_MIN和(MEMORY_OVERHEAD_FACTOR * amMemory).toInt的最大值
+    *
+    * MEMORY_OVERHEAD_MIN是常量384M，也就是说，默认情况下，amMemoryOverhead不少于384M，而最大上限是ApplicationMaster的内存值*0.1
+    * 比如，如果Application Master的内存指定了8G，那么ApplicationManager的overhead 内存就是800M
+    *
+    */
   val amMemoryOverhead = sparkConf.getInt(amMemoryOverheadConf,
     math.max((MEMORY_OVERHEAD_FACTOR * amMemory).toInt, MEMORY_OVERHEAD_MIN))
 
@@ -173,6 +185,10 @@ private[spark] class ClientArguments(args: Array[String], sparkConf: SparkConf) 
           println(s"$key is set but does not apply in cluster mode.")
         }
       }
+
+      /** *
+        * 在集群模式下，amMemory和driverMemory是一样的
+        */
       amMemory = driverMemory
       amCores = driverCores
     } else {

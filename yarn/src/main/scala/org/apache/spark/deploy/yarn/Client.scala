@@ -94,6 +94,10 @@ private[spark] class Client(
    */
   private val yarnConf = new YarnConfiguration(hadoopConf)
   private var credentials: Credentials = null
+
+  /** *
+    * amMemoryOverhead是一个val，也就是说它的值是不会发生变化的，只有这一个赋值的地方
+    */
   private val amMemoryOverhead = args.amMemoryOverhead // MB
   private val executorMemoryOverhead = args.executorMemoryOverhead // MB
   private val distCacheMgr = new ClientDistributedCacheManager()
@@ -162,33 +166,56 @@ private[spark] class Client(
       setupCredentials()
 
       /**
-       * 调用init和start方法初始化YarnClient，使YarnClient可用
+       * 调用init和start方法初始化YarnClient，使YarnClient可用, Yarn中定义的很多Client API都是这种思路，首先
+       * 使用某个配置初始化，然后调用start方法使该Client可用
        */
       yarnClient.init(yarnConf)
       yarnClient.start()
 
+      /** *
+        * 打印当前YARN集群中有多少个NodeManager，YARN是ResourceManager + 各个NodeManager的主从架构的分布式系统
+        */
       logInfo("Requesting a new application from cluster with %d NodeManagers"
         .format(yarnClient.getYarnClusterMetrics.getNumNodeManagers))
 
-      // Get a new application from our RM
+      //
       /**
-       * 1. YarnClient.createApplication返回YarnClientApplication，YarnClientApplication封装了两方面的信息GetNewApplicationResponse和ApplicationSubmissionContext
-       * 2.
+       * Get a new application from our RM
+       * 调用YarnClient的createApplication方法创建一个新Application实例，
+       *
+       * 1. YarnClient.createApplication获取一个YarnClientApplication实例，
+       * 2. 该YarnClientApplication示例封装了两方面的信息GetNewApplicationResponse和ApplicationSubmissionContext
+       *
+       * 问题：调用完YarnClient.createApplication方法后，对Yarn的影响是什么？此时此刻，Application的状态是什么？应该是SUBMITTED
        */
       val newApp = yarnClient.createApplication()
 
       /**
-       * 获得GetNewApplicationResponse
+       * 获得GetNewApplicationResponse,从GetNewApplicationResponse中可以获取ResourceManager分配给该应用的ApplicationID
+       *
        */
       val newAppResponse = newApp.getNewApplicationResponse()
       appId = newAppResponse.getApplicationId()
+
+      /** *
+        * 从GetNewApplicationResponse中也可以获取出ResourceManager可供使用的资源的最大容量(包括内存数和内核数)
+        */
+      val resource = newAppResponse.getMaximumResourceCapability;
+      val memory : Int  = resource.getMemory
+      val vcores: Int = resource.getVirtualCores
+
       reportLauncherState(SparkAppHandle.State.SUBMITTED)
       launcherBackend.setAppId(appId.toString())
 
-      // Verify whether the cluster has enough resources for our AM
+
+      //
       /**
-       * Executor以及AM都会申请额外的内存空间，需要判断YARN是否能够满足
-       * 假如我的Executor申请的是2G，而YARN的Container是1G，那么此时会出现什么情况？
+       * Verify whether the cluster has enough resources for our AM
+       *
+       * 检查Yarn集群的***Container***是否有充足的内存分配给AM使用(在YARN-Cluster模式下，分配给AM使用的内存是通过driver-memory指定的
+       *
+       * 如果集群资源足够如何，如果集群资源不够又当如何？ 内存不足则抛出异常结束Application
+       *
        */
       verifyClusterResources(newAppResponse)
 
@@ -362,28 +389,55 @@ private[spark] class Client(
 
   /**
    * Fail fast if we have requested more resources per container than is available in the cluster.
-   */
+   *
+   * 快速验证Yarn集群中的单个Container的内存容量是否能够满足ApplicationMaster和Executor申请的内存量+相应的overhead
+   *
+   * 注意：快速验证时只关注了内存是否满足，而没有关注内核是否满足
+    *
+    * @param newAppResponse
+    */
   private def verifyClusterResources(newAppResponse: GetNewApplicationResponse): Unit = {
 
     /**
-     * maxMem指的就是YARN Container的内存最大值，yarn.scheduler.maximum-allocation-mb的默认值是8G
+     * maxMem指的是YARN Container的内存最大值，yarn.scheduler.maximum-allocation-mb的默认值是8G
      */
-    val maxMem = newAppResponse.getMaximumResourceCapability().getMemory()
+    val maxMemPerContainer :Int = newAppResponse.getMaximumResourceCapability().getMemory()
+
+    /** *
+      * 打印日志，提示当前正在检查应用申请的内存量不超过单个Container的最大内存量
+      */
     logInfo("Verifying our application has not requested more than the maximum " +
-      s"memory capability of the cluster ($maxMem MB per container)")
+      s"memory capability of the cluster ($maxMemPerContainer MB per container)")
+
+    /** *
+      *  Executor实际使用的内存=指定的Executor内存+Executor内存Overhead
+      */
     val executorMem = args.executorMemory + executorMemoryOverhead
-    if (executorMem > maxMem) {
+
+    /** *
+      * 如果申请的Executor内存超过单个Container的内存最大值，那么抛出异常
+      */
+    if (executorMem > maxMemPerContainer) {
       throw new IllegalArgumentException(s"Required executor memory (${args.executorMemory}" +
-        s"+$executorMemoryOverhead MB) is above the max threshold ($maxMem MB) of this cluster! " +
+        s"+$executorMemoryOverhead MB) is above the max threshold ($maxMemPerContainer MB) of this cluster! " +
         "Please check the values of 'yarn.scheduler.maximum-allocation-mb' and/or " +
         "'yarn.nodemanager.resource.memory-mb'.")
     }
+
+    /** *
+      * 检查ApplicationMaster的内存使用情况
+      *
+      */
     val amMem = args.amMemory + amMemoryOverhead
-    if (amMem > maxMem) {
+    if (amMem > maxMemPerContainer) {
       throw new IllegalArgumentException(s"Required AM memory (${args.amMemory}" +
-        s"+$amMemoryOverhead MB) is above the max threshold ($maxMem MB) of this cluster! " +
+        s"+$amMemoryOverhead MB) is above the max threshold ($maxMemPerContainer MB) of this cluster! " +
         "Please increase the value of 'yarn.scheduler.maximum-allocation-mb'.")
     }
+
+    /** *
+      *  打印日志记录Yarn集群的Container内存容量足以运行ApplicationMaster
+      */
     logInfo("Will allocate AM container, with %d MB memory including %d MB overhead".format(
       amMem,
       amMemoryOverhead))

@@ -186,7 +186,7 @@ private[spark] class Client(
        * 1. YarnClient.createApplication获取一个YarnClientApplication实例，
        * 2. 该YarnClientApplication示例封装了两方面的信息GetNewApplicationResponse和ApplicationSubmissionContext
        *
-       * 问题：调用完YarnClient.createApplication方法后，对Yarn的影响是什么？此时此刻，Application的状态是什么？应该是SUBMITTED
+       * 问题：调用完YarnClient.createApplication方法后，对Yarn的影响是什么？此时此刻，Application的状态是什么？应该是NEW(参见YarnApplicationStage)
        */
       val newApp = yarnClient.createApplication()
 
@@ -219,16 +219,23 @@ private[spark] class Client(
        */
       verifyClusterResources(newAppResponse)
 
-      // Set up the appropriate contexts to launch our AM
-      /**创建启动AM的Container Launch Context*/
-      val containerContext = createContainerLaunchContext(newAppResponse)
+      /** *
+        * Set up the appropriate contexts to launch our AM
+        *  创建启动AM的Container Launch Context, Container LaunchContext应该记录了启动Application Master的脚本
+        *  问题：这个脚本怎么分发出去
+        */
+      val amContainerLaunchContext = createContainerLaunchContext(newAppResponse)
 
       /**创建提交AM的Context，提交AM需要使用Container Launch Context，因此这里将containerContext传递给ApplicationSubmissionContext*/
-      val appContext = createApplicationSubmissionContext(newApp, containerContext)
+      val appContext = createApplicationSubmissionContext(newApp, amContainerLaunchContext)
 
       // Finally, submit and monitor the application
       logInfo(s"Submitting application ${appId.getId} to ResourceManager")
-      //提交作业，申请AM需要的Container然后启动AM进程？
+
+      /**
+       * YarnClient的submitApplication是一个阻塞等待的操作，等待ResourceManager accept该application
+       * 代码运行到此处是否意味着ApplicationMaster可以启动了？
+       */
       yarnClient.submitApplication(appContext)
       appId
     } catch {
@@ -288,19 +295,45 @@ private[spark] class Client(
   /**
    * Set up the context for submitting our ApplicationMaster.
    * This uses the YarnClientApplication not available in the Yarn alpha API.
-   */
+    *
+    * @param newApp
+    * @param amContainerLaunchContext
+    * @return
+    */
   def createApplicationSubmissionContext(
       newApp: YarnClientApplication,
-      containerContext: ContainerLaunchContext): ApplicationSubmissionContext = {
+      amContainerLaunchContext: ContainerLaunchContext): ApplicationSubmissionContext = {
     val appContext = newApp.getApplicationSubmissionContext
+
+    /** *
+      * 应用的名称，是用户在SparkSubmit时通过--name提供的应用程序的名字
+      */
     appContext.setApplicationName(args.appName)
+
+    /** *
+      * 应用运行在YARN调度器中的队列的名字
+      */
     appContext.setQueue(args.amQueue)
-    appContext.setAMContainerSpec(containerContext)
+
+    /** *
+      * ApplicationSubmissionContext需要关联一个启动ApplicationMaster的Container的ContainerLaunchContext
+      */
+    appContext.setAMContainerSpec(amContainerLaunchContext)
+
+    /** *
+      * Application Type，对于Spark应用程序来说，就是SPARK
+      */
     appContext.setApplicationType("SPARK")
+
+    /** *
+      * spark.yarn.tags
+      *Comma-separated list of strings to pass through as YARN application tags appearing  in YARN ApplicationReports,
+      * which can be used for filtering when querying YARN.
+      */
     sparkConf.getOption(CONF_SPARK_YARN_APPLICATION_TAGS)
-      .map(StringUtils.getTrimmedStringCollection(_))
-      .filter(!_.isEmpty())
-      .foreach { tagCollection =>
+      .map(StringUtils.getTrimmedStringCollection(_)) /**_是将方法转换为函数的方式,此处是将逗号分隔的字符串按照逗号切割为数组，数目每个元素做trim*/
+      .filter(!_.isEmpty()) /**此处是过滤掉为空的元素*/
+      .foreach { tagCollection => /**tagCollection为什么是个Collection[String],因为foreach是Option[Array[String]]的方法而不是Array[String]的方法*/
         try {
           // The setApplicationTags method was only introduced in Hadoop 2.4+, so we need to use
           // reflection to set it, printing a warning if a tag was specified but the YARN version
@@ -314,6 +347,11 @@ private[spark] class Client(
               "YARN does not support it")
         }
       }
+
+    /** *
+      * 设置spark application的尝试次数
+      * 问题：默认是多少？
+      */
     sparkConf.getOption("spark.yarn.maxAppAttempts").map(_.toInt) match {
       case Some(v) => appContext.setMaxAppAttempts(v)
       case None => logDebug("spark.yarn.maxAppAttempts is not set. " +
@@ -333,28 +371,48 @@ private[spark] class Client(
       }
     }
 
+    /** *
+      * 通过appContext.setResource()设置capability，包括内存量以及内核数
+      * appContext.getResource()可以获取Application Master所需要的内存和内核
+      */
     val capability = Records.newRecord(classOf[Resource])
     capability.setMemory(args.amMemory + amMemoryOverhead)
+
+    /** *
+      * 这里设置的VirtualCores这里就是--driver-cores内核数
+      */
     capability.setVirtualCores(args.amCores)
 
+    /** *
+      * 如果SparkConf中配置了spark.yarn.am.nodeLabelExpression，那么需要对am nodeLabelExpression进行处理
+      */
     if (sparkConf.contains("spark.yarn.am.nodeLabelExpression")) {
       try {
+        //创建ResourceRequest Record
         val amRequest = Records.newRecord(classOf[ResourceRequest])
         amRequest.setResourceName(ResourceRequest.ANY)
         amRequest.setPriority(Priority.newInstance(0))
         amRequest.setCapability(capability)
+        //设置Container的数目
         amRequest.setNumContainers(1)
         val amLabelExpression = sparkConf.get("spark.yarn.am.nodeLabelExpression")
-        val method = amRequest.getClass.getMethod("setNodeLabelExpression", classOf[String])
-        method.invoke(amRequest, amLabelExpression)
 
-        val setResourceRequestMethod =
+        //通过反射的方式调用amRequest的setNodeLabelExpression以及appContext的setAMContainerResourceRequest方法，目的是
+        //为了保持版本兼容性，不会出现编译错误
+        val setNodeLabelExpressionMethod = amRequest.getClass.getMethod("setNodeLabelExpression", classOf[String])
+        setNodeLabelExpressionMethod.invoke(amRequest, amLabelExpression)
+
+        val setAMContainerResourceRequestMethod =
           appContext.getClass.getMethod("setAMContainerResourceRequest", classOf[ResourceRequest])
-        setResourceRequestMethod.invoke(appContext, amRequest)
+        setAMContainerResourceRequestMethod.invoke(appContext, amRequest)
       } catch {
         case e: NoSuchMethodException =>
           logWarning("Ignoring spark.yarn.am.nodeLabelExpression because the version " +
             "of YARN does not support it")
+
+          /** *
+            * 通过try/catch试错机制进行版本兼容
+            */
           appContext.setResource(capability)
       }
     } else {
@@ -789,6 +847,8 @@ private[spark] class Client(
 
   /**
    * Set up the environment for launching our ApplicationMaster container.
+   *
+   * 为启动ApplicationMaster Container，配置系统环境(System.env)
     *
     * LaunchEnv是一个HashMap，那么
     * 1. 这个LaunchEnv Map里都包含哪些东西？
@@ -799,6 +859,10 @@ private[spark] class Client(
       stagingDir: String,
       pySparkArchives: Seq[String]): HashMap[String, String] = {
     logInfo("Setting up the launch environment for our AM container")
+
+    /** *
+      * env记录了Container Launch Env的Key和Value
+      */
     val env = new HashMap[String, String]()
 
     /**
@@ -914,7 +978,9 @@ private[spark] class Client(
    * Set up a ContainerLaunchContext to launch our ApplicationMaster container.
    * This sets up the launch environment, java options, and the command for launching the AM.
    *
-   * 在createContainerLaunchContext中会指定要传递给ApplicationMaster进程的参数
+   * 在ContainerLaunchContext包含了一个NodeManager启动一个Container所需要的所有信息
+   * NodeManager如何启动Container？ApplicationMaster在Container中运行，何解？
+   * @see
    */
   private def createContainerLaunchContext(newAppResponse: GetNewApplicationResponse)
     : ContainerLaunchContext = {
@@ -926,9 +992,13 @@ private[spark] class Client(
     val appId = newAppResponse.getApplicationId
 
     /**
-     * appStagingDir是一个相对目录
+     * appStagingDir是一个相对目录，获取staging directory
      */
     val appStagingDir = getAppStagingDir(appId)
+
+    /** *
+      * python application，那么需要配置spark.yarn.isPython为true
+      */
     val pySparkArchives =
       if (sparkConf.getBoolean("spark.yarn.isPython", false)) {
         findPySparkArchives()
@@ -937,7 +1007,8 @@ private[spark] class Client(
       }
 
     /**
-     * launchEnv是一个HashMap
+     * launchEnv是一个HashMap，setupLaunchEnv接受两个参数：appStagingDir, pySparkArchives
+     * 问题：这两个参数干啥的？
      */
     val launchEnv = setupLaunchEnv(appStagingDir, pySparkArchives)
 
@@ -951,15 +1022,15 @@ private[spark] class Client(
     distCacheMgr.setDistArchivesEnv(launchEnv)
 
     /**
-      * 创建ContainerLaunchContext
+      * 创建ContainerLaunchContext,它是本方法返回的对象
       */
-    val amContainer = Records.newRecord(classOf[ContainerLaunchContext])
+    val amContainerLaunchContext = Records.newRecord(classOf[ContainerLaunchContext])
 
     /**
       * 设置ContainerLaunchContext的LocalResources和Environment
       */
-    amContainer.setLocalResources(localResources.asJava)
-    amContainer.setEnvironment(launchEnv.asJava)
+    amContainerLaunchContext.setLocalResources(localResources.asJava)
+    amContainerLaunchContext.setEnvironment(launchEnv.asJava)
 
     val javaOpts = ListBuffer[String]()
 
@@ -1103,7 +1174,7 @@ private[spark] class Client(
 
     // TODO: it would be nicer to just make sure there are no null commands here
     val printableCommands = commands.map(s => if (s == null) "null" else s).toList
-    amContainer.setCommands(printableCommands.asJava)
+    amContainerLaunchContext.setCommands(printableCommands.asJava)
 
     logDebug("===============================================================================")
     logDebug("YARN AM launch context:")
@@ -1118,12 +1189,12 @@ private[spark] class Client(
 
     // send the acl settings into YARN to control who has access via YARN interfaces
     val securityManager = new SecurityManager(sparkConf)
-    amContainer.setApplicationACLs(
+    amContainerLaunchContext.setApplicationACLs(
       YarnSparkHadoopUtil.getApplicationAclsForYarn(securityManager).asJava)
-    setupSecurityToken(amContainer)
+    setupSecurityToken(amContainerLaunchContext)
     UserGroupInformation.getCurrentUser().addCredentials(credentials)
 
-    amContainer
+    amContainerLaunchContext
   }
 
   /** *

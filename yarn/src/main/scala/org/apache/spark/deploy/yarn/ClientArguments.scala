@@ -188,6 +188,7 @@ private[spark] class ClientArguments(args: Array[String], sparkConf: SparkConf) 
 
       /** *
         * 在集群模式下，amMemory和driverMemory是一样的
+        * 在集群模式下，amCores和driverCores是一样的，都来自于--driver-cores或者spark.driver.cores配置项
         */
       amMemory = driverMemory
       amCores = driverCores

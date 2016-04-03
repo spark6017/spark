@@ -84,7 +84,7 @@ private[spark] class Client(
     this(clientArgs, SparkHadoopUtil.get.newConfiguration(spConf), spConf)
 
   /**
-   * 访问RM的Client, 这是YARN API，通过Hadoop YARN API创建。
+   * 访问RM的Client, 这是YARN API，通过Hadoop YARN API YarnClient创建。
    * YARNClient，顾名思义，是访问YARN RPC Server的YARN RPC Client
    */
   private val yarnClient = YarnClient.createYarnClient
@@ -157,6 +157,7 @@ private[spark] class Client(
 
       /** *
         *  Setup the credentials before doing anything else,so we have don't have issues at any point.
+        *  Kerberos认证相关的操作
         */
       setupCredentials()
 
@@ -1071,8 +1072,21 @@ private[spark] class Client(
     amContainer
   }
 
+  /** *
+    * Kerbero认证
+    */
   def setupCredentials(): Unit = {
+    /** *
+      * 首先判断用户提交的作业是否需要进行Kerberos认证，从两方面进行判断:
+      *
+      * 1. SparkSumbit是否带有--principal参数，如果有则进行Kerberos认证
+      * 2. Spark应用中是否配置了spark.yarn.principal选项，如果配置了那么也需要进行Kerberos认证
+      */
     loginFromKeytab = args.principal != null || sparkConf.contains("spark.yarn.principal")
+
+    /** *
+      * 如果需要Kerberos认证，那么需要解析出principal和keytab
+      */
     if (loginFromKeytab) {
       principal =
         if (args.principal != null) args.principal else sparkConf.get("spark.yarn.principal")
@@ -1084,17 +1098,31 @@ private[spark] class Client(
         }
       }
 
+      /** *
+        * 代码运行到这里意味着principal不为空，因此这里需要检查keytab也不会空
+        * 打印日志：使用principal和keytab登录Kerberos
+        */
       require(keytab != null, "Keytab must be specified when principal is specified.")
       logInfo("Attempting to login to the Kerberos" +
         s" using principal: $principal and keytab: $keytab")
+
+      /** *
+        * keytab是一个文件，
+        */
       val f = new File(keytab)
-      // Generate a file name that can be used for the keytab file, that does not conflict
-      // with any user file.
+
+
+      /** *
+        *   Generate a file name that can be used for the keytab file, that does not conflict with any user file.
+        *   问题：
+        *   用户可能已经配置了spark.yarn.keytab，并且前面也读取了该配置，为什么这里要重写呢？
+        */
       val keytabFileName = f.getName + "-" + UUID.randomUUID().toString
       sparkConf.set("spark.yarn.keytab", keytabFileName)
       sparkConf.set("spark.yarn.principal", principal)
     }
-    credentials = UserGroupInformation.getCurrentUser.getCredentials
+    val userGroupInformation = UserGroupInformation.getCurrentUser
+    credentials = userGroupInformation .getCredentials
   }
 
   /**
@@ -1139,10 +1167,19 @@ private[spark] class Client(
             return (YarnApplicationState.FAILED, FinalApplicationStatus.FAILED)
         }
 
-
+      /** *
+        * stage记录的是本轮Application Report返回的状态信息
+        */
       val state = report.getYarnApplicationState
 
+      /** *
+        * 如果要将应用程序的汇报信息写日志，那么需要执行写日志操作
+        */
       if (logApplicationReport) {
+
+        /** *
+          * Application汇报状态
+          */
         logInfo(s"Application report for $appId (state: $state)")
 
         // If DEBUG is enabled, log report details every iteration
@@ -1150,6 +1187,10 @@ private[spark] class Client(
         if (log.isDebugEnabled) {
           logDebug(formatReportDetails(report))
         } else if (lastState != state) {
+          /** *
+            * lastStage和stage分别记录的是什么状态？
+            * lastStage上一轮Application Report记录的状态，stage记录的是本轮Application Report记录的状态
+            */
           logInfo(formatReportDetails(report))
         }
       }
@@ -1196,7 +1237,16 @@ private[spark] class Client(
     throw new SparkException("While loop is depleted! This should never happen...")
   }
 
+  /** *
+    * 将ApplicationReport格式化为字符串
+    * @param report
+    * @return
+    */
   private def formatReportDetails(report: ApplicationReport): String = {
+
+    /** *
+      * details记录的是类型为(String,String)的集合，每个二元组的第一个元素是名称，第二个元素是值
+      */
     val details = Seq[(String, String)](
       ("client token", getClientToken(report)),
       ("diagnostics", report.getDiagnostics),
@@ -1206,10 +1256,17 @@ private[spark] class Client(
       ("start time", report.getStartTime.toString),
       ("final status", report.getFinalApplicationStatus.toString),
       ("tracking URL", report.getTrackingUrl),
-      ("user", report.getUser)
+      ("user", report.getUser) /**获取提交应用的用户名*/
     )
 
-    // Use more loggable format if value is null or empty
+    /** *
+      *  Use more loggable format if value is null or empty
+      *  将v包装成Option(v),如果有值那么返回v，如果没有值则返回N/A
+      *
+      *  问题：如果v是空字符串，那么结果是什么？nonEmpty是作用于字符串上，也就是这里的逻辑是
+      *  首先对v进行filter操作，如果v是空字符串或者null，那么返回None，都会返回N/A
+      *  所以，
+      */
     details.map { case (k, v) =>
       val newValue = Option(v).filter(_.nonEmpty).getOrElse("N/A")
       s"\n\t $k: $newValue"
@@ -1227,14 +1284,15 @@ private[spark] class Client(
   def run(): Unit = {
 
     /**
-     * submitApplication，在submitApplication这个代码逻辑中将创建ApplicationMaster进程并提交给YARN执行，
-     * submitApplication与YARN提供的submitApplication API的含义不同，YARN提供的submitApplication的含义是提交RM一个Application返回一个APPID，
-     * 基于这个APPID，用户还需要继续使用YARN API提交AM
+     * submitApplication，在submitApplication方法中做了如下事情：
+     * Client的submitApplication方法与submitApplication与YARN提供的submitApplication API的含义不同，YARN提供的submitApplication的含义是向RM提交一个Application并返回一个APPID，
+     * 而client基于这个APPID，用户还需要继续使用YARN API提交AM
      */
     this.appId = submitApplication()
 
     /**
      * Client是否立即退出,默认配置下fireAndForget为false，因此Client进程不会立即退出
+     * 如果 launcherBackend未连接，并且提交任务后立即退出，那么将汇报任务的状态
       */
     if (!launcherBackend.isConnected() && fireAndForget) {
       val report = getApplicationReport(appId)
@@ -1248,7 +1306,9 @@ private[spark] class Client(
       /**
        * monitorApplication将循环等待应用程序结束，如果ApplicationState为FAILED或者KILLED或者UNDEFINED，则抛出SparkException
        * monitorApplication是一个同步过程？何时返回？
-       * 因为monitorApplication方法的returnOnRunning使用了默认值，即false，因此该方法返回时，Application进入了Running状态
+       * 因为monitorApplication方法的returnOnRunning使用了默认值false，表示monitorApplication方法在应用程序进入RUNNINING状态时不会返回，
+       * 只有在应用程序结束时，才返回。如果returnOnRunning表示Client在应用程序进入运行状态就会返回
+       * 因此该方法返回时，Application进入了Running状态
        */
       val (yarnApplicationState, finalApplicationStatus) = monitorApplication(appId)
 
@@ -1335,7 +1395,7 @@ object Client extends Logging {
     }
 
     /**
-     * 创建Client实例并调用run方法
+     * 创建Client实例并调用run方法, 这是客户端进程唯一做的事情
      */
     new Client(args, sparkConf).run()
   }

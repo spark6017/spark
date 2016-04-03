@@ -183,6 +183,10 @@ private[spark] class TaskSchedulerImpl(
     }
   }
 
+  /**
+   * postStartHook在什么地方调用的？在SparkContext的主构造函数中
+   *
+   */
   override def postStartHook() {
     waitBackendReady()
   }
@@ -737,6 +741,9 @@ private[spark] class TaskSchedulerImpl(
   // By default, rack is unknown
   def getRackForHost(value: String): Option[String] = None
 
+  /** *
+    * 等待backend进入就绪状态
+    */
   private def waitBackendReady(): Unit = {
     if (backend.isReady) {
       return

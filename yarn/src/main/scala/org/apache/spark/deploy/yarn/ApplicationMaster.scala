@@ -105,6 +105,10 @@ private[spark] class ApplicationMaster(
   @volatile private var finished = false
   @volatile private var finalStatus = getDefaultFinalStatus
   @volatile private var finalMsg: String = ""
+
+  /** *
+    * 在Yarn-Cluster模式下，执行用户通过SparkSubmit提交的应用，主类是--class指定的类名
+    */
   @volatile private var userClassThread: Thread = _
 
   @volatile private var reporterThread: Thread = _
@@ -138,7 +142,11 @@ private[spark] class ApplicationMaster(
   private var rpcEnv: RpcEnv = null
   private var amEndpoint: RpcEndpointRef = _
 
-  // Fields used in cluster mode.
+  /** *
+    * Fields used in cluster mode.
+    * AtomicReference是原子引用，它是如何工作的？
+    * AtomicReference何时更新值的？
+    */
   private val sparkContextRef = new AtomicReference[SparkContext](null)
 
   private var delegationTokenRenewerOption: Option[AMDelegationTokenRenewer] = None
@@ -318,6 +326,11 @@ private[spark] class ApplicationMaster(
           logDebug("shutting down reporter thread")
           reporterThread.interrupt()
         }
+
+        /** *
+          * 在成员变量的userThread的run方法中，调用了finish方法，那么
+          * userThread的run方法执行这个finish方法时，Thread.currentThread()就是userClassThread，那么就不能调用interrupt方法
+          */
         if (!inShutdown && Thread.currentThread() != userClassThread && userClassThread != null) {
           logDebug("shutting down user thread")
           userClassThread.interrupt()
@@ -421,7 +434,7 @@ private[spark] class ApplicationMaster(
   }
 
   /**
-    * 在startUserAplicaion执行用户程序中的main然后等SparkContext初始化成功
+    * 在startUserApplication方法中执行用户程序中的main然后等待SparkContext初始化成功
     *
     * 因为Driver和ApplicationMaster运行在同一个Java进程中，因此对于设置到system properties中的spark属性，Driver的用户代码通过new SparkConf创建SparkConf也可以读取到
     *
@@ -429,13 +442,19 @@ private[spark] class ApplicationMaster(
     */
   private def runDriver(securityMgr: SecurityManager): Unit = {
     addAmIpFilter()
+
+    /** *
+      * 启动用户线程，该线程保存在userClassThread中
+      */
     userClassThread = startUserApplication()
 
     // This a bit hacky, but we need to wait until the spark.driver.port property has
     // been set by the Thread executing the user class.
 
     /***
-      * 如何判断Driver（或者SparkContext)已经初始化完成
+      * 如何判断Driver（或者SparkContext)已经初始化完成。
+      * 在前面startUserApplication方法中已经开始执行用户Class的main方法，此处同步等待SparkContext初始化完成
+      * 方法是：
       */
     val sc = waitForSparkContextInitialized()
 
@@ -681,22 +700,33 @@ private[spark] class ApplicationMaster(
     if (args.primaryRFile != null && args.primaryRFile.endsWith(".R")) {
       // TODO(davies): add R dependencies here
     }
+    /** *
+      * 使用userClassLoader加载Class
+      */
     val mainMethod = userClassLoader.loadClass(args.userClass)
       .getMethod("main", classOf[Array[String]])
 
+    /** *
+      * 以单独的线程执行用户提交的main class，即以单独从线程执行用户提交的Application的逻辑
+      */
     val userThread = new Thread {
       override def run() {
         try {
 
           /**
-            * 启动Driver
+            * 启动Driver，调用用户提交的mainClass的main方法，该main方法执行完返回表示用户作业已经执行完
             */
           mainMethod.invoke(null, userArgs.toArray)
 
           /**
             * finish方法是干啥的？
+           * 因为用户class的main方法已经执行完，因此整个Application都执行完了，开始设置任务状态
             */
           finish(FinalApplicationStatus.SUCCEEDED, ApplicationMaster.EXIT_SUCCESS)
+
+          /** *
+            * 打印日志提示用户类已经执行完成
+            */
           logDebug("Done running users class")
         } catch {
           case e: InvocationTargetException =>
@@ -716,8 +746,16 @@ private[spark] class ApplicationMaster(
         }
       }
     }
+
+    /** *
+      * 为线程指定ClassLoader
+      */
     userThread.setContextClassLoader(userClassLoader)
     userThread.setName("Driver")
+
+    /** *
+      * 启动用户线程
+      */
     userThread.start()
     userThread
   }
@@ -832,6 +870,10 @@ object ApplicationMaster extends Logging {
     }
   }
 
+  /** *
+    * SparkContext初始化完成
+    * @param sc
+    */
   private[spark] def sparkContextInitialized(sc: SparkContext): Unit = {
     master.sparkContextInitialized(sc)
   }

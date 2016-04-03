@@ -388,6 +388,9 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     Utils.setLogLevel(org.apache.log4j.Level.toLevel(logLevel))
   }
 
+  /** *
+    * 位于主构造函数中的代码块
+    */
   try {
     _conf = config.clone()
     _conf.validateSettings()
@@ -580,7 +583,9 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     postEnvironmentUpdate()
     postApplicationStart()
 
-    // Post init
+    /***
+      *  Post init
+      */
     _taskScheduler.postStartHook()
     _env.metricsSystem.registerSource(_dagScheduler.metricsSource)
     _env.metricsSystem.registerSource(new BlockManagerSource(_env.blockManager))

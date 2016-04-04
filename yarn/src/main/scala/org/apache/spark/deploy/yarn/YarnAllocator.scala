@@ -121,7 +121,7 @@ private[yarn] class YarnAllocator(
   private var executorIdCounter = 0
 
   /**
-   * 失败的executor的个数，是否就等于失败的Container的个数
+   * 失败的executor的个数，是否就等于失败的Container的个数？是的
    * 问题：如何更新这个变量
    */
   @volatile private var numExecutorsFailed = 0
@@ -261,6 +261,10 @@ private[yarn] class YarnAllocator(
 
   def getNumExecutorsRunning: Int = numExecutorsRunning
 
+  /** *
+    * numExecutorFailed如何计算？
+    * @return
+    */
   def getNumExecutorsFailed: Int = numExecutorsFailed
 
   /** *
@@ -625,10 +629,19 @@ private[yarn] class YarnAllocator(
     }
   }
 
-  // Visible for testing.
+  /** *
+    * 处理运行结束的Container
+    * @param completedContainers
+    */
   private[yarn] def processCompletedContainers(completedContainers: Seq[ContainerStatus]): Unit = {
+    /** *
+      * 遍历completedContainers集合中的每个ContainerStatus
+      */
     for (completedContainer <- completedContainers) {
+      //获得containerId
       val containerId = completedContainer.getContainerId
+      //从releasedContainers集合中删除(问题：何时加入到这个集合中的)
+      //删除成功返回true，否则返回false
       val alreadyReleased = releasedContainers.remove(containerId)
       val hostOpt = allocatedContainerToHostMap.get(containerId)
       val onHostStr = hostOpt.map(host => s" on host: $host").getOrElse("")

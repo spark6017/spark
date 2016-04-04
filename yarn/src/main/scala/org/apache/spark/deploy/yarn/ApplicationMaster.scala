@@ -88,8 +88,8 @@ private[spark] class ApplicationMaster(
     *Default to twice the number of executors (twice the maximum number of executors if dynamic allocation is enabled), with a minimum of 3.
     *
     * Executor失败的最大次数是executor个数的两倍
-    * 如果Spark Application启动了executor个数的动态分配，那么取spark.dynamicAllocation.maxExecutors
-    * 如果Spark Application使用executor个数静态分配，那么取spark.executor.instances
+    * 如果Spark Application启动了executor个数的动态分配，那么取spark.dynamicAllocation.maxExecutors*2
+    * 如果Spark Application使用executor个数静态分配，那么取spark.executor.instances * 2
     *
     */
   private val maxNumExecutorFailures = {

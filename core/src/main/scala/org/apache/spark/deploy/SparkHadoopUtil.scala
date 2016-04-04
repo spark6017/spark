@@ -371,7 +371,14 @@ class SparkHadoopUtil extends Logging {
 
 object SparkHadoopUtil {
 
+  /** *
+    * hadoop是直接创建SparkHadoopUtil对象
+    */
   private lazy val hadoop = new SparkHadoopUtil
+
+  /** *
+    * 通过反射获取，以为在直接使用类名，可能由于没有依赖于YARN而导致编译失败
+    */
   private lazy val yarn = try {
     Utils.classForName("org.apache.spark.deploy.yarn.YarnSparkHadoopUtil")
       .newInstance()
@@ -392,6 +399,10 @@ object SparkHadoopUtil {
    */
   private[spark] val UPDATE_INPUT_METRICS_INTERVAL_RECORDS = 1000
 
+  /** *
+    * 根据Application的运行模式，获取SparkHadoopUtil的实现类(yarn或者hadoop)的对象
+    * @return
+    */
   def get: SparkHadoopUtil = {
     // Check each time to support changing to/from YARN
     val yarnMode = java.lang.Boolean.valueOf(

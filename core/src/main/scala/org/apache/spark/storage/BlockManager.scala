@@ -239,7 +239,7 @@ private[spark] class BlockManager(
     logInfo("Registering executor with local external shuffle service.")
     val shuffleConfig = new ExecutorShuffleInfo(
       diskBlockManager.localDirs.map(_.toString),
-      diskBlockManager.subDirsPerLocalDir,
+      diskBlockManager.subDirNumberPerLocalDir,
       shuffleManager.shortName)
 
     val MAX_ATTEMPTS = 3

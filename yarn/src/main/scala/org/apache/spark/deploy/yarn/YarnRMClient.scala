@@ -111,8 +111,20 @@ private[spark] class YarnRMClient(args: ApplicationMasterArguments) extends Logg
     }
   }
 
-  /** Returns the attempt ID. */
+  /** *
+    * Returns the attempt ID.
+    * YarnRMClient定义的获取ApplicationAttemptId对象的方法
+    * @return
+    */
   def getAttemptId(): ApplicationAttemptId = {
+
+    /** *
+      * 1. 首先获取YarnSparkHadoopUtil实例
+      * 2. 调用YarnSparkHadoopUtil的getContainerId获得ContainerId对象
+      * 3. 调用ContainerId的getApplicationAttemptId方法
+      *
+      * 问题：这个跟ContainerId什么关系？为什么要通过这个类型的对象去获取ApplicationAttemptId
+      */
     YarnSparkHadoopUtil.get.getContainerId.getApplicationAttemptId()
   }
 

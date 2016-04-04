@@ -151,6 +151,11 @@ private[spark] class ApplicationMaster(
 
   private var delegationTokenRenewerOption: Option[AMDelegationTokenRenewer] = None
 
+  /** *
+    * ApplicationMaster class定义了getAttemptId方法
+    * 通过YarnRMClient的getAttemptId方法获取ApplicationAttemptId对象
+    * @return
+    */
   def getAttemptId(): ApplicationAttemptId = {
     client.getAttemptId()
   }
@@ -843,7 +848,8 @@ object ApplicationMaster extends Logging {
   private val EXIT_EXCEPTION_USER_CLASS = 15
 
   /**
-    * ApplicationMaster对象
+    * master是ApplicationMaster class的对象
+   * 也就是说，ApplicationMaster object持有一个ApplicationMaster class的对象
     */
   private var master: ApplicationMaster = _
 
@@ -861,6 +867,10 @@ object ApplicationMaster extends Logging {
       */
     SparkHadoopUtil.get.runAsSparkUser { () =>
       val am2rmClient = new YarnRMClient(amArgs)
+
+      /** *
+        * 初始化master对象
+        */
       master = new ApplicationMaster(amArgs, am2rmClient)
       /** *
         * 执行ApplicationMaster的run方法，知道运行结束
@@ -882,6 +892,12 @@ object ApplicationMaster extends Logging {
     master.sparkContextStopped(sc)
   }
 
+  /** *
+    * ApplicationMaster object定义了getAttemptId方法，返回ApplicationAttemptId
+    * ApplicationAttemptId类包含了ApplicationId属性和attemptId属性
+    *
+    * @return
+    */
   private[spark] def getAttemptId(): ApplicationAttemptId = {
     master.getAttemptId
   }

@@ -40,12 +40,17 @@ private[spark] class YarnClusterSchedulerBackend(
   extends YarnSchedulerBackend(scheduler, sc) {
 
   override def start() {
+    /** *
+      * 从ApplicationMaster object获取attempId
+      * 因为在YARN CLUSTER模式下，Driver和ApplicationMaster运行在同一个JVM中，因此，在
+      * YarnClusterSchedulerBackend中可以直接调用ApplicationMaster的getAttemptId方法
+      */
     val attemptId = ApplicationMaster.getAttemptId
     bindToYarn(attemptId.getApplicationId(), Some(attemptId))
     super.start()
 
     /**
-      * 计算需要的Executor个数
+      * 计算出Application需要的Executor的总数，getInitialTargetExecutorNumber第二个参数没有提供，表示使用默认值2
       */
     totalExpectedExecutors = YarnSparkHadoopUtil.getInitialTargetExecutorNumber(sc.conf)
   }

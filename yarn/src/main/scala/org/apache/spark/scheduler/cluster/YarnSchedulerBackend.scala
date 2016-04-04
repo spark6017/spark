@@ -46,6 +46,10 @@ private[spark] abstract class YarnSchedulerBackend(
     sc: SparkContext)
   extends CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv) {
 
+  /** *
+    * 如果没有指定spark.scheduler.minRegisteredResourcesRatio，那么
+    * minRegisteredRatio指定为0.8
+    */
   if (conf.getOption("spark.scheduler.minRegisteredResourcesRatio").isEmpty) {
     minRegisteredRatio = 0.8
   }
@@ -73,6 +77,8 @@ private[spark] abstract class YarnSchedulerBackend(
 
   /**
    * Bind to YARN. This *must* be done before calling [[start()]].
+   *
+   * 在调用start方法前需要调用这个方法，设置appId和attemptId
    *
    * @param appId YARN application ID
    * @param attemptId Optional YARN attempt ID
@@ -136,7 +142,32 @@ private[spark] abstract class YarnSchedulerBackend(
     yarnSchedulerEndpointRef.askWithRetry[Boolean](KillExecutors(executorIds))
   }
 
+  /** *
+    * 是否已经分配了足够的资源以使YarnSchedulerBackend进入就绪状态。
+    * 它决定YarnSchedulerBackend是否进入就绪状态
+    * @return
+    */
   override def sufficientResourcesRegistered(): Boolean = {
+
+    /** *
+      * 已经注册的executor的个数>=总的executor个数*最小比例
+      * 问题：
+      * 在YARN CLUSTER模式下，
+      * 1. 已经注册的Executor个数如何判定？
+      * 在 CoarseGrainedSchedulerBackend的RegisterExecutor消息中将totalRegisteredExecutors做了增1操作，在RemoveExecutor消息
+      * 中将totalRegisteredExecutors做了减1操作
+      *
+      * 2. totalExpectedExecutors个数如何判定
+      * totalExpectedExecutors定义在YarnSchedulerBackend中，在YarnSchedulerBackend中并没有对它进行修改，
+      * totalExpectedExecutors的修改是在它的子类(比如YarnClusterSchedulerBackend)中执行的
+      * 在YarnClusterSchedulerBackend中，totalExpectedExecutors的处理逻辑是对于静态分配则取用户指定的--executor-number值，如果是动态分配，则取初始值
+      *
+      * 3. minRegisteredRatio 最小比例如何判定
+      * 在YarnSchedulerBackend中，minRegisteredRatio指定为0.8
+      *
+      * 结论：也就是说对于Yarn模式，注册的Executor个数要到达executor总个数*0.8, YarnSchedulerBackend才能进入就绪状态
+      * 所谓的YarnSchedulerBackend进入就绪状态是指进行任务分配？
+      */
     totalRegisteredExecutors.get() >= totalExpectedExecutors * minRegisteredRatio
   }
 

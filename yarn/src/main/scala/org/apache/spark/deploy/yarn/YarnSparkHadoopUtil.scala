@@ -147,8 +147,19 @@ class YarnSparkHadoopUtil extends SparkHadoopUtil {
     tokenRenewer.foreach(_.stop())
   }
 
+  /** *
+    * 获取ContainerId
+    * @return
+    */
   private[spark] def getContainerId: ContainerId = {
+    /** *
+      * 获取包含containerId字符串的环境变量CONTAINER_ID
+      */
     val containerIdString = System.getenv(ApplicationConstants.Environment.CONTAINER_ID.name())
+
+    /** *
+      * 将containerId字符串转换成ContainerId对象
+      */
     ConverterUtils.toContainerId(containerIdString)
   }
 
@@ -288,7 +299,17 @@ object YarnSparkHadoopUtil {
   // request types (like map/reduce in hadoop for example)
   val RM_REQUEST_PRIORITY = Priority.newInstance(1)
 
+  /** *
+    * 获取YarnSparkHadoopUtil对象
+    * @return
+    */
   def get: YarnSparkHadoopUtil = {
+
+    /** *
+      * 首先检查system properties和system env是否定义了SPARK_YARN_MODE=true\false属性
+      * 如果没有定义表示Application不是运行在YARN mode上，报错
+      * 如果Application运行在YARN mode上，那么获取YarnSparkHadoopUtil实例
+      */
     val yarnMode = java.lang.Boolean.valueOf(
       System.getProperty("SPARK_YARN_MODE", System.getenv("SPARK_YARN_MODE")))
     if (!yarnMode) {
@@ -461,24 +482,59 @@ object YarnSparkHadoopUtil {
    * enabled.
    * If not using dynamic allocation it gets the number of executors requested by the user.
     *
-    * 获得用户申请的Executor的数量
+    * 获取要分配的Executor数目的初始值：
+   * 1. 对于静态分配模式，初始值就是用户指定的executor个数
+   * 2. 对于动态分配模式，初始值就是用户通过spark.dynamicAllocation.initialExecutors参数指定的个数
+   * 动态申请和释放过程中，持有的最大值由spark.dynamicAllocation.maxExecutors控制，持有的最小值由spark.dynamicAllocation.maxExecutors控制
+   *
+   *
+   * @param conf
+   * @param numExecutors 默认值2
+   * @return
    */
   def getInitialTargetExecutorNumber(
       conf: SparkConf,
       numExecutors: Int = DEFAULT_NUMBER_EXECUTORS): Int = {
+
+    /** *
+      * 如果Application是使用Executor动态分配方式
+      */
     if (Utils.isDynamicAllocationEnabled(conf)) {
+      /**
+       * 首先获得最小分配数目，默认值是0
+       */
       val minNumExecutors = conf.getInt("spark.dynamicAllocation.minExecutors", 0)
+
+      /** *
+        * 其次获取初始的分配数目，默认值是最小分配数目
+        */
       val initialNumExecutors =
         conf.getInt("spark.dynamicAllocation.initialExecutors", minNumExecutors)
+
+      /** *
+        * 其后获取最大的分配数目，默认值是Integer的最大值
+        */
       val maxNumExecutors = conf.getInt("spark.dynamicAllocation.maxExecutors", Int.MaxValue)
+
+      /** *
+        * 初始值要大于等于最小值，并且最大值要大于等于初始值
+        * 最大值>=初始值>=最小值
+        */
       require(initialNumExecutors >= minNumExecutors && initialNumExecutors <= maxNumExecutors,
         s"initial executor number $initialNumExecutors must between min executor number" +
           s"$minNumExecutors and max executor number $maxNumExecutors")
 
       initialNumExecutors
-    } else {
-      //如果不是动态分配，那么先获取spark.executor.instances配置的数目，如果没有则从SPARK_EXECUTOR_INSTANCES环境变量中获取
-      //如果还没有，那么默认是两个
+    }
+
+    /** *
+      * 如果Application是使用Executor静态分配方式，那么如果用户指定了申请的个数，则返回用户指定的个数；否则，返回默认的2
+      */
+    else {
+      /** *
+        * 第一步：首先从SPARK_EXECUTOR_INSTANCES环境变量中获取，如果获取不到，则取默认值2
+        * 第二步：再从spark.executor.instances配置项中获取，如果获取不到那么取第一步获取的executor的数目
+        */
       val targetNumExecutors =
         sys.env.get("SPARK_EXECUTOR_INSTANCES").map(_.toInt).getOrElse(numExecutors)
       // System property can override environment variable.

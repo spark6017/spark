@@ -51,6 +51,7 @@ private[spark] trait TaskScheduler {
   /** *
     * Invoked after system has successfully initialized (typically in spark context).
     * Yarn uses this to bootstrap allocation of resources based on preferred locations, wait for slave registrations, etc.
+    * 在Yarn模式下，在这个方法中等待，已分配的executor个数占到申请的executor个数一定的比例
     */
   def postStartHook() { }
 

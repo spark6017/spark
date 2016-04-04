@@ -87,23 +87,49 @@ private[yarn] class YarnAllocator(
 
   /** *
     * ContainerId有ApplicationAttemptId和getId方法
+    * allocatedHostToContainersMap记录着一个NodeManager启动了几个Container, 一个Host可以启动多个Container
     */
   val allocatedHostToContainersMap = new HashMap[String, collection.mutable.Set[ContainerId]]
+
+  /** *
+    * Container与Host之间的对应关系，一个Container只能属于一个Host
+    */
   val allocatedContainerToHostMap = new HashMap[ContainerId, String]
 
-  // Containers that we no longer care about. We've either already told the RM to release them or
-  // will on the next heartbeat. Containers get removed from this map after the RM tells us they've
-  // completed.
+  /** *
+    *  Containers that we no longer care about. We've either already told the RM to release them or
+    *  will on the next heartbeat. Containers get removed from this map after the RM tells us they've completed.
+    * 准备释放的Container列表，我们需要通知RM我们不再需要Container，RM可以删除掉
+    * 当RM通知我们这些Container已经被删除掉了，需要更新这个数据结构
+    *
+    * 问题：releasedContainers是一个Set，它是从Map的key转换得到的。
+    * 问题：Map的结构是ContainerId->Boolean，这个Boolean值指的是什么？
+    */
   private val releasedContainers = Collections.newSetFromMap[ContainerId](
     new ConcurrentHashMap[ContainerId, java.lang.Boolean])
 
+  /** *
+    * 正在运行的Executor的数目，是否就等于正在运行的Container的数目
+    * 如何更新这个变量
+    */
   @volatile private var numExecutorsRunning = 0
-  // Used to generate a unique ID per executor
+
+  /** *
+    * Used to generate a unique ID per executor
+    * executorId生成器，根据executor个数生成executorId，也就是说executorId是有序的
+    */
   private var executorIdCounter = 0
+
+  /**
+   * 失败的executor的个数，是否就等于失败的Container的个数
+   * 问题：如何更新这个变量
+   */
   @volatile private var numExecutorsFailed = 0
 
   /**
-    * 获得要申请的Executor数目
+    * 获得要申请的初始Executor数目，
+   * 对于静态分配，初始值就是用户指定的executor个数
+   * 对于动态分配，初始值是根据配置项获得的，之后可以进行动态申请和释放
     */
   @volatile private var targetNumExecutors =
     YarnSparkHadoopUtil.getInitialTargetExecutorNumber(sparkConf)
@@ -113,46 +139,94 @@ private[yarn] class YarnAllocator(
   // was lost.
   private val pendingLossReasonRequests = new HashMap[String, mutable.Buffer[RpcCallContext]]
 
-  // Maintain loss reasons for already released executors, it will be added when executor loss
-  // reason is got from AM-RM call, and be removed after querying this loss reason.
+  /** *
+    * Maintain loss reasons for already released executors,
+    * it will be added when executor loss  reason is got from AM-RM call, and be removed after querying this loss reason.
+    *
+    * 维护着已经释放的executor与它executor丢失原因之间的对应关系
+    *
+    */
   private val releasedExecutorLossReasons = new HashMap[String, ExecutorLossReason]
 
-  // Keep track of which container is running which executor to remove the executors later
-  // Visible for testing.
+  /** *
+    * Keep track of which container is running which executor to remove the executors later
+    * executorId与container之间的一一对应关系，Container有一个ContainerId属性
+    */
   private[yarn] val executorIdToContainer = new HashMap[String, Container]
 
+  /** *
+    * 未预期的Container释放的个数
+    */
   private var numUnexpectedContainerRelease = 0L
+
+  /** *
+    * containerId与ExecutorId之间的映射关系，一个Container对应一个Executor，反之亦然，这是一一对应关系
+    */
   private val containerIdToExecutorId = new HashMap[ContainerId, String]
 
-  // Executor memory in MB.
+  /** *
+    * Executor memory in MB.
+    * 每个executor使用的内存量，默认1024M
+    */
   protected val executorMemory = args.executorMemory
-  // Additional memory overhead.
+
+
+  /** *
+    * Additional memory overhead.
+    * 每个executor在YARN上占用的overhead内存数量，默认384M
+    */
   protected val memoryOverhead: Int = sparkConf.getInt("spark.yarn.executor.memoryOverhead",
     math.max((MEMORY_OVERHEAD_FACTOR * executorMemory).toInt, MEMORY_OVERHEAD_MIN))
-  // Number of cores per executor.
+
+  /** *
+    * Number of cores per executor.
+    * 每个executor的内核数
+    */
   protected val executorCores = args.executorCores
 
   /***
     * Resource capability requested for each executors
     *
-    * 申请的内存量是指定的executor memory + memory overhead
+    * 申请的内存量是指定的executor memory + memory overhead，申请的内核数executorCores
+    *
+    *
+    * 这是一个静态的变量，也就是说，每个Container申请的内存量+核数是固定的
     *
     */
   private[yarn] val resource = Resource.newInstance(executorMemory + memoryOverhead, executorCores)
 
+  /** *
+    * 启动Container的线程的最大个数，默认25个
+    */
   private val launcherPool = ThreadUtils.newDaemonCachedThreadPool(
     "ContainerLauncher",
     sparkConf.getInt("spark.yarn.containerLauncherMaxThreads", 25))
 
-  // For testing
+  /** *
+    * 这个配置项是干什么的？
+    */
   private val launchContainers = sparkConf.getBoolean("spark.yarn.launchContainers", true)
 
+  /** *
+    * Node Label表达式，这个Yarn的新功能，如何使用？返回一个Option
+    */
   private val labelExpression = sparkConf.getOption("spark.yarn.executor.nodeLabelExpression")
 
   // ContainerRequest constructor that can take a node label expression. We grab it through
   // reflection because it's only available in later versions of YARN.
+
+  /** *
+    * 为什么调用Option的flatMap方法，这有什么道道吗？
+    */
   private val nodeLabelConstructor = labelExpression.flatMap { expr =>
     try {
+
+      /** *
+        * 通过返回获取ContainerRequest的构造器，该构造方法的参数列表是
+        * Resource、Array[String], Array[String], Priority、Boolean、String
+        *
+        * ContainerRequest(capability : Resource, nodes : Array[String], racks : Array[String], priority : Priority, relaxLocality : Boolean)
+        */
       Some(classOf[ContainerRequest].getConstructor(classOf[Resource],
         classOf[Array[String]], classOf[Array[String]], classOf[Priority], classOf[Boolean],
         classOf[String]))
@@ -165,13 +239,23 @@ private[yarn] class YarnAllocator(
     }
   }
 
-  // A map to store preferred hostname and possible task numbers running on it.
+  /** *
+    *  A map to store preferred hostname and possible task numbers running on it.
+    *
+    */
   private var hostToLocalTaskCounts: Map[String, Int] = Map.empty
 
-  // Number of tasks that have locality preferences in active stages
+  /** *
+    * Number of tasks that have locality preferences in active stages
+    *
+    * 具有数据本地性的任务个数
+    */
   private var numLocalityAwareTasks: Int = 0
 
-  // A container placement strategy based on pending tasks' locality preference
+  /** *
+    *  A container placement strategy based on pending tasks' locality preference
+    *
+    */
   private[yarn] val containerPlacementStrategy =
     new LocalityPreferredContainerPlacementStrategy(sparkConf, conf, resource)
 
@@ -179,19 +263,37 @@ private[yarn] class YarnAllocator(
 
   def getNumExecutorsFailed: Int = numExecutorsFailed
 
-  /**
-   * A sequence of pending container requests that have not yet been fulfilled.
-   */
+  /** *
+    * A sequence of pending container requests that have not yet been fulfilled.
+    *
+    * 正在等待分配的Container Request集合，它是分配到任意Host
+    * @return
+    */
   def getPendingAllocate: Seq[ContainerRequest] = getPendingAtLocation(ANY_HOST)
 
   /**
    * A sequence of pending container requests at the given location that have not yet been
    * fulfilled.
-   */
+   *
+   *  正在等待分配到指定位置的ContainerRequest的数目
+    *
+    * @param location
+    * @return
+    */
   private def getPendingAtLocation(location: String): Seq[ContainerRequest] = {
-    amClient.getMatchingRequests(RM_REQUEST_PRIORITY, location, resource).asScala
-      .flatMap(_.asScala)
-      .toSeq
+    /** *
+      * matchingRequests的返回值是Java的List集合
+      * 每个元素是Java的Collection集合，实际类型是List<Collection<ContainerRequest>>
+      */
+    val matchingRequests = amClient.getMatchingRequests(RM_REQUEST_PRIORITY, location, resource)
+
+    /** *
+      * 首先将Java List转换为Scala的集合
+      * 然后_.asScala是把Java Collection类型的元素转换为Scala集合，
+      * 通过flatMap将二维的集合转换为一维的集合
+      * 通过toSeq转换为Seq对象
+      */
+    matchingRequests.asScala.flatMap(_.asScala).toSeq
   }
 
   /**
@@ -240,6 +342,10 @@ private[yarn] class YarnAllocator(
    * Deal with any containers YARN has granted to us by possibly launching executors in them.
    *
    * This must be synchronized because variables read in this method are mutated by other methods.
+   *
+   *  0. 更新资源申请请求
+   *  1. 请求RM分配资源，
+   *  2.  使用RM分配的Container(在Container中启动Executor)
    */
   def allocateResources(): Unit = synchronized {
     updateResourceRequests()
@@ -346,13 +452,25 @@ private[yarn] class YarnAllocator(
   /**
    * Creates a container request, handling the reflection required to use YARN features that were
    * added in recent versions.
-   */
+   *
+    * 创建ContainerRequest，需要的参数：resource、nodes、racks，优先级固定为1
+    *
+   *  @param resource
+    * @param nodes
+    * @param racks
+    * @return
+    */
   private def createContainerRequest(
       resource: Resource,
       nodes: Array[String],
       racks: Array[String]): ContainerRequest = {
+    /** *
+      * 如果定义了NodeLabelExpression，那么按照NodeLabel模式进行创建
+      * 如果没有定义NodeLabelExpression，那么创建默认的ContainerRequest
+      *
+      */
     nodeLabelConstructor.map { constructor =>
-      constructor.newInstance(resource, nodes, racks, RM_REQUEST_PRIORITY, true: java.lang.Boolean,
+      constructor.newInstance(resource, nodes, racks, RM_REQUEST_PRIORITY, true: java.lang.Boolean, /**显示指定为Java的Boolean**/
         labelExpression.orNull)
     }.getOrElse(new ContainerRequest(resource, nodes, racks, RM_REQUEST_PRIORITY))
   }

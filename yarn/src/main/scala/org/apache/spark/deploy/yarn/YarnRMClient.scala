@@ -59,7 +59,7 @@ private[spark] class YarnRMClient(args: ApplicationMasterArguments) extends Logg
    *
    * @param conf The Yarn configuration.
    * @param sparkConf The Spark configuration.
-   * @param uiAddress Address of the SparkUI.
+   * @param applicationTrackingUrl  tracking address of the SparkUI.
    * @param uiHistoryAddress Address of the application on the Spark History Server.
     * @param driverUrl
     * @param driverRef Driver Endpoint Ref

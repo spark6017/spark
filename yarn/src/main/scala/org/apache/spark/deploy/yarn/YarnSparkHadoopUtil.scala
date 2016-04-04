@@ -288,15 +288,28 @@ object YarnSparkHadoopUtil {
   // 10% was arrived at experimentally. In the interest of minimizing memory waste while covering
   // the common cases. Memory overhead tends to grow with container size.
 
+  /** *
+    * Memory Overhead的内存量占要使用的内存量的比例，比如--executor-memory是8G，那么Overhead Memory = 8G * 0.1 = 1024*0.8
+    */
   val MEMORY_OVERHEAD_FACTOR = 0.10
+
+  /**
+   * 运行在Yarn Container上的进程，额外的内存空间(最小384M)
+   */
   val MEMORY_OVERHEAD_MIN = 384
 
+  /** *
+    * Container分配到任务Host上
+    */
   val ANY_HOST = "*"
 
   val DEFAULT_NUMBER_EXECUTORS = 2
 
-  // All RM requests are issued with same priority : we do not (yet) have any distinction between
-  // request types (like map/reduce in hadoop for example)
+  /** **
+    * All RM requests are issued with same priority : we do not (yet) have any distinction between request types (like map/reduce in hadoop for example)
+    *
+    * 向RM申请资源的优先级，对于Spark来说，所有的资源的优先级都是一样的，给1
+    */
   val RM_REQUEST_PRIORITY = Priority.newInstance(1)
 
   /** *

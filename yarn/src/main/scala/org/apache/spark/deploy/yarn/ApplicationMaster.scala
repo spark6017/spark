@@ -70,7 +70,12 @@ private[spark] class ApplicationMaster(
   // TODO: Currently, task to container is computed once (TaskSetManager) - which need not be
   // optimal as more containers are available. Might need to handle this better.
 
-  //这是默认的SparkConf？创建SparkConf时，会加载system properties上的以spark.开头的属性
+  /** *
+    * 这是创建不带参数的SparkConf
+    * 创建SparkConf时，会加载system properties上的以spark.开头的属性。
+    * 这个做法是在YARN CLIENT模式下，ApplicationMaster得不到SparkContext对象，ApplicationMaster只能将启动ApplicationMaster时将传递给它的Spark配置属性
+    * 写到System Properties中，然后通过new SparkConf进行加载
+    */
   private val sparkConf = new SparkConf()
   private val yarnConf: YarnConfiguration = SparkHadoopUtil.get.newConfiguration(sparkConf)
     .asInstanceOf[YarnConfiguration]
@@ -352,10 +357,13 @@ private[spark] class ApplicationMaster(
   }
 
   /**
-    * 更新sparkContextRef变量
+    * 更新sparkContextRef变量，使得ApplicationMaster持有一个SparkContext对象
     * @param sc
     */
   private def sparkContextInitialized(sc: SparkContext) = {
+    /** *
+      * 既然sparkContextRef使用了加锁机制，那就没必要使用CAS原语进行更新
+      */
     sparkContextRef.synchronized {
       sparkContextRef.compareAndSet(null, sc)
       sparkContextRef.notifyAll()
@@ -397,6 +405,8 @@ private[spark] class ApplicationMaster(
 
     /**
       * 获得用户的SparkConf
+     * 如果是YARN CLUSTER模式，那么sc不为null，直接通过SparkContext获得SparkConf实例
+     * 如果是YARN CLIENT模式，那么sc为null，那么就通过不带参数的new SparkConf加载配置
       */
     val _sparkConf = if (sc != null) sc.getConf else sparkConf
     val driverUrl = RpcEndpointAddress(
@@ -411,10 +421,13 @@ private[spark] class ApplicationMaster(
      * 注意：YarnAllocator是Spark Yarn提供的API，而不是Hadoop YARN提供的API
      *
      * 问题：
-      * 1. 具体需要向ResourceManager申请多少个Container是在什么地方控制的
+      * 1. 具体需要向ResourceManager申请多少个Container是在什么地方控制的？
+     *     答案： 这个信息写在_sparkConf对象中
      * 2. ApplicationMaster申请到了Container并启动后，Driver是如何如何得知的？(Executor进程会主动向Driver注册)
      * 3. 如果有Executor挂了，ApplicationMaster如何重新申请？Executor作为一个Container，它挂了，NodeManager能够知道，NodeManager
      * 会向ApplicationMaster以及ResourceManager汇报？
+     *
+     * 这个信息是在reporterThread的任务体中处理的
       */
     allocator = client.register(driverUrl,
       driverRef,
@@ -504,6 +517,9 @@ private[spark] class ApplicationMaster(
       val applicationTrackingUrl = sc.ui.map(_.appUIAddress).getOrElse("")
 
 
+      /** *
+        * 将自身注册到ResourceManager中，携带着要申请的资源
+        */
       registerAM(rpcEnv, driverRef, applicationTrackingUrl, securityMgr)
 
       /** *

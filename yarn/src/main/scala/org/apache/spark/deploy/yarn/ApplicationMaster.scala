@@ -160,6 +160,10 @@ private[spark] class ApplicationMaster(
     client.getAttemptId()
   }
 
+  /** *
+    * ApplicationMaster进程的主体代码，它会等待用户application运行结束(在runDriver中实现)
+    * @return
+    */
   final def run(): Int = {
     try {
       val appAttemptId = client.getAttemptId()
@@ -250,7 +254,9 @@ private[spark] class ApplicationMaster(
 
       /**
         * 如果是Cluster Mode，那么在ApplicationMaster中启动Driver，
-       * runDriver方法做的事情绝不仅仅是启动Driver
+       * runDriver方法做的事情绝不仅仅是启动Driver，所有事情都要在这个方法中做，包括
+       * 1. 等待用户application运行完成
+       * 2. 启动汇报线程，监控资源使用、健康情况
         */
       if (isClusterMode) {
         runDriver(securityMgr)
@@ -366,13 +372,13 @@ private[spark] class ApplicationMaster(
     * 假如我在spark-submit上指定了申请了10个executor，这个信息，ApplicationMaster是如何得知的？
     * @param _rpcEnv
     * @param driverRef
-    * @param uiAddress
+    * @param applicationTrackingUrl
     * @param securityMgr
     */
   private def registerAM(
       _rpcEnv: RpcEnv,
       driverRef: RpcEndpointRef,
-      uiAddress: String,
+      applicationTrackingUrl: String,
       securityMgr: SecurityManager) = {
     val sc = sparkContextRef.get()
 
@@ -400,21 +406,34 @@ private[spark] class ApplicationMaster(
 
 
     /**
-      * 调用YarnRMClient的register方法，返回一个YarnAllocator对象，
-      * 具体分配多少个Container在什么地方设置的(分配多少个Container)？
+      *ApplicationMaster进程启动后，ApplicationMaster进程将自身注册给ResourceManager，返回一个YarnAllocator对象。
+     *
+     * 注意：YarnAllocator是Spark Yarn提供的API，而不是Hadoop YARN提供的API
+     *
+     * 问题：
+      * 1. 具体需要向ResourceManager申请多少个Container是在什么地方控制的
+     * 2. ApplicationMaster申请到了Container并启动后，Driver是如何如何得知的？(Executor进程会主动向Driver注册)
+     * 3. 如果有Executor挂了，ApplicationMaster如何重新申请？Executor作为一个Container，它挂了，NodeManager能够知道，NodeManager
+     * 会向ApplicationMaster以及ResourceManager汇报？
       */
     allocator = client.register(driverUrl,
       driverRef,
       yarnConf,
       _sparkConf,
-      uiAddress,
+      applicationTrackingUrl,
       historyAddress,
       securityMgr)
 
     /**
-      * 分配资源
+      * 调用YarnAllocator的allocateResource进行资源分配
+     * 问题：如果Executor/Container一次性没有全部分配，或者分配到的Container在application运行中有挂，如何容错？
       */
     allocator.allocateResources()
+
+    /** *
+      * 启动汇报线程，这个线程很关键
+      * Executor是否已经挂了，在这个汇报线程中检测
+      */
     reporterThread = launchReporterThread()
   }
 
@@ -450,6 +469,8 @@ private[spark] class ApplicationMaster(
 
     /** *
       * 启动用户线程，该线程保存在userClassThread中
+      * 该用户线程userClassThread用于启动SparkSubmit的主类，也就是执行Application的逻辑
+      * 问题：Application启动起来，ApplicationMaster如何帮助Driver申请资源？
       */
     userClassThread = startUserApplication()
 
@@ -457,9 +478,11 @@ private[spark] class ApplicationMaster(
     // been set by the Thread executing the user class.
 
     /***
-      * 如何判断Driver（或者SparkContext)已经初始化完成。
+      *  等待Driver的SparkContext初始化完成
+      *
+      * 问题：如何判断Driver（或者SparkContext)已经初始化完成。
       * 在前面startUserApplication方法中已经开始执行用户Class的main方法，此处同步等待SparkContext初始化完成
-      * 方法是：
+      * 方法是：socket连接到Driver的host和port
       */
     val sc = waitForSparkContextInitialized()
 
@@ -478,7 +501,15 @@ private[spark] class ApplicationMaster(
       /**
         * 注册AM?在ApplicationMaster中运行registerAM
         */
-      registerAM(rpcEnv, driverRef, sc.ui.map(_.appUIAddress).getOrElse(""), securityMgr)
+      val applicationTrackingUrl = sc.ui.map(_.appUIAddress).getOrElse("")
+
+
+      registerAM(rpcEnv, driverRef, applicationTrackingUrl, securityMgr)
+
+      /** *
+        * 将用户应用线程合并，因为userClassThread是要等待执行完成
+        * 因此此处也将等待用户作业执行完成
+        */
       userClassThread.join()
     }
   }

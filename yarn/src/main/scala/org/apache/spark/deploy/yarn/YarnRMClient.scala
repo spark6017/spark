@@ -54,24 +54,30 @@ private[spark] class YarnRMClient(args: ApplicationMasterArguments) extends Logg
 
   /**
    * Registers the application master with the RM.
+   * 将ApplicationMaster注册到ResourceManager，这是ApplicationMaster进程自己的事情，它发生在ApplicationMaster进程已经启动，然后
+   * ApplicationMaster进程主动将它自身注册给ResourceManager
    *
    * @param conf The Yarn configuration.
    * @param sparkConf The Spark configuration.
    * @param uiAddress Address of the SparkUI.
-   * @param uiHistoryAddress Address of the application on the History Server.
-   */
+   * @param uiHistoryAddress Address of the application on the Spark History Server.
+    * @param driverUrl
+    * @param driverRef Driver Endpoint Ref
+    * @param securityMgr
+    * @return
+    */
   def register(
       driverUrl: String,
       driverRef: RpcEndpointRef,
       conf: YarnConfiguration,
       sparkConf: SparkConf,
-      uiAddress: String,
+      applicationTrackingUrl: String,
       uiHistoryAddress: String,
       securityMgr: SecurityManager
     ): YarnAllocator = {
 
     /**
-      * 初始化AM向RM发送RPC请求的Client
+      * 创建、初始化、启动ApplicationMaster向ResourceManager发送RPC请求的Client
       */
     am2rmClient = AMRMClient.createAMRMClient()
     am2rmClient.init(conf)
@@ -85,7 +91,7 @@ private[spark] class YarnRMClient(args: ApplicationMasterArguments) extends Logg
      * Application Master做的事情
       */
     synchronized {
-      am2rmClient.registerApplicationMaster(Utils.localHostName(), 0, uiAddress)
+      am2rmClient.registerApplicationMaster(Utils.localHostName(), 0, applicationTrackingUrl)
       registered = true
     }
 

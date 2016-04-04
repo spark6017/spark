@@ -96,6 +96,10 @@ private[spark] class SparkUI private (
    */
   private[spark] def appUIHostPort = publicHostName + ":" + boundPort
 
+  /** *
+    * applicationTrackingUrl
+    * @return
+    */
   private[spark] def appUIAddress = s"http://$appUIHostPort"
 
   def getSparkUI(appId: String): Option[SparkUI] = {

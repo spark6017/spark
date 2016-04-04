@@ -100,6 +100,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   /**
    * Driver进程对应的RPC通信Endpoint，
     * CoarseGrainedSchedulerBackend会给Driver发送ReviveOffers消息
+   *
+   * 问题：CoarseGrainedSchedulerBackend有个一个isReady方法，那么DriverEndpoint是在isReady为true之前构造还是在
+   * isReady为true之后构造？
+   * 答：因为DriverEndpoint是在 CoarseGrainedSchedulerBackend的start方法中创建的，因此构造DriverEndpoint的时序与SchedulerBackend是否isReady无关
+   *
    * @param rpcEnv
    * @param sparkProperties
    */
@@ -411,6 +416,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   var driverEndpoint: RpcEndpointRef = null
   val taskIdsOnSlave = new HashMap[String, HashSet[String]]
 
+  /** *
+    * CoarseGrainedSchedulerBackend初始化完成就会构造DriverEndpoint
+    */
   override def start() {
     val properties = new ArrayBuffer[(String, String)]
     for ((key, value) <- scheduler.sc.conf.getAll) {
@@ -423,6 +431,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     driverEndpoint = rpcEnv.setupEndpoint(ENDPOINT_NAME, createDriverEndpoint(properties))
   }
 
+  /** *
+    * 创建DriverEndPoint
+    * @param properties
+    * @return
+    */
   protected def createDriverEndpoint(properties: Seq[(String, String)]): DriverEndpoint = {
     new DriverEndpoint(rpcEnv, properties)
   }

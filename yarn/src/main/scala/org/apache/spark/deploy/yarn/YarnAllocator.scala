@@ -43,6 +43,10 @@ import org.apache.spark.util.ThreadUtils
  * YarnAllocator is charged with requesting containers from the YARN ResourceManager and deciding
  * what to do with containers when YARN fulfills these requests.
  *
+ * YarnAllocator负责事情：
+ * 1. 向YARN ResourceManager申请资源(就是Container).
+ * 2. 当YARN ResourceManager分配了这些Container，YarnAllocator决定如何使用这些Container(数据本地性考虑?)
+ *
  * This class makes use of YARN's AMRMClient APIs. We interact with the AMRMClient in three ways:
  * * Making our resource needs known, which updates local bookkeeping about containers requested.
  * * Calling "allocate", which syncs our local container requests with the RM, and returns any
@@ -51,6 +55,8 @@ import org.apache.spark.util.ThreadUtils
  *
  * The public methods of this class are thread-safe.  All methods that mutate state are
  * synchronized.
+ *
+ *  YarnAllocator定义了非常多的属性，需要将这些属性捋一遍
   *
   * @param driverUrl
   * @param driverRef
@@ -97,7 +103,7 @@ private[yarn] class YarnAllocator(
   @volatile private var numExecutorsFailed = 0
 
   /**
-    * 要获取的Executor数目
+    * 获得要申请的Executor数目
     */
   @volatile private var targetNumExecutors =
     YarnSparkHadoopUtil.getInitialTargetExecutorNumber(sparkConf)

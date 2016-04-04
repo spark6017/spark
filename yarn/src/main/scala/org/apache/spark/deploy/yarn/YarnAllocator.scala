@@ -383,19 +383,31 @@ private[yarn] class YarnAllocator(
    * Update the set of container requests that we will sync with the RM based on the number of
    * executors we have currently running and our target number of executors.
    *
-   * Visible for testing.
-    *
-    * getPendingAllocate表示正在申请的数量
-    *
+   * 在请求RM申请资源前，首先整理我们已经分配到的、尚未分配到的、RM分配的但是无用的Container
+   *
    */
   def updateResourceRequests(): Unit = {
+
+    /** *
+      * 已经发出申请请求，但是YARN尚未实际的分配
+      */
     val pendingAllocate = getPendingAllocate
+
+    /** *
+      * 返回正在申请中的Container的数目
+      */
     val numPendingAllocate = pendingAllocate.size
+
+    /** *
+      * 还需要申请的数目 = Application当前需要的Executor的数目 - 已经向RM发出申请尚未答复的Container数目 - 已经申请到且正在运行的Container数目
+      * 可能大于0，可能等于0，可能小于0
+      */
     val missing = targetNumExecutors - numPendingAllocate - numExecutorsRunning
 
 
     /***
-      * 需要申请missing个executor container
+      * 如果missing 大于 0 表示Application申请的Container资源还没有完全满足，需要再missing个executor container
+      * 问题：如果已经申请到的Container已经运行完关闭了，
       */
     if (missing > 0) {
       logInfo(s"Will request $missing executor containers, each with ${resource.getVirtualCores} " +
@@ -407,12 +419,23 @@ private[yarn] class YarnAllocator(
       // For locality unmatched and locality free container requests, cancel these container
       // requests, since required locality preference has been changed, recalculating using
       // container placement strategy.
+      /** *
+        * pendingAllocate是要申请资源的ContainerRequest集合
+        */
       val (localityMatched, localityUnMatched, localityFree) = splitPendingAllocationsByLocality(
         hostToLocalTaskCounts, pendingAllocate)
 
-      // Remove the outdated container request and recalculate the requested container number
+      /** *
+        *  Remove the outdated container request and recalculate the requested container number
+        *  将数据本地性不友好的ContainerRequest删除掉
+        */
       localityUnMatched.foreach(amClient.removeContainerRequest)
       localityFree.foreach(amClient.removeContainerRequest)
+
+
+      /** *
+        * 需要申请的Container数量
+        */
       val updatedNumContainer = missing + localityUnMatched.size + localityFree.size
 
       val containerLocalityPreferences = containerPlacementStrategy.localityOfRequestedContainers(
@@ -516,6 +539,9 @@ private[yarn] class YarnAllocator(
       }
     }
 
+    /** *
+      * 在分配到的Container上运行Executor
+      */
     runAllocatedContainers(containersToUse)
 
     logInfo("Received %d containers from YARN, launching executors on %d of them."
@@ -748,18 +774,40 @@ private[yarn] class YarnAllocator(
       hostToLocalTaskCount: Map[String, Int],
       pendingAllocations: Seq[ContainerRequest]
     ): (Seq[ContainerRequest], Seq[ContainerRequest], Seq[ContainerRequest]) = {
+
+
     val localityMatched = ArrayBuffer[ContainerRequest]()
     val localityUnMatched = ArrayBuffer[ContainerRequest]()
     val localityFree = ArrayBuffer[ContainerRequest]()
-
+    /** *
+      * preferered hosts
+      */
     val preferredHosts = hostToLocalTaskCount.keySet
+
+    /** *
+      * pendingAllocations是ApplicationMaster要向Yarn ResourceManager申请的ContainerRequest集合
+      */
     pendingAllocations.foreach { cr =>
+
+      /**
+       * 如果ContainerRequest没有指定Nodes信息，那么localityFree集合加上该ContainerRequest
+       */
       val nodes = cr.getNodes
       if (nodes == null) {
         localityFree += cr
-      } else if (nodes.asScala.toSet.intersect(preferredHosts).nonEmpty) {
+      }
+
+      /** *
+        * 如果ContainerRequest的nodes和prefererredHosts有交集，那么localityMatched集合加上该ContainerRequest
+        */
+      else if (nodes.asScala.toSet.intersect(preferredHosts).nonEmpty) {
         localityMatched += cr
-      } else {
+      }
+
+      /** *
+        * 如果ContainerRequest的nodes信息和preferredHosts集合没有交集，那么localityUnMatched集合加上该ContainerRequest
+        */
+      else {
         localityUnMatched += cr
       }
     }

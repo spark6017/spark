@@ -117,6 +117,10 @@ private[spark] class ApplicationMaster(
   @volatile private var userClassThread: Thread = _
 
   @volatile private var reporterThread: Thread = _
+
+  /** *
+    * allocator什么时候初始化？
+    */
   @volatile private var allocator: YarnAllocator = _
 
   // Lock for controlling the allocator (heartbeat) thread.
@@ -819,6 +823,7 @@ private[spark] class ApplicationMaster(
 
   /**
    * An [[RpcEndpoint]] that communicates with the driver's scheduler backend.
+   * 与SchedulerBackend进行通信的ApplicationMaster实例
    */
   private class AMEndpoint(
       override val rpcEnv: RpcEnv, driver: RpcEndpointRef, isClusterMode: Boolean)
@@ -835,6 +840,10 @@ private[spark] class ApplicationMaster(
     }
 
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
+      /** *
+        * ApplicationMaster收到RequestExecutors消息
+        * 问题：这个消息是谁发送的？
+        */
       case RequestExecutors(requestedTotal, localityAwareTasks, hostToLocalTaskCount) =>
         Option(allocator) match {
           case Some(a) =>

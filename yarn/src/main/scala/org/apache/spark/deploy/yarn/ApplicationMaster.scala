@@ -843,12 +843,16 @@ private[spark] class ApplicationMaster(
       /** *
         * ApplicationMaster收到RequestExecutors消息
         * 问题：这个消息是谁发送的？
+        * 这个消息带有三个参数：
+        * 1. requestedTotal，申请的executor总数
+        * 2. 具有数据本地性的任务个数
+        * 3. 具有数据本地性的host和在它之上运行的task个数的Map
         */
-      case RequestExecutors(requestedTotal, localityAwareTasks, hostToLocalTaskCount) =>
+      case RequestExecutors(requestedTotal, localityAwareTasks, preferredHostToLocalTaskCountMap) =>
         Option(allocator) match {
           case Some(a) =>
             if (a.requestTotalExecutorsWithPreferredLocalities(requestedTotal,
-              localityAwareTasks, hostToLocalTaskCount)) {
+              localityAwareTasks, preferredHostToLocalTaskCountMap)) {
               resetAllocatorInterval()
             }
             context.reply(true)

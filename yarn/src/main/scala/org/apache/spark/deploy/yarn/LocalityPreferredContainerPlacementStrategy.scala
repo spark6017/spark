@@ -119,6 +119,7 @@ private[yarn] class LocalityPreferredContainerPlacementStrategy(
       math.max(0, numContainer - updatedLocalityAwareContainerNum)
     val requiredLocalityAwareContainerNum = numContainer - requiredLocalityFreeContainerNum
 
+    //方法的返回结果放在containerLocalityPreferences中
     val containerLocalityPreferences = ArrayBuffer[ContainerLocalityPreferences]()
     if (requiredLocalityFreeContainerNum > 0) {
       for (i <- 0 until requiredLocalityFreeContainerNum) {

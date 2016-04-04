@@ -242,8 +242,9 @@ private[yarn] class YarnAllocator(
   /** *
     *  A map to store preferred hostname and possible task numbers running on it.
     *
+    *
     */
-  private var hostToLocalTaskCounts: Map[String, Int] = Map.empty
+  private var preferredHostToLocalTaskCountMap: Map[String, Int] = Map.empty
 
   /** *
     * Number of tasks that have locality preferences in active stages
@@ -306,16 +307,16 @@ private[yarn] class YarnAllocator(
    * be killed.
    * @param requestedTotal total number of containers requested
    * @param localityAwareTasks number of locality aware tasks to be used as container placement hint
-   * @param hostToLocalTaskCount a map of preferred hostname to possible task counts to be used as
+   * @param preferredHostToLocalTaskCountMap a map of preferred hostname to possible task counts to be used as
    *                             container placement hint.
    * @return Whether the new requested total is different than the old value.
    */
   def requestTotalExecutorsWithPreferredLocalities(
       requestedTotal: Int,
       localityAwareTasks: Int,
-      hostToLocalTaskCount: Map[String, Int]): Boolean = synchronized {
+      preferredHostToLocalTaskCountMap: Map[String, Int]): Boolean = synchronized {
     this.numLocalityAwareTasks = localityAwareTasks
-    this.hostToLocalTaskCounts = hostToLocalTaskCount
+    this.preferredHostToLocalTaskCountMap = preferredHostToLocalTaskCountMap
 
     if (requestedTotal != targetNumExecutors) {
       logInfo(s"Driver requested a total number of $requestedTotal executor(s).")
@@ -393,7 +394,7 @@ private[yarn] class YarnAllocator(
   def updateResourceRequests(): Unit = {
 
     /** *
-      * 已经发出申请请求，但是YARN尚未实际的分配
+      * 已经发出申请请求，但是YARN尚未实际的分配的ContainerRequest集合
       */
     val pendingAllocate = getPendingAllocate
 
@@ -427,7 +428,7 @@ private[yarn] class YarnAllocator(
         * pendingAllocate是要申请资源的ContainerRequest集合
         */
       val (localityMatched, localityUnMatched, localityFree) = splitPendingAllocationsByLocality(
-        hostToLocalTaskCounts, pendingAllocate)
+        preferredHostToLocalTaskCountMap, pendingAllocate)
 
       /** *
         *  Remove the outdated container request and recalculate the requested container number
@@ -443,7 +444,7 @@ private[yarn] class YarnAllocator(
       val updatedNumContainer = missing + localityUnMatched.size + localityFree.size
 
       val containerLocalityPreferences = containerPlacementStrategy.localityOfRequestedContainers(
-        updatedNumContainer, numLocalityAwareTasks, hostToLocalTaskCounts,
+        updatedNumContainer, numLocalityAwareTasks, preferredHostToLocalTaskCountMap,
           allocatedHostToContainersMap, localityMatched)
 
       for (locality <- containerLocalityPreferences) {

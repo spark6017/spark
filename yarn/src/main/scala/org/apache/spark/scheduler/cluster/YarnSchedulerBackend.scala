@@ -130,7 +130,7 @@ private[spark] abstract class YarnSchedulerBackend(
    * Request executors from the ApplicationMaster by specifying the total number desired.
    * This includes executors already pending or running.
     *
-   * 向ApplicationMaster发送请求Executor消息
+   * YarnSchedulerBackend向ApplicationMaster发送请求资源（Executor或者Container)消息
     * @param requestedTotal
     * @return
     */

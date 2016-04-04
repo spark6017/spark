@@ -89,7 +89,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   private val executorsPendingToRemove = new HashMap[String, Boolean]
 
   // A map to store hostname with its possible task number running on it
-  protected var hostToLocalTaskCount: Map[String, Int] = Map.empty
+  protected var preferredHostToLocalTaskCountMap: Map[String, Int] = Map.empty
 
   // The number of pending tasks which is locality required
   protected var localityAwareTasks = 0
@@ -599,7 +599,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
 
     this.localityAwareTasks = localityAwareTasks
-    this.hostToLocalTaskCount = hostToLocalTaskCount
+    this.preferredHostToLocalTaskCountMap = hostToLocalTaskCount
 
     numPendingExecutors =
       math.max(numExecutors - numExistingExecutors + executorsPendingToRemove.size, 0)

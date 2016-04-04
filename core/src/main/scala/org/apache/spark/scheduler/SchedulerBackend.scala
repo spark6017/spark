@@ -32,6 +32,11 @@ private[spark] trait SchedulerBackend {
 
   def killTask(taskId: Long, executorId: String, interruptThread: Boolean): Unit =
     throw new UnsupportedOperationException
+
+  /** *
+    * SchedulerBackend默认是就绪状态，CoarseGrainedSchedulerBackend对它进行了重写
+    * @return
+    */
   def isReady(): Boolean = true
 
   /**

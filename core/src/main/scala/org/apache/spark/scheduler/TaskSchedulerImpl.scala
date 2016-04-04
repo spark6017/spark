@@ -185,6 +185,7 @@ private[spark] class TaskSchedulerImpl(
 
   /**
    * postStartHook在什么地方调用的？在SparkContext的主构造函数中
+   * 等待Backend进行就绪状态
    *
    */
   override def postStartHook() {
@@ -743,11 +744,20 @@ private[spark] class TaskSchedulerImpl(
 
   /** *
     * 等待backend进入就绪状态
+    *
+    * 问题：waitBackendReady方法是在什么地方调用的？
     */
   private def waitBackendReady(): Unit = {
+    /** *
+      * 如果SchedulerBackend已经就绪则立即返回
+      */
     if (backend.isReady) {
       return
     }
+
+    /** *
+      * 如果Backend尚未就绪，则循环等待，每次等待100ms
+      */
     while (!backend.isReady) {
       synchronized {
         this.wait(100)
@@ -755,6 +765,10 @@ private[spark] class TaskSchedulerImpl(
     }
   }
 
+  /** *
+    *  TaskScheduler调用它关联的SchedulerBackend的applicationId方法
+    * @return An application ID
+    */
   override def applicationId(): String = backend.applicationId()
 
   override def applicationAttemptId(): Option[String] = backend.applicationAttemptId()

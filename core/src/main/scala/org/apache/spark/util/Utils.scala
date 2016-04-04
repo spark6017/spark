@@ -2228,7 +2228,9 @@ private[spark] object Utils extends Logging {
   /**
    * Returns the current user name. This is the currently logged in user, unless that's been
    * overridden by the `SPARK_USER` environment variable.
-   */
+    *   首先从环境中获得SPARK_USER,如果没有设置，那么调用Hadoop的USER API获得当前登陆的用户
+    * @return
+    */
   def getCurrentUserName(): String = {
     Option(System.getenv("SPARK_USER"))
       .getOrElse(UserGroupInformation.getCurrentUser().getShortUserName())

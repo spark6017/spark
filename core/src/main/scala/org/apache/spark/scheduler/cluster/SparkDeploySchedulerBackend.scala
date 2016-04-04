@@ -202,10 +202,20 @@ private[spark] class SparkDeploySchedulerBackend(
     removeExecutor(fullId.split("/")(1), reason)
   }
 
+  /** *
+    * 对于SparkDeploySchedulerBackend而言，
+    * 只对core个数进行了限制，意思是说，只要申请到的core个数>=要申请的总的core个数*最小比例
+    *
+    * @return
+    */
   override def sufficientResourcesRegistered(): Boolean = {
     totalCoreCount.get() >= totalExpectedCores * minRegisteredRatio
   }
 
+  /** *
+    * 调用父类的applicationId方法
+    * @return An application ID
+    */
   override def applicationId(): String =
     Option(appId).getOrElse {
       logWarning("Application ID is not initialized yet.")

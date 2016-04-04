@@ -35,6 +35,11 @@ import org.apache.spark.storage.BlockManagerId
  */
 private[spark] trait TaskScheduler {
 
+  /** *
+    * 默认的Spark Application ID，这是Standalone模式下的ApplicationID?不是的，TaskScheduler的唯一实现类TaskSchedulerImpl对它进行了
+    * 重写，TaskSchedulerImpl将它交给TaskScheduler对应的SchedulerBackend进行实现
+    * Local模式和YARN模式下，SparkApplicationID需要重写
+    */
   private val appId = "spark-application-" + System.currentTimeMillis
 
   def rootPool: Pool
@@ -43,9 +48,10 @@ private[spark] trait TaskScheduler {
 
   def start(): Unit
 
-  // Invoked after system has successfully initialized (typically in spark context).
-  // Yarn uses this to bootstrap allocation of resources based on preferred locations,
-  // wait for slave registrations, etc.
+  /** *
+    * Invoked after system has successfully initialized (typically in spark context).
+    * Yarn uses this to bootstrap allocation of resources based on preferred locations, wait for slave registrations, etc.
+    */
   def postStartHook() { }
 
   // Disconnect from the cluster.

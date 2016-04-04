@@ -30,9 +30,17 @@ import org.apache.spark.ui.JettyUtils
 import org.apache.spark.util.{RpcUtils, ThreadUtils}
 
 /**
- * Abstract Yarn scheduler backend that contains common logic
- * between the client and cluster Yarn scheduler backends.
+ * Abstract Yarn scheduler backend that contains common logic between the client and cluster Yarn scheduler backends.
+ *
+ * YarnSchedulerBackend是YarnClusterSchedulerBackend和YarnClientSchedulerBackend的共同父类
  */
+
+/** *
+  * YarnSchedulerBackend实现了CoarseGrainedSchedulerBackend，
+  * 为什么查看CoarseGrainedSchedulerBackend的实现类时，没有显示YarnSchedulerBackend
+  * @param scheduler
+  * @param sc
+  */
 private[spark] abstract class YarnSchedulerBackend(
     scheduler: TaskSchedulerImpl,
     sc: SparkContext)

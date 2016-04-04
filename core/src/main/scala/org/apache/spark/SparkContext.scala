@@ -216,6 +216,11 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
   private var _taskScheduler: TaskScheduler = _
   private var _heartbeatReceiver: RpcEndpointRef = _
   @volatile private var _dagScheduler: DAGScheduler = _
+
+  /**
+   * 每个Application只有一个SparkContext，那么使用SparkContext保存这个
+   * 唯一的ApplicationID是合理的
+   */
   private var _applicationId: String = _
   private var _applicationAttemptId: Option[String] = None
   private var _eventLogger: Option[EventLoggingListener] = None
@@ -338,6 +343,8 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
    *  in case of local spark app something like 'local-1433865536131'
    *  in case of YARN something like 'application_1433865536131_34483'
    * )
+   * 问题： _applicationId何时初始化的
+   * 比如在YARN Cluster模式下，这个值是如何传入的？
    */
   def applicationId: String = _applicationId
   def applicationAttemptId: Option[String] = _applicationAttemptId
@@ -533,6 +540,11 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     // constructor
     _taskScheduler.start()
 
+    /** *
+      * 通过_taskScheduler的applicaitonId方法获得，
+      * 如果是YARN模式，_taskScheduler如何获得这个applicationID
+      *
+      */
     _applicationId = _taskScheduler.applicationId()
     _applicationAttemptId = taskScheduler.applicationAttemptId()
     _conf.set("spark.app.id", _applicationId)
@@ -585,6 +597,7 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
 
     /***
       *  Post init
+      *  在SparkContext初始化完成(或者主要基础设施已经启动后)添加一个Hook
       */
     _taskScheduler.postStartHook()
     _env.metricsSystem.registerSource(_dagScheduler.metricsSource)
@@ -597,7 +610,7 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     // unfinished event logs around after the JVM exits cleanly. It doesn't help if the JVM
     // is killed, though.
     /***
-      * JVM退出时，调用SparkContext的stop方法
+      * JVM优雅退出时，调用SparkContext的stop方法
       *
       */
     _shutdownHookRef = ShutdownHookManager.addShutdownHook(

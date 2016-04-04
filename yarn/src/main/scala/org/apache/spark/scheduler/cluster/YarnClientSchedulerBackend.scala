@@ -28,7 +28,11 @@ import org.apache.spark.scheduler.TaskSchedulerImpl
 
 /**
   * YarnClientSchedulerBackend继承自YarnSchedulerBackend
-  * YarnClusterSChedulerBackend也继承自YarnSchedulerBackend
+  * YarnClusterSchedulerBackend也继承自YarnSchedulerBackend
+ *
+ * YarnClientSchedulerBackend是YARN-CLIENT模式下的SchedulerBackend
+ *
+ * YarnClientSchedulerBackend要比YarnClusterSchedulerBackend复杂，原因是在YARN-Client模式下，Driver的YarnClientSchedulerBackend要负责启动ApplicationMaster
 
   * @param scheduler
   * @param sc

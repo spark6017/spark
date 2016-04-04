@@ -162,6 +162,10 @@ private[spark] class LocalBackend(
     localEndpoint.send(StatusUpdate(taskId, state, serializedData))
   }
 
+  /** *
+    * LocalBackend的applicationId是local- + 时间戳
+    * @return An application ID
+    */
   override def applicationId(): String = appId
 
   private def stop(finalState: SparkAppHandle.State): Unit = {

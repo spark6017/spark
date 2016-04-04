@@ -41,20 +41,39 @@ private[spark]
 class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: RpcEnv)
   extends ExecutorAllocationClient with SchedulerBackend with Logging
 {
-  // Use an atomic variable to track total number of cores in the cluster for simplicity and speed
+  /** *
+    *  Use an atomic variable to track total number of cores in the cluster for simplicity and speed
+    *  该Application申请的内核总数
+    */
   var totalCoreCount = new AtomicInteger(0)
-  // Total number of executors that are currently registered
+
+  /** *
+    * Total number of executors that are currently registered
+    * 已经注册的Executor的数目
+    */
   var totalRegisteredExecutors = new AtomicInteger(0)
   val conf = scheduler.sc.conf
   private val maxRpcMessageSize = RpcUtils.maxMessageSizeBytes(conf)
-  // Submit tasks only after (registered resources / total expected resources)
-  // is equal to at least this value, that is double between 0 and 1.
+
+  /** *
+    * Submit tasks only after (registered resources / total expected resources)  is equal to larger than this value, that is double between 0 and 1.
+    *
+    * 如果不配置spark.scheduler.minRegisteredResourcesRatio这个参数，那么默认是0，
+    * 这个值在YarnSchedulerBackend中进行了重写
+    */
   var minRegisteredRatio =
     math.min(1, conf.getDouble("spark.scheduler.minRegisteredResourcesRatio", 0))
-  // Submit tasks after maxRegisteredWaitingTime milliseconds
-  // if minRegisteredRatio has not yet been reached
+
+  /** *
+    * Submit tasks after maxRegisteredWaitingTime milliseconds  if minRegisteredRatio has not yet been reached
+    * 如果注册资源/申请资源小于minRegisteredRatio，那么最多等待30s
+    */
   val maxRegisteredWaitingTimeMs =
     conf.getTimeAsMs("spark.scheduler.maxRegisteredResourcesWaitingTime", "30s")
+
+  /** *
+    * SchedulerBackend的创建时间
+    */
   val createTime = System.currentTimeMillis()
 
   private val executorDataMap = new HashMap[String, ExecutorData]
@@ -482,14 +501,33 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
   }
 
+  /** *
+    * 默认是true
+    * 问题：谁它进行了重写？
+    * @return
+    */
   def sufficientResourcesRegistered(): Boolean = true
 
+  /** *
+    * SchedulerBackend是否是就绪状态
+    * 1.  已经注册了足够的资源
+    * 2. 等待的时间到达
+    * @return
+    */
   override def isReady(): Boolean = {
+    /** *
+      * 如果已经Application已经申请到了足够的资源(所谓的足够资源是最小比例的资源)
+      */
     if (sufficientResourcesRegistered) {
       logInfo("SchedulerBackend is ready for scheduling beginning after " +
         s"reached minRegisteredResourcesRatio: $minRegisteredRatio")
       return true
     }
+
+    /** *
+      * 如果能容忍的最小资源也没申请到，那么就等待一定的时间，
+      * 超过这个等待时间，SchedulerBackend就进入就绪状态
+      */
     if ((System.currentTimeMillis() - createTime) >= maxRegisteredWaitingTimeMs) {
       logInfo("SchedulerBackend is ready for scheduling beginning after waiting " +
         s"maxRegisteredResourcesWaitingTime: $maxRegisteredWaitingTimeMs(ms)")

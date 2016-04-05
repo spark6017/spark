@@ -453,6 +453,10 @@ private[yarn] class YarnAllocator(
           * 创建Container Request
           */
         val request = createContainerRequest(resource, locality.nodes, locality.racks)
+
+        /** *
+          * 调用AMRMClient的addContainerRequest方法添加ContainerRequest
+          */
         amClient.addContainerRequest(request)
         val nodes = request.getNodes
         val hostStr = if (nodes == null || nodes.isEmpty) "Any" else nodes.asScala.last

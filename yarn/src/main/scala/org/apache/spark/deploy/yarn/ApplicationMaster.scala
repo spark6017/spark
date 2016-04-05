@@ -139,8 +139,10 @@ private[spark] class ApplicationMaster(
       sparkConf.getTimeAsMs("spark.yarn.scheduler.heartbeat.interval-ms", "3s")))
   }
 
-  // Initial wait interval before allocator poll, to allow for quicker ramp up when executors are
-  // being requested.
+  /** *
+    *  Initial wait interval before allocator poll, to allow for quicker ramp up when executors are being requested.
+    *  初始调度的时间间隔
+    */
   private val initialAllocationInterval = math.min(heartbeatInterval,
     sparkConf.getTimeAsMs("spark.yarn.scheduler.initial-allocation.interval", "200ms"))
 
@@ -598,6 +600,10 @@ private[spark] class ApplicationMaster(
                 if (numPendingAllocate > 0 || allocator.getNumPendingLossReasonRequests > 0) {
                   val currentAllocationInterval =
                     math.min(heartbeatInterval, nextAllocationInterval)
+
+                  /**
+                   * 更新nextAllocationInterval
+                   */
                   nextAllocationInterval = currentAllocationInterval * 2 // avoid overflow
                   currentAllocationInterval
                 } else {
@@ -816,6 +822,9 @@ private[spark] class ApplicationMaster(
     userThread
   }
 
+  /** *
+    * 重置Allocator Interval
+    */
   private def resetAllocatorInterval(): Unit = allocatorLock.synchronized {
     nextAllocationInterval = initialAllocationInterval
     allocatorLock.notifyAll()

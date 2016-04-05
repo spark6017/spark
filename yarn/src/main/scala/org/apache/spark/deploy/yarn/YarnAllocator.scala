@@ -615,6 +615,7 @@ private[yarn] class YarnAllocator(
       containerSet += containerId
       allocatedContainerToHostMap.put(containerId, executorHostname)
 
+      //
       val executorRunnable = new ExecutorRunnable(
         container,
         conf,

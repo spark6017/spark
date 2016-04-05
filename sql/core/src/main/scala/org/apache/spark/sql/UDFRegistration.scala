@@ -125,12 +125,34 @@ class UDFRegistration private[sql] (sqlContext: SQLContext) extends Logging {
    * Register a Scala closure of 1 arguments as user-defined function (UDF).
    * @tparam RT return type of UDF.
    * @since 1.3.0
-   */
+    *
+    * @param name
+    * @param func
+    * @tparam RT UDF函数的计算结果类型
+    * @tparam A1 UDF函数的入参类型
+    * @return UserDefinedFunction类型
+    */
   def register[RT: TypeTag, A1: TypeTag](name: String, func: Function1[A1, RT]): UserDefinedFunction = {
+    /***
+      * 解析出函数返回类型RT对应的Spark SQL类型，是一个DataType类型
+      */
     val dataType = ScalaReflection.schemaFor[RT].dataType
+
+    /***
+      * 解析出函数的入参类型对应的Spark SQL类型，是一个DataType类型的包装，Option
+      */
     val inputTypes = Try(ScalaReflection.schemaFor[A1].dataType :: Nil).toOption
+
+    /***
+      * 对输入的表达式进行计算的builder,返回值是一个ScalaUDF类型的Expression
+      * @param e
+      * @return
+      */
     def builder(e: Seq[Expression]) = ScalaUDF(func, dataType, e, inputTypes.getOrElse(Nil))
+
+
     functionRegistry.registerFunction(name, builder)
+
     UserDefinedFunction(func, dataType, inputTypes)
   }
 

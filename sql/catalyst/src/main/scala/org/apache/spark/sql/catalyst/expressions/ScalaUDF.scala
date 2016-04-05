@@ -27,8 +27,10 @@ import org.apache.spark.sql.types.DataType
  *                  Note that if you use primitive parameters, you are not able to check if it is
  *                  null or not, and the UDF will return null for you if the primitive input is
  *                  null. Use boxed type or [[Option]] if you wanna do the null-handling yourself.
- * @param dataType  Return type of function.
- * @param children  The input expressions of this UDF.
+  *                 Scala函数
+  *
+ * @param dataType  Return type of function. 函数的执行结果的类型
+ * @param children  The input expressions of this UDF. 输入表达式
  * @param inputTypes  The expected input types of this UDF, used to perform type coercion. If we do
  *                    not want to perform coercion, simply use "Nil". Note that it would've been
  *                    better to use Option of Seq[DataType] so we can use "None" as the case for no
@@ -72,6 +74,9 @@ case class ScalaUDF(
   def userDefinedFunc(): AnyRef = function
   def getChildren(): Seq[Expression] = children
 
+  /***
+    * 根据children表达式分别处理
+    */
   private[this] val f = children.size match {
     case 0 =>
       val func = function.asInstanceOf[() => Any]

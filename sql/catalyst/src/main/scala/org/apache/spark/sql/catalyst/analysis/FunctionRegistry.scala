@@ -47,11 +47,20 @@ trait FunctionRegistry {
   def lookupFunction(name: String): Option[ExpressionInfo]
 }
 
+/***
+  * Spark SQLContext UDF注册器
+  */
 class SimpleFunctionRegistry extends FunctionRegistry {
 
   private[sql] val functionBuilders =
     StringKeyHashMap[(ExpressionInfo, FunctionBuilder)](caseSensitive = false)
 
+  /***
+    * 注册函数
+    * @param name
+    * @param info
+    * @param builder
+    */
   override def registerFunction(
       name: String,
       info: ExpressionInfo,

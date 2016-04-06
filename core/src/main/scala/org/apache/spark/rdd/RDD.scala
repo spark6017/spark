@@ -2130,6 +2130,20 @@ object RDD {
   // them automatically. However, we still keep the old functions in SparkContext for backward
   // compatibility and forward to the following functions directly.
 
+  /***
+    * 将RDD[K,V]隐式转换为PairRDDFunctions，因此RDD[K,V]可以调用PairRDDFunctions定义的方法
+    * 问题：PairRDDFunctions是RDD吗？不是！
+    * 那么val b = a.reduceByKey(), RDD b对RDD a的依赖关系是如何形成的? 在PairRDDFunctions中以rdd作为parent
+    *
+    *
+    * @param rdd
+    * @param kt
+    * @param vt
+    * @param ord
+    * @tparam K
+    * @tparam V
+    * @return
+    */
   implicit def rddToPairRDDFunctions[K, V](rdd: RDD[(K, V)])
     (implicit kt: ClassTag[K], vt: ClassTag[V], ord: Ordering[K] = null): PairRDDFunctions[K, V] = {
     new PairRDDFunctions(rdd)

@@ -49,7 +49,14 @@ import org.apache.spark.util.random.StratifiedSamplingUtils
 
 /**
  * Extra functions available on RDDs of (key, value) pairs through an implicit conversion.
- */
+  *
+  * @param self 父RDD,在reduceByKey方法中使用
+  * @param kt
+  * @param vt
+  * @param ord
+  * @tparam K
+  * @tparam V
+  */
 class PairRDDFunctions[K, V](self: RDD[(K, V)])
     (implicit kt: ClassTag[K], vt: ClassTag[V], ord: Ordering[K] = null)
   extends Logging with Serializable {

@@ -67,7 +67,7 @@ private[deploy] class Master(
   private def createDateFormat = new SimpleDateFormat("yyyyMMddHHmmss") // For application IDs
 
   /** *
-    * Worker心跳超时时间
+    * Worker心跳的超时时间，默认60秒
     */
   private val WORKER_TIMEOUT_MS = conf.getLong("spark.worker.timeout", 60) * 1000
   private val RETAINED_APPLICATIONS = conf.getInt("spark.deploy.retainedApplications", 200)

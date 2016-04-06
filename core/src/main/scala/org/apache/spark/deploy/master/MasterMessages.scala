@@ -28,8 +28,10 @@ private[master] object MasterMessages {
 
   case object RevokedLeadership
 
-  // Master to itself
-
+  /***
+    * Master to itself
+    * 发送给自己的WorkerTimeOut消息？何解？
+    */
   case object CheckForWorkerTimeOut
 
   case class BeginRecovery(storedApps: Seq[ApplicationInfo], storedWorkers: Seq[WorkerInfo])

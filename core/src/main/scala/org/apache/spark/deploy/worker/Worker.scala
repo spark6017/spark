@@ -69,6 +69,10 @@ private[deploy] class Worker(
   // For worker and executor IDs
   private def createDateFormat = new SimpleDateFormat("yyyyMMddHHmmss")
   // Send a heartbeat every (heartbeat timeout) / 4 milliseconds
+
+  /***
+    * spark.worker.timeout是Worker的超时时间，默认60s，此时汇报心跳的时间间隔是15
+    */
   private val HEARTBEAT_MILLIS = conf.getLong("spark.worker.timeout", 60) * 1000 / 4
 
   // Model retries to connect to the master, after Hadoop's model.
@@ -362,12 +366,15 @@ private[deploy] class Worker(
 
         /**
           * Worker注册成功后，向Master周期性发送SendHeartbeat消息，默认15秒钟发送一次
+          * 延迟等待0秒开始发送心跳信息，之后每隔HEARTBEAT_MILLIS毫秒进行发送
           */
         forwordMessageScheduler.scheduleAtFixedRate(new Runnable {
           override def run(): Unit = Utils.tryLogNonFatalError {
             self.send(SendHeartbeat)
           }
         }, 0, HEARTBEAT_MILLIS, TimeUnit.MILLISECONDS)
+
+
         if (CLEANUP_ENABLED) {
           logInfo(
             s"Worker cleanup enabled; old application directories will be deleted in: $workDir")
@@ -617,6 +624,10 @@ private[deploy] class Worker(
     "worker-%s-%s-%d".format(createDateFormat.format(new Date), host, port)
   }
 
+  /***
+    * Worker异常退出，这个代码应该不会运行，
+    * 这个地方有kill executor的逻辑
+    */
   override def onStop() {
     cleanupThreadExecutor.shutdownNow()
     metricsSystem.report()

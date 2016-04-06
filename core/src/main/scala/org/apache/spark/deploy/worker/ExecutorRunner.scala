@@ -77,7 +77,7 @@ private[deploy] class ExecutorRunner(
     workerThread.start()
     // Shutdown hook that kills actors on shutdown.
     /***
-      * 杀死Executor进程
+      * ExecutorRunner进程结束时，会杀死自己
       */
     shutdownHook = ShutdownHookManager.addShutdownHook { () =>
       // It's possible that we arrive here before calling `fetchAndRunExecutor`, then `state` will

@@ -53,12 +53,25 @@ sealed trait Vector extends Serializable {
 
   /**
    * Converts the instance to a double array.
+    * 将向量转换为一维的Double数组
    */
   @Since("1.0.0")
   def toArray: Array[Double]
 
+  /***
+    * 向量是否相同
+    * @param other
+    * @return
+    */
   override def equals(other: Any): Boolean = {
     other match {
+        //如果other是向量，那么进行下面的判断
+        //1. 首先判断向量长度是否相同，不同则不等
+        //2. 如果长度相同，则比较内容
+        //2.1 如果都是稀疏矩阵
+        //2.2 如果this是稀疏矩阵，而that是稠密矩阵
+        //2.3 如果this是稠密矩阵，而that是稠密矩阵
+        //2.4 如果this和that都是稠密矩阵，那么使用数组进行比较
       case v2: Vector =>
         if (this.size != v2.size) return false
         (this, v2) match {
@@ -70,6 +83,7 @@ sealed trait Vector extends Serializable {
             Vectors.equals(0 until d1.size, d1.values, s1.indices, s1.values)
           case (_, _) => util.Arrays.equals(this.toArray, v2.toArray)
         }
+        //如果other不是向量，则返回false
       case _ => false
     }
   }
@@ -177,6 +191,7 @@ sealed trait Vector extends Serializable {
 
   /**
    * Converts the vector to a JSON string.
+    * 向量转换为JSON串
    */
   @Since("1.6.0")
   def toJson: String
@@ -286,9 +301,9 @@ object Vectors {
   /**
    * Creates a sparse vector providing its index array and value array.
    *
-   * @param size vector size.
-   * @param indices index array, must be strictly increasing.
-   * @param values value array, must have the same length as indices.
+   * @param size vector size. 稀疏矩阵的长度
+   * @param indices index array, must be strictly increasing. 非零数字的下标位置，必须是严格单调增的
+   * @param values value array, must have the same length as indices. 值数组，值数组的长度与indices数组的长度必须相同，且不能大于size
    */
   @Since("1.0.0")
   def sparse(size: Int, indices: Array[Int], values: Array[Double]): Vector =
@@ -710,6 +725,11 @@ class SparseVector @Since("1.0.0") (
     @Since("1.0.0") val indices: Array[Int],
     @Since("1.0.0") val values: Array[Double]) extends Vector {
 
+  /***
+    * 数据有效性校验
+    * 1. 值数组与数值下标数组的长度必须一样
+    * 2.
+    */
   require(indices.length == values.length, "Sparse vectors require that the dimension of the" +
     s" indices match the dimension of the values. You provided ${indices.length} indices and " +
     s" ${values.length} values.")

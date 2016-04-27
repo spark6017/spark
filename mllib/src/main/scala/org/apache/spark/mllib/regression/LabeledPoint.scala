@@ -26,6 +26,8 @@ import org.apache.spark.SparkException
 
 /**
  * Class that represents the features and labels of a data point.
+  *
+  * 标签点用于记录一个特征向量的label。特征向量是特征的集合
  *
  * @param label Label for this data point.
  * @param features List of features for this data point.

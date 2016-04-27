@@ -153,6 +153,9 @@ object MLUtils {
   /**
    * Loads binary labeled data in the LIBSVM format into an RDD[LabeledPoint], with number of
    * features determined automatically and the default number of partitions.
+   * 加载LIBSVM格式的二元分类数据，特点：
+   * 1. feature的个数自动确定，是每个向量的最大值
+   * 2. 分区数是如何确定的
    */
   @Since("1.0.0")
   def loadLibSVMFile(sc: SparkContext, path: String): RDD[LabeledPoint] =

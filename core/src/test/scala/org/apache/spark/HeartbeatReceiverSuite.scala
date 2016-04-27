@@ -267,8 +267,9 @@ private class FakeSchedulerBackend(
   extends CoarseGrainedSchedulerBackend(scheduler, rpcEnv) {
 
   protected override def doRequestTotalExecutors(requestedTotal: Int): Boolean = {
-    clusterManagerEndpoint.askWithRetry[Boolean](
-      RequestExecutors(requestedTotal, localityAwareTasks, hostToLocalTaskCount))
+//    clusterManagerEndpoint.askWithRetry[Boolean](
+//      RequestExecutors(requestedTotal, localityAwareTasks, hostToLocalTaskCount))
+    true
   }
 
   protected override def doKillExecutors(executorIds: Seq[String]): Boolean = {

@@ -434,6 +434,9 @@ object SparkSubmit {
 
       /**
        * 这里的shell指的是spark-shell命令行吗？看spark-shell的脚本，没有看到指定primaryResource为spark-shell
+        *
+        * 是spark-shell，在spark shell上运行--master yarn-cluster，则报错
+        * 问题：如果判断当前是在spark shell上
        */
       case (_, CLUSTER) if isShell(args.primaryResource) =>
         printErrorAndExit("Cluster deploy mode is not applicable to Spark shells.")

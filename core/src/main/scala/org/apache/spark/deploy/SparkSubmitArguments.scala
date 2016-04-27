@@ -61,6 +61,7 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
 
   /**
    * 对于Java作业而言，primaryResource指的是包含用户代码的jar包
+    * 对于Spark Shell而言，它是SPARK_SHELL
    */
   var primaryResource: String = null
 

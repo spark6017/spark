@@ -841,6 +841,8 @@ object Matrices {
   /**
    * Creates a column-major dense matrix.
    *
+   * 何为column-major？
+   *
    * @param numRows number of rows
    * @param numCols number of columns
    * @param values matrix entries in column major

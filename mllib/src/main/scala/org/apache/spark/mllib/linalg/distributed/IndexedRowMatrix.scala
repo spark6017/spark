@@ -26,6 +26,8 @@ import org.apache.spark.rdd.RDD
 
 /**
  * Represents a row of [[org.apache.spark.mllib.linalg.distributed.IndexedRowMatrix]].
+ *
+ * 带有索引信息的向量
  */
 @Since("1.0.0")
 case class IndexedRow(index: Long, vector: Vector)
@@ -33,6 +35,8 @@ case class IndexedRow(index: Long, vector: Vector)
 /**
  * Represents a row-oriented [[org.apache.spark.mllib.linalg.distributed.DistributedMatrix]] with
  * indexed rows.
+ *
+ *  该矩阵是元素类型为IndexedRow的RDD
  *
  * @param rows indexed rows of this matrix
  * @param nRows number of rows. A non-positive value means unknown, and then the number of rows will

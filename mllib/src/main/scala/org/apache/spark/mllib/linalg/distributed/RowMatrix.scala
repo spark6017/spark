@@ -36,9 +36,12 @@ import org.apache.spark.util.random.XORShiftRandom
 /**
  * Represents a row-oriented distributed Matrix with no meaningful row indices.
  *
+ * 元素类型是Vector的RDD，RowMatrix继承自DistributedMatrix，行数是Long类型，列数是int类型
+ *
  * @param rows rows stored as an RDD[Vector]
  * @param nRows number of rows. A non-positive value means unknown, and then the number of rows will
  *              be determined by the number of records in the RDD `rows`.
+ *
  * @param nCols number of columns. A non-positive value means unknown, and then the number of
  *              columns will be determined by the size of the first row.
  */

@@ -845,12 +845,23 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
     *
     *
     * 第二个参数是最小分区数，如果文件的Block数突破这个分区数，那么会使用Block个数作为并行度
-    * 问题：如果指定的最小分区数大于Block个数，Spark如何进行分区调整？
+    * 问题：如果指定的最小分区数大于Block个数，Spark如何进行分区调整？它是使用HADOOP的重新分区的功能
    */
   def textFile(
       path: String,
       minPartitions: Int = defaultMinPartitions): RDD[String] = withScope {
     assertNotStopped()
+
+
+    /** *
+      * 调用hadoopFile方法，方法参数是
+      * 1. 文本文件路径
+      * 2. InputFormat类，因为是文本文件，因此使用TextInputFormat
+      * 3. key是文本行的第一个字符在整个文件中的偏移量，是LongWritable类型
+      * 4. value是文本行
+      *
+      * 使用map操作将<LongWritable, Text>map为Text.toString
+      */
     hadoopFile(path, classOf[TextInputFormat], classOf[LongWritable], classOf[Text],
       minPartitions).map(pair => pair._2.toString).setName(path)
   }
@@ -1035,8 +1046,15 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
       valueClass: Class[V],
       minPartitions: Int = defaultMinPartitions): RDD[(K, V)] = withScope {
     assertNotStopped()
-    // A Hadoop configuration can be about 10 KB, which is pretty big, so broadcast it.
+    /** *
+      *  A Hadoop configuration can be about 10 KB, which is pretty big, so broadcast it.
+      *  配置文件进行Broadcast
+      */
     val confBroadcast = broadcast(new SerializableConfiguration(hadoopConfiguration))
+
+    /** *
+      * 调用HADOOP的FileInputFormat.setInputPaths方法，将文件路径或者文件配置进去
+      */
     val setInputPathsFunc = (jobConf: JobConf) => FileInputFormat.setInputPaths(jobConf, path)
     new HadoopRDD(
       this,

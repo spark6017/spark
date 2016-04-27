@@ -87,6 +87,8 @@ private[spark] class HadoopPartition(rddId: Int, idx: Int, s: InputSplit)
  * Note: Instantiating this class directly is not recommended, please use
  * [[org.apache.spark.SparkContext.hadoopRDD()]]
  *
+ * HadoopRDD的partitioner是None
+ *
  * @param sc The SparkContext to associate the RDD with.
  * @param broadcastedConf A general Hadoop Configuration, or a subclass of it. If the enclosed
  *   variable references an instance of JobConf, then that JobConf will be used for the Hadoop job.
@@ -202,6 +204,10 @@ class HadoopRDD[K, V](
     // add the credentials here as this can be called before SparkContext initialized
     SparkHadoopUtil.get.addCredentials(jobConf)
     val inputFormat = getInputFormat(jobConf)
+
+    /** *
+      * getSplits方法可以指定minPartitions
+      */
     val inputSplits = inputFormat.getSplits(jobConf, minPartitions)
     val array = new Array[Partition](inputSplits.size)
     for (i <- 0 until inputSplits.size) {

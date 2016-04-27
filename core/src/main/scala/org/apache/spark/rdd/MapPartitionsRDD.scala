@@ -30,6 +30,10 @@ private[spark] class MapPartitionsRDD[U: ClassTag, T: ClassTag](
     preservesPartitioning: Boolean = false)
   extends RDD[U](prev) {
 
+  /** *
+    * MapPartitionsRDD的partitioner的实现逻辑是：
+    * 如果保持分区算法，那么继承自父类的partitioner，否则就是None
+    */
   override val partitioner = if (preservesPartitioning) firstParent[T].partitioner else None
 
   override def getPartitions: Array[Partition] = firstParent[T].partitions

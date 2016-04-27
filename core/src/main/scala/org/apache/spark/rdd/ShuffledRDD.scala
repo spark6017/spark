@@ -98,6 +98,9 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
     List(new ShuffleDependency(prev, part, serializer, keyOrdering, aggregator, mapSideCombine))
   }
 
+  /** *
+    * ShuffledRDD的分区器是构造ShuffledRDD时指定的
+    */
   override val partitioner = Some(part)
 
   override def getPartitions: Array[Partition] = {

@@ -400,7 +400,8 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
     * 如下所示：
     * val bRDD = aRDD.reduceyByKey(_ + _)； 假如aRDD的并行度是10，那么bRDD的并行度是多少？
     *
-    * 调用默认分区函数defaultPartitioner，参数是self，那么就是aRDD把？
+    * 调用默认分区函数defaultPartitioner，defaultPartitioner是根据parent RDD定义的情况决定ShuffledRDD的分区情况
+   * defaultPartitioner是基于Hash的分区
    */
   def reduceByKey(func: (V, V) => V): RDD[(K, V)] = self.withScope {
     reduceByKey(defaultPartitioner(self), func)
@@ -612,6 +613,9 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
     if (keyClass.isArray && partitioner.isInstanceOf[HashPartitioner]) {
       throw new SparkException("Default partitioner cannot partition array keys.")
     }
+
+    //如果当前的分区已经是指定的分区器，那么就不变化，否则使用ShuffledRDD进行重新分区
+    //重新分区通常以为着数据的重新分布
     if (self.partitioner == Some(partitioner)) {
       self
     } else {

@@ -515,6 +515,10 @@ private[spark] class MemoryStore(blockManager: BlockManager, memoryManager: Memo
         entries.synchronized {
           entries.put(blockId, entry)
         }
+
+        /** *
+          * 如果数据序列化那么内存中存储的是bytes，如果没有序列化，则使用values表示内存中存储的是对象
+          */
         val valuesOrBytes = if (deserialized) "values" else "bytes"
         logInfo("Block %s stored as %s in memory (estimated size %s, free %s)".format(
           blockId, valuesOrBytes, Utils.bytesToString(size), Utils.bytesToString(blocksMemoryUsed)))

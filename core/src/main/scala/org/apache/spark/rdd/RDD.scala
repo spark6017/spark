@@ -1504,8 +1504,20 @@ abstract class RDD[T: ClassTag](
    * the same index assignments, you should sort the RDD with sortByKey() or save it to a file.
    */
   def zipWithUniqueId(): RDD[(T, Long)] = withScope {
+    /** *
+      * n是分区数
+      */
     val n = this.partitions.length.toLong
+
+    /** *
+      * 调用mapPartitionsWithIndex, k是分区ID，iter是分区数据集合
+      *
+      */
     this.mapPartitionsWithIndex { case (k, iter) =>
+
+      /** *
+        * 调用迭代器的zipWithIndex方法，对于每个元素item以及它的元素下标i
+        */
       iter.zipWithIndex.map { case (item, i) =>
         (item, i * n + k)
       }

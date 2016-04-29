@@ -405,9 +405,19 @@ private[spark] object HadoopRDD extends Logging {
 
     override def getPartitions: Array[Partition] = firstParent[T].partitions
 
+    /** *
+      * HadoopPartitiong关联Hadoop的InputSplit
+      * @param split
+      * @param context
+      * @return
+      */
     override def compute(split: Partition, context: TaskContext): Iterator[U] = {
       val partition = split.asInstanceOf[HadoopPartition]
-      val inputSplit = partition.inputSplit.value
+      val inputSplit: InputSplit = partition.inputSplit.value
+
+      /**
+        *  f函数是将一个分区的数据转换为另一个分区的数据
+        */
       f(inputSplit, firstParent[T].iterator(split, context))
     }
   }

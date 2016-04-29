@@ -981,6 +981,7 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
   /**
    * For each key k in `this` or `other`, return a resulting RDD that contains a tuple with the
    * list of values for that key in `this` as well as `other`.
+   * 将相同的Key聚合到一起，得到(K, (Iterable[V],Iterable[W]))
    */
   def cogroup[W](other: RDD[(K, W)]): RDD[(K, (Iterable[V], Iterable[W]))] = self.withScope {
     cogroup(other, defaultPartitioner(self, other))
@@ -1390,6 +1391,7 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
 
   /**
    * Return an RDD with the keys of each tuple.
+   * 将Pair RDD的键作为RDD
    */
   def keys: RDD[K] = self.map(_._1)
 

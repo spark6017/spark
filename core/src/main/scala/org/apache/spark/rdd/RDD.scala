@@ -681,9 +681,22 @@ abstract class RDD[T: ClassTag](
    * Note that this method performs a shuffle internally.
    */
   def intersection(other: RDD[T]): RDD[T] = withScope {
-    this.map(v => (v, null)).cogroup(other.map(v => (v, null)))
-        .filter { case (_, (leftGroup, rightGroup)) => leftGroup.nonEmpty && rightGroup.nonEmpty }
-        .keys
+
+    /** *
+      * 首先转换this RDD和 other RDD，得到两个(V,null)的RDD
+      *
+      */
+    val thisPairRDD = this.map(v => (v, null))
+    val otherPairRDD = other.map(v => (v, null))
+
+    //group RDD的类型是(V,(Iteratable, Iterable)),两个Iterable都是null的集合
+    val group = thisPairRDD.cogroup(otherPairRDD)
+
+    /** *
+      * leftGroup和rightGroup都是值为null的Iterable集合
+      */
+    group.filter { case (_, (leftGroup, rightGroup)) => leftGroup.nonEmpty && rightGroup.nonEmpty }
+      .keys
   }
 
   /**

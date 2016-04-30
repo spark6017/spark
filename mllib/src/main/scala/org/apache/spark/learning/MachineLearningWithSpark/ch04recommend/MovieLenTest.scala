@@ -34,5 +34,24 @@ object MovieLenTest {
     println(s"Count of userMetrix is $userCount , Count of productMetrix is $productCount")
     //first user id is 1
     println(s"The first userId  is ${userMetrix.first()._1}, the latent feature ${userMetrix.first()._2.length }, they are \n ${userMetrix.first()._2.mkString("\n")}")
+
+    //使用模型进行预测
+    val score = model.predict(789,123)
+    println(s"score is : $score")
+
+    //仅仅列出Rating集合，即只有user id, product id, score
+    val products = model.recommendProducts(789, 10)
+    products.foreach(println)
+
+
+    //将推荐的电影名等信息列出来
+    val itemData = sc.textFile("file:///D:/documents/Spark/SparkEbooks/ml-100k/ml-100k/u.item")
+    val movieId2TitleMap = itemData.map(_.split("\\|")).map(x=>x.take(2)).map(x => (x(0).toInt, x(1))).collectAsMap()
+    println("The title of 123th movie is " +movieId2TitleMap(123))
+
+    val ratingsBy789 = ratings.keyBy(_.user).lookup(789)
+    ratingsBy789.foreach(x => println(x.user + ", " + x.product + "," + movieId2TitleMap(x.product) + ", " + x.rating))
+
+    readLine()
   }
 }

@@ -47,9 +47,9 @@ import org.apache.spark.storage.StorageLevel
  *
  * @param rank Rank for the features in this model.
  * @param userFeatures RDD of tuples where each tuple represents the userId and
- *                     the features computed for this user.
+ *                     the features computed for this user. user-factor矩阵
  * @param productFeatures RDD of tuples where each tuple represents the productId
- *                        and the features computed for this product.
+ *                        and the features computed for this product. product矩阵
  */
 @Since("0.8.0")
 class MatrixFactorizationModel @Since("0.8.0") (

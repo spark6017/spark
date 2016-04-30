@@ -26,6 +26,7 @@ import org.apache.spark.storage.StorageLevel
 
 /**
  * A more compact class to represent a rating than Tuple3[Int, Int, Double].
+ * 用户对某个商品的打分记录
  */
 @Since("0.8.0")
 case class Rating @Since("0.8.0") (
@@ -279,6 +280,7 @@ class ALS private (
 @Since("0.8.0")
 object ALS {
   /**
+   * 训练特征向量模型
    * Train a matrix factorization model given an RDD of ratings given by users to some products,
    * in the form of (userID, productID, rating) pairs. We approximate the ratings matrix as the
    * product of two lower-rank matrices of a given rank (number of features). To solve for these
@@ -289,7 +291,7 @@ object ALS {
    * @param rank       number of features to use
    * @param iterations number of iterations of ALS (recommended: 10-20)
    * @param lambda     regularization factor (recommended: 0.01)
-   * @param blocks     level of parallelism to split computation into
+   * @param blocks     level of parallelism to split computation into 并行度？
    * @param seed       random seed
    */
   @Since("0.9.1")
@@ -353,9 +355,11 @@ object ALS {
    * features, we run a given number of iterations of ALS. The level of parallelism is determined
    * automatically based on the number of partitions in `ratings`.
    *
-   * @param ratings    RDD of (userID, productID, rating) pairs
-   * @param rank       number of features to use
-   * @param iterations number of iterations of ALS (recommended: 10-20)
+   * 对矩阵分解模型进行训练
+   *
+   * @param ratings    RDD of (userID, productID, rating) pairs (用户ID、产品ID和打分)向量的集合
+   * @param rank       number of features to use 特征个数
+   * @param iterations number of iterations of ALS (recommended: 10-20) ALS迭代的次数，建议10到20之间
    */
   @Since("0.8.0")
   def train(ratings: RDD[Rating], rank: Int, iterations: Int)
